@@ -14,16 +14,173 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      attribute_definitions: {
+        Row: {
+          cap_current: boolean
+          icon: string
+          key: string
+          label: string
+          show_bar: boolean
+          sort_order: number
+        }
+        Insert: {
+          cap_current?: boolean
+          icon?: string
+          key: string
+          label: string
+          show_bar?: boolean
+          sort_order?: number
+        }
+        Update: {
+          cap_current?: boolean
+          icon?: string
+          key?: string
+          label?: string
+          show_bar?: boolean
+          sort_order?: number
+        }
+        Relationships: []
+      }
+      character_attributes: {
+        Row: {
+          attribute_key: string
+          character_id: string
+          current_value: number
+          max_value: number
+          updated_at: string
+        }
+        Insert: {
+          attribute_key: string
+          character_id: string
+          current_value?: number
+          max_value?: number
+          updated_at?: string
+        }
+        Update: {
+          attribute_key?: string
+          character_id?: string
+          current_value?: number
+          max_value?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "character_attributes_attribute_key_fkey"
+            columns: ["attribute_key"]
+            isOneToOne: false
+            referencedRelation: "attribute_definitions"
+            referencedColumns: ["key"]
+          },
+          {
+            foreignKeyName: "character_attributes_character_id_fkey"
+            columns: ["character_id"]
+            isOneToOne: false
+            referencedRelation: "characters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      characters: {
+        Row: {
+          body: number
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          owner_id: string | null
+          photo_path: string | null
+          player_name: string
+          sanity: number
+          updated_at: string
+        }
+        Insert: {
+          body?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          owner_id?: string | null
+          photo_path?: string | null
+          player_name?: string
+          sanity?: number
+          updated_at?: string
+        }
+        Update: {
+          body?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          owner_id?: string | null
+          photo_path?: string | null
+          player_name?: string
+          sanity?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "characters_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          display_name: string
+          email: string | null
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string
+          email?: string | null
+          id: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string
+          email?: string | null
+          id?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "master" | "player"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +307,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["master", "player"],
+    },
   },
 } as const
