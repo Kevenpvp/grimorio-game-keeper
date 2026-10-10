@@ -82,7 +82,7 @@ function MasterDashboard() {
 
   async function create() {
     const { data, error } = await supabase.from("characters").insert({ name: "Novo personagem" }).select("id").single();
-    if (error || !data) return toast.error("Não foi possível criar a ficha");
+    if (error || !data) { toast.error("Não foi possível criar a ficha"); return; }
     if (defs?.length) {
       await supabase.from("character_attributes").insert(
         defs.map((d) => ({ character_id: data.id, attribute_key: d.key, current_value: 0, max_value: 0 })),

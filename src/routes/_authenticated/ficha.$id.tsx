@@ -92,14 +92,14 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
 
   async function updateCharacter(patch: Partial<Character>) {
     const { error } = await supabase.from("characters").update(patch).eq("id", character.id);
-    if (error) return toast.error(error.message), false;
+    if (error) { toast.error(error.message); return false; }
     mark();
     refresh();
     return true;
   }
 
   async function saveInfo() {
-    if (!info.name.trim()) return toast.error("Informe o nome do personagem");
+    if (!info.name.trim()) { toast.error("Informe o nome do personagem"); return; }
     const ok = await updateCharacter({
       name: info.name.trim(),
       player_name: info.player_name.trim(),
@@ -111,11 +111,11 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
 
   const fileRef = useRef<HTMLInputElement>(null);
   async function upload(file: File) {
-    if (!file.type.startsWith("image/")) return toast.error("Envie uma imagem");
+    if (!file.type.startsWith("image/")) { toast.error("Envie uma imagem"); return; }
     const ext = file.name.split(".").pop() || "jpg";
     const path = `${character.id}/${Date.now()}.${ext}`;
     const { error } = await supabase.storage.from("character-photos").upload(path, file, { contentType: file.type });
-    if (error) return toast.error("Falha no envio: " + error.message);
+    if (error) { toast.error("Falha no envio: " + error.message); return; }
     const old = character.photo_path;
     if (await updateCharacter({ photo_path: path })) {
       if (old) await supabase.storage.from("character-photos").remove([old]);
@@ -126,7 +126,7 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
   async function remove() {
     if (character.photo_path) await supabase.storage.from("character-photos").remove([character.photo_path]);
     const { error } = await supabase.from("characters").delete().eq("id", character.id);
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     qc.invalidateQueries({ queryKey: ["characters"] });
     toast.success("Ficha excluída");
     navigate({ to: "/painel" });
@@ -265,14 +265,14 @@ function PercentEditor({ label, icon, tone, value, onSave }: {
           <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => commit(v + 5)}><Plus className="h-4 w-4" /></Button>
         </div>
       </div>
-      <Slider min={0} max={100} step={1} value={[v]} onValueChange={([n]) => setV(n)} onValueCommit={([n]) => commit(n)} />
+      <Slider min={0} max={100} step={1} value={[v]} onValueChange={([n]) => setV(n ?? 0)} onValueCommit={([n]) => commit(n ?? 0)} />
       <StatBar value={v} max={100} tone={tone} />
     </div>
   );
 }
 
 function AttrEditor({ def, characterId, attr, onSaved }: {
-  def: AttributeDef; characterId: string; attr?: CharacterAttr; onSaved: () => void;
+  def: AttributeDef; characterId: string; attr: CharacterAttr | undefined; onSaved: () => void;
 }) {
   const cur0 = attr?.current_value ?? 0;
   const max0 = attr?.max_value ?? 0;
