@@ -13,6 +13,7 @@ export function useMe() {
     queryFn: async () => {
       const { data: u } = await supabase.auth.getUser();
       if (!u.user) return null;
+      await supabase.rpc("sync_my_role");
       const [{ data: roles }, { data: profile }] = await Promise.all([
         supabase.from("user_roles").select("role").eq("user_id", u.user.id),
         supabase.from("profiles").select("*").eq("id", u.user.id).maybeSingle(),
@@ -95,3 +96,8 @@ export function usePhotoUrl(path: string | null | undefined) {
 }
 
 export const clampPct = (n: number) => Math.max(0, Math.min(100, Math.round(Number.isFinite(n) ? n : 0)));
+
+/** Calculated value from invested points, using the configurable rule on the definition. */
+export function computeValue(def: AttributeDef, points: number) {
+  return Math.round((Number(def.base_value) + points * Number(def.points_multiplier)) * 100) / 100;
+}
