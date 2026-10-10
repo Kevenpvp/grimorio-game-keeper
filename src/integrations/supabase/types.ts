@@ -16,26 +16,35 @@ export type Database = {
     Tables: {
       attribute_definitions: {
         Row: {
+          accepts_points: boolean
+          base_value: number
           cap_current: boolean
           icon: string
           key: string
           label: string
+          points_multiplier: number
           show_bar: boolean
           sort_order: number
         }
         Insert: {
+          accepts_points?: boolean
+          base_value?: number
           cap_current?: boolean
           icon?: string
           key: string
           label: string
+          points_multiplier?: number
           show_bar?: boolean
           sort_order?: number
         }
         Update: {
+          accepts_points?: boolean
+          base_value?: number
           cap_current?: boolean
           icon?: string
           key?: string
           label?: string
+          points_multiplier?: number
           show_bar?: boolean
           sort_order?: number
         }
@@ -47,6 +56,7 @@ export type Database = {
           character_id: string
           current_value: number
           max_value: number
+          points: number
           updated_at: string
         }
         Insert: {
@@ -54,6 +64,7 @@ export type Database = {
           character_id: string
           current_value?: number
           max_value?: number
+          points?: number
           updated_at?: string
         }
         Update: {
@@ -61,6 +72,7 @@ export type Database = {
           character_id?: string
           current_value?: number
           max_value?: number
+          points?: number
           updated_at?: string
         }
         Relationships: [
@@ -82,10 +94,12 @@ export type Database = {
       }
       characters: {
         Row: {
+          available_points: number
           body: number
           created_at: string
           description: string | null
           id: string
+          kills: number
           name: string
           owner_id: string | null
           photo_path: string | null
@@ -94,10 +108,12 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          available_points?: number
           body?: number
           created_at?: string
           description?: string | null
           id?: string
+          kills?: number
           name: string
           owner_id?: string | null
           photo_path?: string | null
@@ -106,10 +122,12 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          available_points?: number
           body?: number
           created_at?: string
           description?: string | null
           id?: string
+          kills?: number
           name?: string
           owner_id?: string | null
           photo_path?: string | null
@@ -126,6 +144,18 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      master_emails: {
+        Row: {
+          email: string
+        }
+        Insert: {
+          email: string
+        }
+        Update: {
+          email?: string
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
@@ -177,6 +207,14 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      invest_points: {
+        Args: { _allocations: Json; _character_id: string }
+        Returns: undefined
+      }
+      sync_my_role: {
+        Args: never
+        Returns: Database["public"]["Enums"]["app_role"]
       }
     }
     Enums: {
