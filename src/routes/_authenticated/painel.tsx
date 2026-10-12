@@ -67,7 +67,7 @@ function MasterDashboard() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("characters")
-        .select("*, character_attributes(attribute_key,current_value,max_value)")
+        .select("*, character_attributes(attribute_key,current_value,max_value,points)")
         .order("name");
       if (error) throw error;
       return data;
