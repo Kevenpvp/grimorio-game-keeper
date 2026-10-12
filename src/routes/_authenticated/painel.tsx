@@ -125,7 +125,7 @@ function MasterDashboard() {
                   <div className="truncate text-xs text-muted-foreground">{c.player_name || "Sem jogador"}</div>
                   <MiniBar label="HP" cur={hp?.current_value ?? 0} max={hp?.max_value ?? 0} tone="bg-blood" />
                   <MiniBar label="Mana" cur={mana?.current_value ?? 0} max={mana?.max_value ?? 0} tone="bg-arcane" />
-                  <div className="tabular text-xs text-muted-foreground">Corpo {c.body}% · Sanidade {c.sanity}%</div>
+                  <div className="tabular text-xs text-muted-foreground">Corpo {c.body}% · Sanidade {c.sanity}% · {c.available_points} pt{c.available_points === 1 ? "" : "s"} · {c.kills} abate{c.kills === 1 ? "" : "s"}</div>
                 </div>
               </Link>
             );

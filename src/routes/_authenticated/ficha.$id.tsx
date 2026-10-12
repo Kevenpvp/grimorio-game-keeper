@@ -315,6 +315,7 @@ function AttrEditor({ def, characterId, attr, onSaved }: {
 }) {
   const cur0 = attr?.current_value ?? 0;
   const max0 = attr?.max_value ?? 0;
+  const pts0 = attr?.points ?? 0;
   const [cur, setCur] = useState(cur0);
   const [max, setMax] = useState(max0);
   const [pendingMax, setPendingMax] = useState<number | null>(null);
@@ -349,26 +350,55 @@ function AttrEditor({ def, characterId, attr, onSaved }: {
         <span className="flex items-center gap-2 text-sm uppercase tracking-wider text-muted-foreground">
           <AttrIcon name={def.icon} className="h-4 w-4 text-gold" /> {def.label}
         </span>
-        <span className="tabular text-lg font-bold">{cur0} <span className="text-sm text-muted-foreground">/ {max0}</span></span>
+        <span className="tabular text-lg font-bold">
+          {def.accepts_points ? (
+            computeValue(def, pts0)
+          ) : (
+            <>{cur0} <span className="text-sm text-muted-foreground">/ {max0}</span></>
+          )}
+        </span>
       </div>
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Atual</Label>
-          <div className="flex items-center gap-1">
-            <Button size="icon" variant="outline" className="h-9 w-9" onClick={() => commitCur(cur - 1)}><Minus className="h-4 w-4" /></Button>
-            <Input type="number" min={0} className="tabular h-9 w-20 text-center" value={cur}
-              onChange={(e) => setCur(Number(e.target.value))} onBlur={() => commitCur(cur)}
-              onKeyDown={(e) => e.key === "Enter" && commitCur(cur)} />
-            <Button size="icon" variant="outline" className="h-9 w-9" onClick={() => commitCur(cur + 1)}><Plus className="h-4 w-4" /></Button>
+
+      {def.accepts_points ? (
+        <div className="flex flex-wrap items-end gap-3">
+          {def.show_bar && (
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Uso atual</Label>
+              <div className="flex items-center gap-1">
+                <Button size="icon" variant="outline" className="h-9 w-9" onClick={() => commitCur(cur - 1)}><Minus className="h-4 w-4" /></Button>
+                <Input type="number" min={0} className="tabular h-9 w-20 text-center" value={cur}
+                  onChange={(e) => setCur(Number(e.target.value))} onBlur={() => commitCur(cur)}
+                  onKeyDown={(e) => e.key === "Enter" && commitCur(cur)} />
+                <Button size="icon" variant="outline" className="h-9 w-9" onClick={() => commitCur(cur + 1)}><Plus className="h-4 w-4" /></Button>
+              </div>
+            </div>
+          )}
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Pontos investidos</Label>
+            <div className="tabular panel px-4 py-1.5 text-center text-sm">{pts0}</div>
           </div>
         </div>
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Máximo</Label>
-          <Input type="number" min={0} className="tabular h-9 w-24 text-center" value={max}
-            onChange={(e) => setMax(Number(e.target.value))} onBlur={() => commitMax(max)}
-            onKeyDown={(e) => e.key === "Enter" && commitMax(max)} />
+      ) : (
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Atual</Label>
+            <div className="flex items-center gap-1">
+              <Button size="icon" variant="outline" className="h-9 w-9" onClick={() => commitCur(cur - 1)}><Minus className="h-4 w-4" /></Button>
+              <Input type="number" min={0} className="tabular h-9 w-20 text-center" value={cur}
+                onChange={(e) => setCur(Number(e.target.value))} onBlur={() => commitCur(cur)}
+                onKeyDown={(e) => e.key === "Enter" && commitCur(cur)} />
+              <Button size="icon" variant="outline" className="h-9 w-9" onClick={() => commitCur(cur + 1)}><Plus className="h-4 w-4" /></Button>
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Máximo</Label>
+            <Input type="number" min={0} className="tabular h-9 w-24 text-center" value={max}
+              onChange={(e) => setMax(Number(e.target.value))} onBlur={() => commitMax(max)}
+              onKeyDown={(e) => e.key === "Enter" && commitMax(max)} />
+          </div>
         </div>
-      </div>
+      )}
+
       {def.show_bar && <StatBar value={cur0} max={max0} tone={barTone(def.key)} className="mt-3" />}
 
       <AlertDialog open={pendingMax !== null} onOpenChange={(o) => { if (!o) { setPendingMax(null); setMax(max0); } }}>
