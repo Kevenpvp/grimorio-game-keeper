@@ -1,6 +1,6 @@
 import { User } from "lucide-react";
 import type { AttributeDef, Character, CharacterAttr } from "@/lib/sheets";
-import { usePhotoUrl } from "@/lib/sheets";
+import { computeValue, usePhotoUrl } from "@/lib/sheets";
 import { AttrIcon, barTone } from "./icons";
 import { StatBar } from "./StatBar";
 
@@ -50,6 +50,16 @@ export function CharacterSheetView({
             <p className="text-muted-foreground">Jogador: {character.player_name || "—"}</p>
             {character.description && <p className="mt-3 max-w-prose text-sm leading-relaxed">{character.description}</p>}
           </div>
+
+          <div className="flex flex-wrap gap-3">
+            <span className="panel tabular px-3 py-1.5 text-xs uppercase tracking-wider text-gold">
+              {character.available_points} ponto{character.available_points === 1 ? "" : "s"} livre{character.available_points === 1 ? "" : "s"}
+            </span>
+            <span className="panel tabular px-3 py-1.5 text-xs uppercase tracking-wider text-muted-foreground">
+              {character.kills} abate{character.kills === 1 ? "" : "s"}
+            </span>
+          </div>
+
           <div className="grid gap-3 sm:grid-cols-2">
             {barDefs.map((d) => {
               const a = byKey.get(d.key);
@@ -80,14 +90,19 @@ export function CharacterSheetView({
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {otherDefs.map((d) => {
             const a = byKey.get(d.key);
+            const pts = a?.points ?? 0;
+            const value = d.accepts_points ? computeValue(d, pts) : a?.current_value ?? 0;
             return (
               <div key={d.key} className="panel p-4">
                 <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
                   <AttrIcon name={d.icon} className="h-4 w-4 text-gold" /> {d.label}
                 </div>
-                <div className="tabular mt-2 text-2xl font-bold">
-                  {a?.current_value ?? 0} <span className="text-base text-muted-foreground">/ {a?.max_value ?? 0}</span>
-                </div>
+                <div className="tabular mt-2 text-2xl font-bold">{value}</div>
+                {d.accepts_points && (
+                  <div className="tabular mt-1 text-xs text-muted-foreground">
+                    {pts} ponto{pts === 1 ? "" : "s"} investido{pts === 1 ? "" : "s"}
+                  </div>
+                )}
               </div>
             );
           })}

@@ -17,10 +17,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  clampPct, useCharacter, useCharacterLive, useDefs, useMe,
+  clampPct, computeValue, useCharacter, useCharacterLive, useDefs, useMe,
   type AttributeDef, type Character, type CharacterAttr,
 } from "@/lib/sheets";
 import { CharacterSheetView, Portrait } from "@/components/sheet/CharacterSheetView";
+import { PointsDistribution } from "@/components/sheet/PointsDistribution";
 import { AttrIcon, barTone } from "@/components/sheet/icons";
 import { StatBar } from "@/components/sheet/StatBar";
 
@@ -214,6 +215,18 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
               onSave={(v) => updateCharacter({ sanity: v })} />
           </section>
 
+          <section className="grid gap-4 sm:grid-cols-2">
+            <NumberField label="Pontos disponíveis" icon="sparkles" value={character.available_points}
+              onSave={(v) => updateCharacter({ available_points: v })} />
+            <NumberField label="Abates" icon="flame" value={character.kills}
+              onSave={(v) => updateCharacter({ kills: v })} />
+          </section>
+
+          <section>
+            <h2 className="mb-3 text-lg text-gold">Pontos de atributo</h2>
+            <PointsDistribution character={character} attrs={attrs} defs={defs} canRemove />
+          </section>
+
           <section>
             <h2 className="mb-3 text-lg text-gold">Atributos</h2>
             <div className="grid gap-3 md:grid-cols-2">
@@ -241,6 +254,32 @@ function SavedBadge({ savedAt }: { savedAt: number | null }) {
     <span className={`flex items-center gap-1 text-sm text-vital transition-opacity ${show ? "opacity-100" : "opacity-0"}`}>
       <Check className="h-4 w-4" /> Salvo
     </span>
+  );
+}
+
+function NumberField({ label, icon, value, onSave }: {
+  label: string; icon: string; value: number; onSave: (v: number) => Promise<unknown>;
+}) {
+  const [v, setV] = useState(value);
+  useEffect(() => setV(value), [value]);
+  const commit = (n: number) => {
+    const c = Math.max(0, Math.round(Number.isFinite(n) ? n : 0));
+    setV(c);
+    if (c !== value) onSave(c);
+  };
+  return (
+    <div className="panel flex items-center justify-between gap-3 p-4">
+      <span className="flex items-center gap-2 text-sm uppercase tracking-wider text-muted-foreground">
+        <AttrIcon name={icon} className="h-4 w-4 text-gold" /> {label}
+      </span>
+      <div className="flex items-center gap-1">
+        <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => commit(v - 1)}><Minus className="h-4 w-4" /></Button>
+        <Input type="number" min={0} className="tabular h-8 w-20 text-center" value={v}
+          onChange={(e) => setV(Number(e.target.value))} onBlur={() => commit(v)}
+          onKeyDown={(e) => e.key === "Enter" && commit(v)} />
+        <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => commit(v + 1)}><Plus className="h-4 w-4" /></Button>
+      </div>
+    </div>
   );
 }
 
