@@ -36,6 +36,13 @@
       "when": 1791808588903,
       "tag": "0004_invest_points_remove_fix",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791808614837,
+      "tag": "0005_invest_points_rowcount",
+      "breakpoints": true
     }
   ]
 }
