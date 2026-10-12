@@ -11,3 +11,5 @@
 
 - Permissions are enforced by database RLS (has_role master vs owner_id); the client talks to the database directly. Why: players can't bypass rules via manual API calls.
 - Attributes live in attribute_definitions + character_attributes rows. Why: new attributes need only a new definition row, no schema change.
+- Point investment goes only through the invest_points database function; the client never writes character_attributes.points. Why: the point balance, the caps and the derived maximum must change atomically and be checked server-side.
+- Master identity comes from the master_emails table matched against the authenticated email; the client never chooses a role. Why: nobody can promote themselves through the UI or manual API calls.
