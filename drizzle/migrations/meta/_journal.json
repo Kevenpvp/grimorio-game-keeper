@@ -22,6 +22,13 @@
       "when": 1791808331464,
       "tag": "0002_sync_max_value_with_points",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791808529383,
+      "tag": "0003_fix_invest_points_sync",
+      "breakpoints": true
     }
   ]
 }
