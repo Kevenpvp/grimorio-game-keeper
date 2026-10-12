@@ -15,6 +15,34 @@
       "when": 1791655159311,
       "tag": "0001_points_system_master_email",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791808331464,
+      "tag": "0002_sync_max_value_with_points",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791808529383,
+      "tag": "0003_fix_invest_points_sync",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791808588903,
+      "tag": "0004_invest_points_remove_fix",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791808614837,
+      "tag": "0005_invest_points_rowcount",
+      "breakpoints": true
     }
   ]
 }
