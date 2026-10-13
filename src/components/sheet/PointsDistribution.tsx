@@ -27,14 +27,19 @@ export function PointsDistribution({
   }
 
   async function confirm() {
+    if (busy || remaining < 0) return;
     setBusy(true);
     const { error } = await supabase.rpc("invest_points", { _character_id: character.id, _allocations: alloc });
-    setBusy(false);
-    if (error) { toast.error(error.message); return; }
-    setAlloc({});
-    toast.success("Distribuição salva");
-    qc.invalidateQueries({ queryKey: ["character", character.id] });
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success("Distribuição salva");
+    }
+    // Wait for the fresh balance before unlocking, so the old balance is never reused.
+    await qc.refetchQueries({ queryKey: ["character", character.id] });
     qc.invalidateQueries({ queryKey: ["characters"] });
+    setAlloc({});
+    setBusy(false);
   }
 
   return (
