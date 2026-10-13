@@ -316,10 +316,14 @@ function AttrEditor({ def, characterId, attr, onSaved }: {
   const cur0 = attr?.current_value ?? 0;
   const max0 = attr?.max_value ?? 0;
   const pts0 = attr?.points ?? 0;
+  const bonus0 = attr?.bonus ?? 0;
+  const base = def.accepts_points ? computeValue(def, pts0) : max0;
+  const total = def.accepts_points ? base + bonus0 : max0;
   const [cur, setCur] = useState(cur0);
   const [max, setMax] = useState(max0);
+  const [bonus, setBonus] = useState(bonus0);
   const [pendingMax, setPendingMax] = useState<number | null>(null);
-  useEffect(() => { setCur(cur0); setMax(max0); }, [cur0, max0]);
+  useEffect(() => { setCur(cur0); setMax(max0); setBonus(bonus0); }, [cur0, max0, bonus0]);
 
   async function save(c: number, m: number) {
     const { error } = await supabase.from("character_attributes").upsert({
@@ -329,9 +333,21 @@ function AttrEditor({ def, characterId, attr, onSaved }: {
     onSaved();
   }
 
+  async function commitBonus(n: number) {
+    const b = Math.round(Number.isFinite(n) ? n : 0);
+    setBonus(b);
+    if (b === bonus0) return;
+    const { error } = await supabase.from("character_attributes").upsert({
+      character_id: characterId, attribute_key: def.key, bonus: b,
+    });
+    if (error) { toast.error(error.message); setBonus(bonus0); return; }
+    onSaved();
+  }
+
   function commitCur(n: number) {
     let c = Math.max(0, Math.round(Number.isFinite(n) ? n : 0));
-    if (def.cap_current) c = Math.min(c, max);
+    if (def.accepts_points) c = Math.min(c, Math.max(0, total));
+    else if (def.cap_current) c = Math.min(c, max);
     setCur(c);
     if (c !== cur0) save(c, max);
   }
@@ -351,8 +367,10 @@ function AttrEditor({ def, characterId, attr, onSaved }: {
           <AttrIcon name={def.icon} className="h-4 w-4 text-gold" /> {def.label}
         </span>
         <span className="tabular text-lg font-bold">
-          {def.accepts_points ? (
-            computeValue(def, pts0)
+          {def.accepts_points && !def.show_bar ? (
+            total
+          ) : def.accepts_points ? (
+            <>{cur0} <span className="text-sm text-muted-foreground">/ {total}</span></>
           ) : (
             <>{cur0} <span className="text-sm text-muted-foreground">/ {max0}</span></>
           )}
@@ -360,23 +378,40 @@ function AttrEditor({ def, characterId, attr, onSaved }: {
       </div>
 
       {def.accepts_points ? (
-        <div className="flex flex-wrap items-end gap-3">
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Pontos investidos</Label>
+              <div className="tabular panel px-4 py-1.5 text-center text-sm">{pts0}</div>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Valor por pontos</Label>
+              <div className="tabular panel px-4 py-1.5 text-center text-sm">{base}</div>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Buff / Debuff</Label>
+              <Input type="number" className="tabular h-9 w-24 text-center" value={bonus}
+                onChange={(e) => setBonus(Number(e.target.value))} onBlur={() => commitBonus(bonus)}
+                onKeyDown={(e) => e.key === "Enter" && commitBonus(bonus)} />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">{def.show_bar ? "Total" : "Valor aplicado"}</Label>
+              <div className="tabular panel px-4 py-1.5 text-center text-sm font-bold text-gold">{total}</div>
+            </div>
+          </div>
           {def.show_bar && (
             <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Uso atual</Label>
+              <Label className="text-xs text-muted-foreground">{def.label} atual</Label>
               <div className="flex items-center gap-1">
                 <Button size="icon" variant="outline" className="h-9 w-9" onClick={() => commitCur(cur - 1)}><Minus className="h-4 w-4" /></Button>
-                <Input type="number" min={0} className="tabular h-9 w-20 text-center" value={cur}
+                <Input type="number" min={0} className="tabular h-9 w-24 text-center" value={cur}
                   onChange={(e) => setCur(Number(e.target.value))} onBlur={() => commitCur(cur)}
                   onKeyDown={(e) => e.key === "Enter" && commitCur(cur)} />
                 <Button size="icon" variant="outline" className="h-9 w-9" onClick={() => commitCur(cur + 1)}><Plus className="h-4 w-4" /></Button>
+                <Button size="sm" variant="ghost" onClick={() => commitCur(total)}>Encher</Button>
               </div>
             </div>
           )}
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Pontos investidos</Label>
-            <div className="tabular panel px-4 py-1.5 text-center text-sm">{pts0}</div>
-          </div>
         </div>
       ) : (
         <div className="flex flex-wrap items-end gap-3">
@@ -399,7 +434,7 @@ function AttrEditor({ def, characterId, attr, onSaved }: {
         </div>
       )}
 
-      {def.show_bar && <StatBar value={cur0} max={max0} tone={barTone(def.key)} className="mt-3" />}
+      {def.show_bar && <StatBar value={cur0} max={def.accepts_points ? total : max0} tone={barTone(def.key)} className="mt-3" />}
 
       <AlertDialog open={pendingMax !== null} onOpenChange={(o) => { if (!o) { setPendingMax(null); setMax(max0); } }}>
         <AlertDialogContent>

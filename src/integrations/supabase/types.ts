@@ -53,6 +53,7 @@ export type Database = {
       character_attributes: {
         Row: {
           attribute_key: string
+          bonus: number
           character_id: string
           current_value: number
           max_value: number
@@ -61,6 +62,7 @@ export type Database = {
         }
         Insert: {
           attribute_key: string
+          bonus?: number
           character_id: string
           current_value?: number
           max_value?: number
@@ -69,6 +71,7 @@ export type Database = {
         }
         Update: {
           attribute_key?: string
+          bonus?: number
           character_id?: string
           current_value?: number
           max_value?: number
