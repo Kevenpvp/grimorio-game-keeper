@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCharacter, useCharacterLive, useDefs, useMe } from "@/lib/sheets";
 import { CharacterSheetView, Portrait } from "@/components/sheet/CharacterSheetView";
 import { StatBar } from "@/components/sheet/StatBar";
+import { PointsDistribution } from "@/components/sheet/PointsDistribution";
 
 export const Route = createFileRoute("/_authenticated/painel")({
   head: () => ({
@@ -55,7 +56,14 @@ function PlayerSheet({ id }: { id: string }) {
   const { data: defs } = useDefs();
   useCharacterLive(id);
   if (!data?.character || !defs) return <p className="text-muted-foreground">Carregando…</p>;
-  return <CharacterSheetView character={data.character} attrs={data.attrs} defs={defs} />;
+  return (
+    <div className="space-y-6">
+      <CharacterSheetView character={data.character} attrs={data.attrs} defs={defs} />
+      {data.character.available_points > 0 && (
+        <PointsDistribution character={data.character} attrs={data.attrs} defs={defs} />
+      )}
+    </div>
+  );
 }
 
 function MasterDashboard() {
