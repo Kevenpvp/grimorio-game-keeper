@@ -43,6 +43,13 @@
       "when": 1791808614837,
       "tag": "0005_invest_points_rowcount",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791914527818,
+      "tag": "0006_attribute_bonus_mana_50",
+      "breakpoints": true
     }
   ]
 }
