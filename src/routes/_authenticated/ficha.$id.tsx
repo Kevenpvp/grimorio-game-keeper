@@ -54,7 +54,15 @@ function FichaPage() {
         <Link to="/painel" className="mt-4 inline-block text-sm text-muted-foreground hover:text-gold">Voltar</Link>
       </div>
     );
-  if (!me.isMaster) return <CharacterSheetView character={data.character} attrs={data.attrs} defs={defs} />;
+  if (!me.isMaster)
+    return (
+      <div className="space-y-6">
+        <CharacterSheetView character={data.character} attrs={data.attrs} defs={defs} />
+        {data.character.available_points > 0 && (
+          <PointsDistribution character={data.character} attrs={data.attrs} defs={defs} />
+        )}
+      </div>
+    );
   return <Editor character={data.character} attrs={data.attrs} defs={defs} />;
 }
 
