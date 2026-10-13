@@ -434,7 +434,7 @@ function AttrEditor({ def, characterId, attr, onSaved }: {
         </div>
       )}
 
-      {def.show_bar && <StatBar value={cur0} max={max0} tone={barTone(def.key)} className="mt-3" />}
+      {def.show_bar && <StatBar value={cur0} max={def.accepts_points ? total : max0} tone={barTone(def.key)} className="mt-3" />}
 
       <AlertDialog open={pendingMax !== null} onOpenChange={(o) => { if (!o) { setPendingMax(null); setMax(max0); } }}>
         <AlertDialogContent>

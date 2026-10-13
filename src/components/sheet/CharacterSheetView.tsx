@@ -64,7 +64,10 @@ export function CharacterSheetView({
             {barDefs.map((d) => {
               const a = byKey.get(d.key);
               const cur = a?.current_value ?? 0;
-              const max = a?.max_value ?? 0;
+              const pts = a?.points ?? 0;
+              const bonus = a?.bonus ?? 0;
+              const base = d.accepts_points ? computeValue(d, pts) : 0;
+              const max = d.accepts_points ? base + bonus : a?.max_value ?? 0;
               return (
                 <div key={d.key} className="panel p-4">
                   <div className="mb-2 flex items-center justify-between">
@@ -76,6 +79,11 @@ export function CharacterSheetView({
                     </span>
                   </div>
                   <StatBar value={cur} max={max} tone={barTone(d.key)} />
+                  {d.accepts_points && (
+                    <div className="tabular mt-2 text-xs text-muted-foreground">
+                      {pts} pts · {base} por pontos{bonus !== 0 && <> · <span className={bonus > 0 ? "text-gold" : "text-destructive"}>{bonus > 0 ? "+" : ""}{bonus} buff/debuff</span></>}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -91,7 +99,9 @@ export function CharacterSheetView({
           {otherDefs.map((d) => {
             const a = byKey.get(d.key);
             const pts = a?.points ?? 0;
-            const value = d.accepts_points ? computeValue(d, pts) : a?.current_value ?? 0;
+            const bonus = a?.bonus ?? 0;
+            const base = d.accepts_points ? computeValue(d, pts) : 0;
+            const value = d.accepts_points ? base + bonus : a?.current_value ?? 0;
             return (
               <div key={d.key} className="panel p-4">
                 <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
@@ -100,7 +110,8 @@ export function CharacterSheetView({
                 <div className="tabular mt-2 text-2xl font-bold">{value}</div>
                 {d.accepts_points && (
                   <div className="tabular mt-1 text-xs text-muted-foreground">
-                    {pts} ponto{pts === 1 ? "" : "s"} investido{pts === 1 ? "" : "s"}
+                    {base} por pontos ({pts} pt{pts === 1 ? "" : "s"})
+                    {bonus !== 0 && <> · <span className={bonus > 0 ? "text-gold" : "text-destructive"}>{bonus > 0 ? "+" : ""}{bonus}</span></>}
                   </div>
                 )}
               </div>
