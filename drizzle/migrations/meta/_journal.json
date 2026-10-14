@@ -50,6 +50,13 @@
       "when": 1791914527818,
       "tag": "0006_attribute_bonus_mana_50",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791983983338,
+      "tag": "0007_races",
+      "breakpoints": true
     }
   ]
 }
