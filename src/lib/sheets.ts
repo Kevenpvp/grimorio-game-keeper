@@ -101,3 +101,32 @@ export const clampPct = (n: number) => Math.max(0, Math.min(100, Math.round(Numb
 export function computeValue(def: AttributeDef, points: number) {
   return Math.round((Number(def.base_value) + points * Number(def.points_multiplier)) * 100) / 100;
 }
+
+export type Race = Tables<"races">;
+export type RaceMods = Record<string, number>;
+
+export function useRaces() {
+  return useQuery({
+    queryKey: ["races"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("races").select("*").order("name");
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function raceMods(race: Race | null | undefined): RaceMods {
+  const m = race?.modifiers;
+  if (!m || typeof m !== "object" || Array.isArray(m)) return {};
+  const out: RaceMods = {};
+  for (const [k, v] of Object.entries(m)) { const n = Number(v); if (Number.isFinite(n) && n !== 0) out[k] = n; }
+  return out;
+}
+
+/** Racial points per attribute key for a character. */
+export function useRaceMods(raceId: string | null | undefined) {
+  const { data: races } = useRaces();
+  const race = races?.find((r) => r.id === raceId) ?? null;
+  return { race, mods: raceMods(race), races: races ?? [] };
+}
