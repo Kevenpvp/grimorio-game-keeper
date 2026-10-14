@@ -11,8 +11,8 @@ export function ModsList({ race, defs }: { race: Race; defs: AttributeDef[] }) {
   return (
     <div className="flex flex-wrap gap-1.5 text-xs">
       {entries.map((d) => (
-        <span key={d.key} className={`tabular rounded px-2 py-0.5 bg-muted ${mods[d.key] > 0 ? "text-gold" : "text-destructive"}`}>
-          {mods[d.key] > 0 ? "+" : ""}{mods[d.key]} {d.label}
+        <span key={d.key} className={`tabular rounded px-2 py-0.5 bg-muted ${(mods[d.key] ?? 0) > 0 ? "text-gold" : "text-destructive"}`}>
+          {(mods[d.key] ?? 0) > 0 ? "+" : ""}{mods[d.key]} {d.label}
         </span>
       ))}
       {race.bonus_points > 0 && (

@@ -86,7 +86,7 @@ export function CharacterSheetView({
                   <StatBar value={cur} max={max} tone={barTone(d.key)} />
                   {d.accepts_points && (
                     <div className="tabular mt-2 text-xs text-muted-foreground">
-                      {pts} pts{(mods[d.key] ?? 0) !== 0 && <> ({mods[d.key] > 0 ? "+" : ""}{mods[d.key]} raça)</>} · {base} por pontos{bonus !== 0 && <> · <span className={bonus > 0 ? "text-gold" : "text-destructive"}>{bonus > 0 ? "+" : ""}{bonus} buff/debuff</span></>}
+                      {pts} pts{rm !== 0 && <> ({rm > 0 ? "+" : ""}{rm} raça)</>} · {base} por pontos{bonus !== 0 && <> · <span className={bonus > 0 ? "text-gold" : "text-destructive"}>{bonus > 0 ? "+" : ""}{bonus} buff/debuff</span></>}
                     </div>
                   )}
                 </div>
