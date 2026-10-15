@@ -64,6 +64,13 @@
       "when": 1791992386082,
       "tag": "0008_migration",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792069269895,
+      "tag": "0009_combat_mode",
+      "breakpoints": true
     }
   ]
 }

@@ -50,6 +50,81 @@ export type Database = {
         }
         Relationships: []
       }
+      battle_participants: {
+        Row: {
+          battle_id: string
+          character_id: string
+          sort_order: number
+        }
+        Insert: {
+          battle_id: string
+          character_id: string
+          sort_order?: number
+        }
+        Update: {
+          battle_id?: string
+          character_id?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "battle_participants_battle_id_fkey"
+            columns: ["battle_id"]
+            isOneToOne: false
+            referencedRelation: "battles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "battle_participants_character_id_fkey"
+            columns: ["character_id"]
+            isOneToOne: false
+            referencedRelation: "characters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      battles: {
+        Row: {
+          active: boolean
+          created_at: string
+          current_character_id: string | null
+          id: string
+          name: string
+          target_character_id: string | null
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          current_character_id?: string | null
+          id?: string
+          name?: string
+          target_character_id?: string | null
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          current_character_id?: string | null
+          id?: string
+          name?: string
+          target_character_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "battles_current_character_id_fkey"
+            columns: ["current_character_id"]
+            isOneToOne: false
+            referencedRelation: "characters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "battles_target_character_id_fkey"
+            columns: ["target_character_id"]
+            isOneToOne: false
+            referencedRelation: "characters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       character_attributes: {
         Row: {
           attribute_key: string
@@ -255,10 +330,12 @@ export type Database = {
         }
         Returns: boolean
       }
+      in_my_battle: { Args: { _battle_id: string }; Returns: boolean }
       invest_points: {
         Args: { _allocations: Json; _character_id: string }
         Returns: undefined
       }
+      shares_battle: { Args: { _character_id: string }; Returns: boolean }
       sync_my_role: {
         Args: never
         Returns: Database["public"]["Enums"]["app_role"]
