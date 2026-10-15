@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as AuthenticatedCombateRouteImport } from './routes/_authenticated/combate'
 import { Route as AuthenticatedPainelRouteImport } from './routes/_authenticated/painel'
 import { Route as AuthenticatedRacasRouteImport } from './routes/_authenticated/racas'
 import { Route as AuthenticatedFichaIdRouteImport } from './routes/_authenticated/ficha.$id'
@@ -29,6 +30,11 @@ const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedCombateRoute = AuthenticatedCombateRouteImport.update({
+  id: '/combate',
+  path: '/combate',
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedPainelRoute = AuthenticatedPainelRouteImport.update({
   id: '/painel',
@@ -49,6 +55,7 @@ const AuthenticatedFichaIdRoute = AuthenticatedFichaIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/combate': typeof AuthenticatedCombateRoute
   '/painel': typeof AuthenticatedPainelRoute
   '/racas': typeof AuthenticatedRacasRoute
   '/ficha/$id': typeof AuthenticatedFichaIdRoute
@@ -56,6 +63,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/combate': typeof AuthenticatedCombateRoute
   '/painel': typeof AuthenticatedPainelRoute
   '/racas': typeof AuthenticatedRacasRoute
   '/ficha/$id': typeof AuthenticatedFichaIdRoute
@@ -65,20 +73,22 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/_authenticated/combate': typeof AuthenticatedCombateRoute
   '/_authenticated/painel': typeof AuthenticatedPainelRoute
   '/_authenticated/racas': typeof AuthenticatedRacasRoute
   '/_authenticated/ficha/$id': typeof AuthenticatedFichaIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/painel' | '/racas' | '/ficha/$id'
+  fullPaths: '/' | '/auth' | '/combate' | '/painel' | '/racas' | '/ficha/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/painel' | '/racas' | '/ficha/$id'
+  to: '/' | '/auth' | '/combate' | '/painel' | '/racas' | '/ficha/$id'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
     | '/auth'
+    | '/_authenticated/combate'
     | '/_authenticated/painel'
     | '/_authenticated/racas'
     | '/_authenticated/ficha/$id'
@@ -113,6 +123,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/combate': {
+      id: '/_authenticated/combate'
+      path: '/combate'
+      fullPath: '/combate'
+      preLoaderRoute: typeof AuthenticatedCombateRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/painel': {
       id: '/_authenticated/painel'
       path: '/painel'
@@ -138,12 +155,14 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedCombateRoute: typeof AuthenticatedCombateRoute
   AuthenticatedPainelRoute: typeof AuthenticatedPainelRoute
   AuthenticatedRacasRoute: typeof AuthenticatedRacasRoute
   AuthenticatedFichaIdRoute: typeof AuthenticatedFichaIdRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedCombateRoute: AuthenticatedCombateRoute,
   AuthenticatedPainelRoute: AuthenticatedPainelRoute,
   AuthenticatedRacasRoute: AuthenticatedRacasRoute,
   AuthenticatedFichaIdRoute: AuthenticatedFichaIdRoute,

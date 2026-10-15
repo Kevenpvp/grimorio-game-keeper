@@ -260,11 +260,8 @@ function Actions({ actor, target, defs, val }: {
 
   function attack() {
     const aAtk = val(actor, "atk_speed"), tSpd = val(target, "speed");
-    const tAtk = val(target, "atk_speed"), aSpd = val(actor, "speed");
-    void tAtk;
     const atkMod = diceMod(aAtk, tSpd);
     const dodgeMod = diceMod(tSpd, aAtk);
-    void aSpd;
     setRoll({
       title: `${actor.name} ataca ${target.name}`,
       lines: [
@@ -283,7 +280,7 @@ function Actions({ actor, target, defs, val }: {
       ],
     });
   }
-  const testable = defs.filter((d) => d.key !== "hp" || true);
+  const testable = defs;
 
   return (
     <div className="panel space-y-4 p-4">
