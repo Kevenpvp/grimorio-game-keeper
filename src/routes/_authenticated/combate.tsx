@@ -75,7 +75,7 @@ function CombatPage() {
 
   async function create() {
     const { data, error } = await supabase.from("battles").insert({ name: `Batalha ${list.length + 1}` }).select("id").single();
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     setSel(data.id);
   }
 
