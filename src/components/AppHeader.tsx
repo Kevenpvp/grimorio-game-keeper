@@ -24,6 +24,7 @@ export function AppHeader() {
           <Swords className="h-5 w-5" /> Grimório
         </Link>
         <div className="flex items-center gap-3 text-sm">
+          {me && <Link to="/combate" className="text-muted-foreground hover:text-gold">Combate</Link>}
           {me?.isMaster && (
             <Link to="/racas" className="text-muted-foreground hover:text-gold">Raças</Link>
           )}
