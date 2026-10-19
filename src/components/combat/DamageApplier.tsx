@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Flame, HeartPulse, Plus, Shield, Sparkles, Swords, Zap } from "lucide-react";
+import { HeartPulse, Shield, Sparkles, Swords, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -100,8 +100,9 @@ export function DamageApplier({ target, battleId = null }: {
       const typeName = needsMagic
         ? damageTypes.find((t) => t.id === damageTypeId)?.name ?? "mágico"
         : damageKindName;
+      const damageDescription = damageKind === "hybrid" ? `híbrido (${typeName})` : damageKind === "magical" ? `mágico (${typeName})` : typeName;
       toast.success(
-        `${target.name}: ${result.hits} golpe(s) de ${typeName}; ${defenseText}; ${result.total_damage} de dano total. HP: ${result.hp_before} → ${result.hp_after}.`,
+        `${target.name}: ${result.hits} golpe(s) de ${damageDescription}; ${defenseText}; ${result.total_damage} de dano total. HP: ${result.hp_before} → ${result.hp_after}.`,
         { duration: 8000 },
       );
       await Promise.all([
@@ -147,9 +148,9 @@ export function DamageApplier({ target, battleId = null }: {
               <label className="text-xs text-muted-foreground">Nível da magia</label>
               <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
                 value={magicLevel} onChange={(e) => setMagicLevel(e.target.value as MagicLevel)}>
-                <option value="baixa">Magia nível baixo</option>
-                <option value="media">Magia nível médio</option>
-                <option value="alta">Magia nível alto</option>
+                <option value="baixa">Baixa</option>
+                <option value="media">Média</option>
+                <option value="alta">Alta</option>
               </select>
             </div>
           </>
