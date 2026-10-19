@@ -34,8 +34,11 @@ type Fighter = {
 /** Applied total of an attribute (points + race + buff/debuff). */
 function totalOf(def: AttributeDef, a: Attr | undefined, mods: Record<string, number>) {
   const race = mods[def.key] ?? 0;
-  if (!def.accepts_points) return (a?.max_value ?? 0) + race + (a?.bonus ?? 0);
-  return computeValue(def, (a?.points ?? 0) + race) + (a?.bonus ?? 0);
+  const value = !def.accepts_points
+    ? (a?.max_value ?? 0) + race + (a?.bonus ?? 0)
+    : computeValue(def, (a?.points ?? 0) + race) + (a?.bonus ?? 0);
+  // A racial penalty must never make a character's maximum HP zero or negative.
+  return def.key === "hp" ? Math.max(1, value) : value;
 }
 const diceMod = (mine: number, theirs: number) => Math.max(0, Math.floor((mine - theirs) / 10));
 const dice = (m: number) => `1d20+${m}`;
