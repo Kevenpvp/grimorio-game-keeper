@@ -331,7 +331,9 @@ function AttrEditor({ def, characterId, attr, racePts, onSaved }: {
   const pts0 = attr?.points ?? 0;
   const bonus0 = attr?.bonus ?? 0;
   const base = def.accepts_points ? computeValue(def, pts0 + racePts) : max0;
-  const total = def.accepts_points ? base + bonus0 : max0 + racePts;
+  const rawTotal = def.accepts_points ? base + bonus0 : max0 + racePts + bonus0;
+  // HP can receive negative racial modifiers, but its displayed maximum is always at least 1.
+  const total = def.key === "hp" ? Math.max(1, rawTotal) : rawTotal;
   const [cur, setCur] = useState(cur0);
   const [max, setMax] = useState(max0);
   const [bonus, setBonus] = useState(bonus0);
@@ -360,7 +362,7 @@ function AttrEditor({ def, characterId, attr, racePts, onSaved }: {
   function commitCur(n: number) {
     let c = Math.max(0, Math.round(Number.isFinite(n) ? n : 0));
     if (def.accepts_points) c = Math.min(c, Math.max(0, total));
-    else if (def.cap_current) c = Math.min(c, max);
+    else if (def.cap_current) c = Math.min(c, Math.max(0, Math.min(max, total)));
     setCur(c);
     if (c !== cur0) save(c, max);
   }
