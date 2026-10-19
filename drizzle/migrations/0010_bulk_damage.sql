@@ -50,13 +50,13 @@ BEGIN
     RAISE EXCEPTION 'Apenas o mestre pode aplicar dano';
   END IF;
 
-  IF _damage_kind NOT IN ('physical', 'magical') THEN
+  IF _damage_kind IS NULL OR _damage_kind NOT IN ('physical', 'magical') THEN
     RAISE EXCEPTION 'Tipo de dano inválido';
   END IF;
 
-  IF jsonb_typeof(_damage_values) <> 'array'
-     OR jsonb_array_length(_damage_values) < 1
-     OR jsonb_array_length(_damage_values) > 200 THEN
+  IF _damage_values IS NULL
+     OR jsonb_typeof(_damage_values) IS DISTINCT FROM 'array'
+     OR jsonb_array_length(_damage_values) NOT BETWEEN 1 AND 200 THEN
     RAISE EXCEPTION 'Informe de 1 a 200 valores de dano';
   END IF;
 
