@@ -72,7 +72,8 @@ export function CharacterSheetView({
               const pts = (a?.points ?? 0) + (d.accepts_points ? rm : 0);
               const bonus = a?.bonus ?? 0;
               const base = d.accepts_points ? computeValue(d, pts) : 0;
-              const max = d.accepts_points ? base + bonus : (a?.max_value ?? 0) + rm;
+              const rawMax = d.accepts_points ? base + bonus : (a?.max_value ?? 0) + rm + bonus;
+              const max = d.key === "hp" ? Math.max(1, rawMax) : rawMax;
               return (
                 <div key={d.key} className="panel p-4">
                   <div className="mb-2 flex items-center justify-between">
