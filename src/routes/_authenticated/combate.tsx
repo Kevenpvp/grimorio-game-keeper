@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { Crosshair, Dices, Plus, Swords, Trash2, Copy } from "lucide-react";
+import { Crosshair, Dices, Plus, Swords, Trash2, Copy, HeartPulse, Flame, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -135,6 +135,7 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
   return (
     <div className="space-y-6">
       {isMaster && <BattleAdmin battle={battle} fighters={fighters} onUpdate={update} />}
+      {isMaster && <DamageTypesManager />}
       {!isMaster && <h2 className="text-xl text-gold">{battle.name}</h2>}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -172,7 +173,7 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
       </div>
 
       {isMaster && (actor && target ? (
-        <Actions actor={actor} target={target} defs={defs} val={val} />
+        <Actions battleId={battle.id} actor={actor} target={target} defs={defs} val={val} />
       ) : (
         <p className="text-sm text-muted-foreground">Escolha quem está na vez e um alvo para ver as ações.</p>
       ))}
@@ -249,6 +250,58 @@ function BattleAdmin({ battle, fighters, onUpdate }: {
   );
 }
 
+function DamageTypesManager() {
+  const qc = useQueryClient();
+  const [name, setName] = useState("");
+  const { data: types = [], isLoading } = useQuery({
+    queryKey: ["damage-types"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("damage_types").select("id,name").order("name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  async function addType() {
+    const clean = name.trim();
+    if (!clean) { toast.error("Digite o nome do tipo mágico"); return; }
+    if (clean.length > 40) { toast.error("Use no máximo 40 caracteres"); return; }
+    const { error } = await supabase.from("damage_types").insert({ name: clean });
+    if (error) { toast.error(error.message.includes("duplicate") ? "Esse tipo já existe" : error.message); return; }
+    setName("");
+    await qc.invalidateQueries({ queryKey: ["damage-types"] });
+    toast.success("Tipo de dano mágico adicionado");
+  }
+
+  async function removeType(id: string) {
+    const { error } = await supabase.from("damage_types").delete().eq("id", id);
+    if (error) { toast.error(error.message); return; }
+    await qc.invalidateQueries({ queryKey: ["damage-types"] });
+    toast.success("Tipo removido");
+  }
+
+  return (
+    <section className="panel space-y-3 p-4">
+      <div className="flex items-center gap-2 text-lg text-gold"><Sparkles className="h-5 w-5" /> Tipos de dano mágico</div>
+      <p className="text-sm text-muted-foreground">Cadastre os tipos usados pelo RPG. Eles usam a Defesa Mágica do alvo.</p>
+      <form className="flex flex-wrap gap-2" onSubmit={(e) => { e.preventDefault(); void addType(); }}>
+        <Input aria-label="Nome do tipo mágico" className="max-w-xs" placeholder="Ex.: Gelo, Veneno, Elétrico" maxLength={40} value={name} onChange={(e) => setName(e.target.value)} />
+        <Button type="submit" disabled={!name.trim()}><Plus className="mr-1 h-4 w-4" /> Adicionar tipo</Button>
+      </form>
+      <div className="flex flex-wrap gap-2">
+        {isLoading ? <span className="text-sm text-muted-foreground">Carregando tipos…</span> : types.map((type) => (
+          <div key={type.id} className="flex items-center gap-1 rounded-md border px-2 py-1 text-sm">
+            <Flame className="h-3.5 w-3.5 text-gold" /> {type.name}
+            <Button size="icon" variant="ghost" className="h-6 w-6" aria-label={`Remover ${type.name}`} onClick={() => void removeType(type.id)}>
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 type Roll = { title: string; lines: { who: string; dice: string; detail: string }[] };
 
 function Actions({ actor, target, defs, val }: {
@@ -292,6 +345,84 @@ function Actions({ actor, target, defs, val }: {
           {testable.map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
         </select>
         <Button variant="outline" onClick={test}><Dices className="mr-1 h-4 w-4" /> Teste</Button>
+      </div>
+      <div className="space-y-3 border-t border-border pt-4">
+        <div className="flex items-center gap-2 text-lg text-gold"><HeartPulse className="h-5 w-5" /> Aplicar dano em lote</div>
+        <p className="text-sm text-muted-foreground">A defesa escolhida é descontada de cada golpe individualmente. O HP não fica abaixo de zero.</p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">Tipo de dano</label>
+            <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={damageKind} onChange={(e) => setDamageKind(e.target.value as "physical" | "magical")}>
+              <option value="physical">Físico — Defesa</option>
+              <option value="magical">Mágico — Defesa Mágica</option>
+            </select>
+          </div>
+          {damageKind === "magical" && (
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Subtipo mágico</label>
+              <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={damageTypeId} onChange={(e) => setDamageTypeId(e.target.value)}>
+                <option value="">Selecione o subtipo</option>
+                {damageTypes.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}
+              </select>
+            </div>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant={damageMode === "repeat" ? "default" : "outline"} onClick={() => setDamageMode("repeat")}>Repetir um valor</Button>
+          <Button size="sm" variant={damageMode === "list" ? "default" : "outline"} onClick={() => setDamageMode("list")}>Lista de danos</Button>
+        </div>
+        {damageMode === "repeat" ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Dano bruto por golpe</label>
+              <Input type="number" min="0" max="1000000" value={damageValue} onChange={(e) => setDamageValue(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Quantidade de golpes (1–200)</label>
+              <Input type="number" min="1" max="200" value={repeatCount} onChange={(e) => setRepeatCount(e.target.value)} />
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">Danos brutos separados por vírgula</label>
+            <Input value={damageList} onChange={(e) => setDamageList(e.target.value)} placeholder="50, 35, 45, 86, 20, 10, 50" />
+          </div>
+        )}
+        <Button disabled={applyingDamage || (damageKind === "magical" && (!damageTypeId || damageTypes.length === 0))} onClick={async () => {
+          let values: number[];
+          if (damageMode === "repeat") {
+            const amount = Number(damageValue);
+            const count = Number(repeatCount);
+            if (!Number.isFinite(amount) || amount < 0 || amount > 1000000 || !Number.isInteger(count) || count < 1 || count > 200) {
+              toast.error("Informe um dano válido e de 1 a 200 golpes"); return;
+            }
+            values = Array.from({ length: count }, () => amount);
+          } else {
+            const parts = damageList.split(/[,;\s]+/).filter(Boolean);
+            values = parts.map(Number);
+            if (values.length < 1 || values.length > 200 || values.some((n) => !Number.isFinite(n) || n < 0 || n > 1000000)) {
+              toast.error("Informe de 1 a 200 danos válidos, separados por vírgula"); return;
+            }
+          }
+          if (damageKind === "magical" && !damageTypeId) { toast.error("Selecione um subtipo mágico"); return; }
+          setApplyingDamage(true);
+          try {
+            const { data, error } = await supabase.rpc("apply_battle_damage", {
+              _battle_id: battleId,
+              _character_id: target.id,
+              _damage_kind: damageKind,
+              _damage_type_id: damageKind === "magical" ? damageTypeId : null,
+              _damage_values: values,
+            });
+            if (error) { toast.error(error.message); return; }
+            const result = data as unknown as { hits: number; defense: number; total_damage: number; hp_before: number; hp_after: number };
+            toast.success(`Dano aplicado em ${target.name}: ${result.hits} golpe(s), defesa ${result.defense}, ${result.total_damage} de dano total. HP: ${result.hp_before} → ${result.hp_after}.`);
+            await qc.invalidateQueries({ queryKey: ["battles"] });
+            await qc.invalidateQueries({ queryKey: ["character", target.id] });
+          } finally {
+            setApplyingDamage(false);
+          }
+        }}><HeartPulse className="mr-1 h-4 w-4" /> {applyingDamage ? "Aplicando…" : `Aplicar dano em ${target.name}`}</Button>
       </div>
       {roll && (
         <div className="space-y-2 rounded-md border border-gold/40 p-3">
