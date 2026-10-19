@@ -100,7 +100,7 @@ export function DamageApplier({ target, battleId = null }: {
       const typeName = needsMagic
         ? damageTypes.find((t) => t.id === damageTypeId)?.name ?? "mágico"
         : damageKindName;
-      const damageDescription = damageKind === "hybrid" ? `híbrido (${typeName})` : damageKind === "magical" ? `mágico (${typeName})` : typeName;
+      const damageDescription = damageKind === "hybrid" ? `dano híbrido (${typeName})` : damageKind === "magical" ? `dano mágico (${typeName})` : damageKind === "true" ? "dano verdadeiro" : "dano físico";
       toast.success(
         `${target.name}: ${result.hits} golpe(s) de ${damageDescription}; ${defenseText}; ${result.total_damage} de dano total. HP: ${result.hp_before} → ${result.hp_after}.`,
         { duration: 8000 },
