@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { Crosshair, Dices, Plus, Swords, Trash2, Copy, HeartPulse } from "lucide-react";
+import { Crosshair, Dices, Plus, Swords, Trash2, Copy, Footprints } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,7 @@ import { computeValue, raceMods, useDefs, useMe, useRaces, type AttributeDef } f
 import { Portrait } from "@/components/sheet/CharacterSheetView";
 import { StatBar } from "@/components/sheet/StatBar";
 import { cn } from "@/lib/utils";
+import { DamageApplier } from "@/components/combat/DamageApplier";
 
 export const Route = createFileRoute("/_authenticated/combate")({
   head: () => ({
@@ -115,6 +116,7 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
   const { data: defs } = useDefs();
   const { data: races } = useRaces();
   const qc = useQueryClient();
+  const [selectedTargetIds, setSelectedTargetIds] = useState<string[]>(() => battle.target_character_id ? [battle.target_character_id] : []);
   const fighters = useMemo(
     () => battle.battle_participants.slice().sort((a, b) => a.sort_order - b.sort_order).map((p) => p.characters as Fighter).filter(Boolean),
     [battle],
@@ -132,7 +134,16 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
   };
 
   const actor = fighters.find((f) => f.id === battle.current_character_id);
-  const target = fighters.find((f) => f.id === battle.target_character_id);
+  const targets = fighters.filter((f) => selectedTargetIds.includes(f.id) && f.id !== actor?.id);
+
+  function toggleTarget(id: string) {
+    if (!actor || actor.id === id) return;
+    const next = selectedTargetIds.includes(id)
+      ? selectedTargetIds.filter((selectedId) => selectedId !== id)
+      : [...selectedTargetIds, id];
+    setSelectedTargetIds(next);
+    void update({ target_character_id: next[0] ?? null });
+  }
 
   if (!defs) return null;
   return (
@@ -143,7 +154,7 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {fighters.map((f) => {
           const isActor = f.id === actor?.id;
-          const isTarget = f.id === target?.id;
+          const isTarget = selectedTargetIds.includes(f.id) && f.id !== actor?.id;
           const hp = f.character_attributes.find((a) => a.attribute_key === "hp");
           const mana = f.character_attributes.find((a) => a.attribute_key === "mana");
           return (
@@ -154,18 +165,22 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
                   <div className="truncate font-display text-lg text-gold">{f.name}</div>
                   <div className="truncate text-xs text-muted-foreground">{f.player_name || "NPC"}</div>
                   {isActor && <div className="text-xs font-semibold text-gold">⚔ Na vez</div>}
-                  {isTarget && <div className="text-xs font-semibold text-blood">◎ Alvo</div>}
+                  {isTarget && <div className="text-xs font-semibold text-blood">◎ Alvo selecionado</div>}
                 </div>
               </div>
               <Bar label="HP" cur={hp?.current_value ?? 0} max={val(f, "hp")} tone="bg-blood" />
               <Bar label="Mana" cur={mana?.current_value ?? 0} max={val(f, "mana")} tone="bg-arcane" />
               {isMaster && (
                 <div className="flex gap-2 pt-1">
-                  <Button size="sm" variant={isActor ? "default" : "outline"} onClick={() => update({ current_character_id: f.id, target_character_id: battle.target_character_id === f.id ? null : battle.target_character_id })}>
+                  <Button size="sm" variant={isActor ? "default" : "outline"} onClick={() => {
+                    const next = selectedTargetIds.filter((id) => id !== f.id);
+                    setSelectedTargetIds(next);
+                    void update({ current_character_id: f.id, target_character_id: next[0] ?? null });
+                  }}>
                     <Swords className="mr-1 h-3.5 w-3.5" /> Vez
                   </Button>
-                  <Button size="sm" variant={isTarget ? "destructive" : "outline"} disabled={isActor} onClick={() => update({ target_character_id: f.id })}>
-                    <Crosshair className="mr-1 h-3.5 w-3.5" /> Alvo
+                  <Button size="sm" variant={isTarget ? "destructive" : "outline"} disabled={isActor} onClick={() => toggleTarget(f.id)}>
+                    <Crosshair className="mr-1 h-3.5 w-3.5" /> {isTarget ? "Remover alvo" : "Selecionar alvo"}
                   </Button>
                 </div>
               )}
@@ -174,10 +189,10 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
         })}
       </div>
 
-      {isMaster && (actor && target ? (
-        <Actions battleId={battle.id} actor={actor} target={target} defs={defs} val={val} />
+      {isMaster && (actor && targets.length > 0 ? (
+        <Actions battleId={battle.id} actor={actor} targets={targets} fighters={fighters} defs={defs} val={val} />
       ) : (
-        <p className="text-sm text-muted-foreground">Escolha quem está na vez e um alvo para ver as ações.</p>
+        <p className="text-sm text-muted-foreground">Escolha quem está na vez e selecione um ou mais alvos para ver as ações.</p>
       ))}
     </div>
   );
@@ -255,161 +270,138 @@ function BattleAdmin({ battle, fighters, onUpdate }: {
 
 type Roll = { title: string; lines: { who: string; dice: string; detail: string }[] };
 
-function Actions({ battleId, actor, target, defs, val }: {
-  battleId: string; actor: Fighter; target: Fighter; defs: AttributeDef[]; val: (f: Fighter, k: string) => number;
+function Actions({ battleId, actor, targets, fighters, defs, val }: {
+  battleId: string;
+  actor: Fighter;
+  targets: Fighter[];
+  fighters: Fighter[];
+  defs: AttributeDef[];
+  val: (f: Fighter, k: string) => number;
 }) {
-  const qc = useQueryClient();
   const [roll, setRoll] = useState<Roll | null>(null);
   const [testKey, setTestKey] = useState("strength");
-  const [damageMode, setDamageMode] = useState<"repeat" | "list">("repeat");
-  const [damageKind, setDamageKind] = useState<"physical" | "magical">("physical");
-  const [damageValue, setDamageValue] = useState("20");
-  const [repeatCount, setRepeatCount] = useState("1");
-  const [damageList, setDamageList] = useState("50, 35, 45, 86, 20, 10, 50");
-  const [damageTypeId, setDamageTypeId] = useState("");
-  const [applyingDamage, setApplyingDamage] = useState(false);
-  const { data: damageTypes = [] } = useQuery({
-    queryKey: ["damage-types"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("damage_types").select("id,name").order("name");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const [dodgeFromId, setDodgeFromId] = useState(() => targets[0]?.id ?? fighters.find((f) => f.id !== actor.id)?.id ?? "");
   const label = (k: string) => defs.find((d) => d.key === k)?.label ?? k;
-
-  function attack() {
-    const aAtk = val(actor, "atk_speed"), tSpd = val(target, "speed");
-    const atkMod = diceMod(aAtk, tSpd);
-    const dodgeMod = diceMod(tSpd, aAtk);
-    setRoll({
-      title: `${actor.name} ataca ${target.name}`,
-      lines: [
-        { who: `${actor.name} (ataque)`, dice: dice(atkMod), detail: `(${label("atk_speed")} ${aAtk} − ${label("speed")} ${tSpd}) ÷ 10` },
-        { who: `${target.name} (esquiva)`, dice: dice(dodgeMod), detail: `(${label("speed")} ${tSpd} − ${label("atk_speed")} ${aAtk}) ÷ 10` },
-      ],
-    });
-  }
-  function test() {
-    const a = val(actor, testKey), t = val(target, testKey);
-    setRoll({
-      title: `Teste de ${label(testKey)} vs ${label(testKey)}`,
-      lines: [
-        { who: actor.name, dice: dice(diceMod(a, t)), detail: `(${a} − ${t}) ÷ 10` },
-        { who: target.name, dice: dice(diceMod(t, a)), detail: `(${t} − ${a}) ÷ 10` },
-      ],
-    });
-  }
+  const dodgeFrom = fighters.find((f) => f.id === dodgeFromId && f.id !== actor.id);
   const testable = defs;
 
+  function attack() {
+    const aAtk = val(actor, "atk_speed");
+    const lines = targets.flatMap((target) => {
+      const tSpeed = val(target, "speed");
+      return [
+        {
+          who: `${actor.name} → ${target.name} (ataque)`,
+          dice: dice(diceMod(aAtk, tSpeed)),
+          detail: `(${label("atk_speed")} ${aAtk} − ${label("speed")} ${tSpeed}) ÷ 10`,
+        },
+        {
+          who: `${target.name} (esquiva)`,
+          dice: dice(diceMod(tSpeed, aAtk)),
+          detail: `(${label("speed")} ${tSpeed} − ${label("atk_speed")} ${aAtk}) ÷ 10`,
+        },
+      ];
+    });
+    setRoll({ title: `${actor.name} ataca ${targets.length} alvo(s)`, lines });
+  }
+
+  function test() {
+    const a = val(actor, testKey);
+    const lines = targets.flatMap((target) => {
+      const t = val(target, testKey);
+      const targetSpeed = val(target, "speed");
+      const actorAttackSpeed = val(actor, "atk_speed");
+      return [
+        {
+          who: `${actor.name} — ${label(testKey)} vs ${target.name}`,
+          dice: dice(diceMod(a, t)),
+          detail: `(${a} − ${t}) ÷ 10`,
+        },
+        {
+          who: `${target.name} — resposta de ${label(testKey)}`,
+          dice: dice(diceMod(t, a)),
+          detail: `(${t} − ${a}) ÷ 10`,
+        },
+        {
+          who: `${target.name} (esquiva)`,
+          dice: dice(diceMod(targetSpeed, actorAttackSpeed)),
+          detail: `(${label("speed")} ${targetSpeed} − ${label("atk_speed")} do atacante ${actorAttackSpeed}) ÷ 10`,
+        },
+      ];
+    });
+    setRoll({ title: `Teste de ${label(testKey)} contra os alvos selecionados`, lines });
+  }
+
+  function testDodge() {
+    if (!dodgeFrom) {
+      toast.error("Selecione de quem deseja esquivar");
+      return;
+    }
+    const mySpeed = val(actor, "speed");
+    const enemyAttackSpeed = val(dodgeFrom, "atk_speed");
+    setRoll({
+      title: `${actor.name} tenta esquivar de ${dodgeFrom.name}`,
+      lines: [{
+        who: `${actor.name} (esquiva)`,
+        dice: dice(diceMod(mySpeed, enemyAttackSpeed)),
+        detail: `(${label("speed")} ${mySpeed} − ${label("atk_speed")} de ${dodgeFrom.name} ${enemyAttackSpeed}) ÷ 10`,
+      }],
+    });
+  }
+
   return (
-    <div className="panel space-y-4 p-4">
-      <h2 className="text-xl text-gold">Ações de {actor.name} → {target.name}</h2>
-      <div className="flex flex-wrap items-center gap-2">
-        <Button onClick={attack}><Swords className="mr-1 h-4 w-4" /> Atacar</Button>
-        <span className="mx-2 text-muted-foreground">|</span>
-        <select className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={testKey} onChange={(e) => setTestKey(e.target.value)}>
-          {testable.map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
-        </select>
-        <Button variant="outline" onClick={test}><Dices className="mr-1 h-4 w-4" /> Teste</Button>
-      </div>
-      <div className="space-y-3 border-t border-border pt-4">
-        <div className="flex items-center gap-2 text-lg text-gold"><HeartPulse className="h-5 w-5" /> Aplicar dano em lote</div>
-        <p className="text-sm text-muted-foreground">A defesa escolhida é descontada de cada golpe individualmente. O HP não fica abaixo de zero.</p>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">Tipo de dano</label>
-            <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={damageKind} onChange={(e) => setDamageKind(e.target.value as "physical" | "magical")}>
-              <option value="physical">Físico — Defesa</option>
-              <option value="magical">Mágico — Defesa Mágica</option>
+    <div className="space-y-4">
+      <div className="panel space-y-4 p-4">
+        <h2 className="text-xl text-gold">Ações de {actor.name}</h2>
+        <div className="rounded-md border border-border p-3">
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Alvos selecionados ({targets.length})</div>
+          <div className="flex flex-wrap gap-2">
+            {targets.map((t) => <span key={t.id} className="rounded-md border border-blood/50 px-2 py-1 text-sm">{t.name}</span>)}
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button onClick={attack}><Swords className="mr-1 h-4 w-4" /> Atacar todos</Button>
+          <select className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={testKey} onChange={(e) => setTestKey(e.target.value)}>
+            {testable.map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
+          </select>
+          <Button variant="outline" onClick={test}><Dices className="mr-1 h-4 w-4" /> Teste contra todos</Button>
+        </div>
+        <div className="space-y-2 border-t border-border pt-4">
+          <h3 className="flex items-center gap-2 text-lg text-gold"><Footprints className="h-5 w-5" /> Teste de esquiva único</h3>
+          <p className="text-sm text-muted-foreground">A esquiva usa sua Velocidade menos a Velocidade de Ataque do inimigo, dividido por 10, com modificador mínimo 0.</p>
+          <div className="flex flex-wrap gap-2">
+            <select className="h-9 min-w-48 rounded-md border border-input bg-background px-2 text-sm" value={dodgeFromId} onChange={(e) => setDodgeFromId(e.target.value)}>
+              <option value="">Selecione um inimigo</option>
+              {fighters.filter((f) => f.id !== actor.id).map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
             </select>
+            <Button variant="outline" onClick={testDodge}><Footprints className="mr-1 h-4 w-4" /> Testar esquiva</Button>
           </div>
-          {damageKind === "magical" && (
-            <div className="space-y-1">
-              <label className="text-xs text-muted-foreground">Subtipo mágico</label>
-              <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={damageTypeId} onChange={(e) => setDamageTypeId(e.target.value)}>
-                <option value="">Selecione o subtipo</option>
-                {damageTypes.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}
-              </select>
-            </div>
-          )}
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant={damageMode === "repeat" ? "default" : "outline"} onClick={() => setDamageMode("repeat")}>Repetir um valor</Button>
-          <Button size="sm" variant={damageMode === "list" ? "default" : "outline"} onClick={() => setDamageMode("list")}>Lista de danos</Button>
-        </div>
-        {damageMode === "repeat" ? (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1">
-              <label className="text-xs text-muted-foreground">Dano bruto por golpe</label>
-              <Input type="number" min="0" max="1000000" value={damageValue} onChange={(e) => setDamageValue(e.target.value)} />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs text-muted-foreground">Quantidade de golpes (1–200)</label>
-              <Input type="number" min="1" max="200" value={repeatCount} onChange={(e) => setRepeatCount(e.target.value)} />
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">Danos brutos separados por vírgula</label>
-            <Input value={damageList} onChange={(e) => setDamageList(e.target.value)} placeholder="50, 35, 45, 86, 20, 10, 50" />
+        {roll && (
+          <div className="space-y-2 rounded-md border border-gold/40 p-3">
+            <div className="font-display text-gold">{roll.title}</div>
+            {roll.lines.map((line, i) => (
+              <div key={`${line.who}-${i}`} className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 py-1 last:border-0">
+                <div>
+                  <div className="text-sm">{line.who}</div>
+                  <div className="text-xs text-muted-foreground">{line.detail} (modificador mínimo 0)</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="tabular font-display text-2xl text-gold">{line.dice}</span>
+                  <Button size="icon" variant="ghost" aria-label={`Copiar ${line.dice} de ${line.who}`} onClick={() => { navigator.clipboard.writeText(line.dice); toast.success("Copiado"); }}>
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            ))}
           </div>
         )}
-        <Button disabled={applyingDamage || (damageKind === "magical" && (!damageTypeId || damageTypes.length === 0))} onClick={async () => {
-          let values: number[];
-          if (damageMode === "repeat") {
-            const amount = Number(damageValue);
-            const count = Number(repeatCount);
-            if (!Number.isFinite(amount) || amount < 0 || amount > 1000000 || !Number.isInteger(count) || count < 1 || count > 200) {
-              toast.error("Informe um dano válido e de 1 a 200 golpes"); return;
-            }
-            values = Array.from({ length: count }, () => amount);
-          } else {
-            const parts = damageList.split(/[,;\s]+/).filter(Boolean);
-            values = parts.map(Number);
-            if (values.length < 1 || values.length > 200 || values.some((n) => !Number.isFinite(n) || n < 0 || n > 1000000)) {
-              toast.error("Informe de 1 a 200 danos válidos, separados por vírgula"); return;
-            }
-          }
-          if (damageKind === "magical" && !damageTypeId) { toast.error("Selecione um subtipo mágico"); return; }
-          setApplyingDamage(true);
-          try {
-            const { data, error } = await supabase.rpc("apply_battle_damage", {
-              _battle_id: battleId,
-              _character_id: target.id,
-              _damage_kind: damageKind,
-              _damage_type_id: damageKind === "magical" ? damageTypeId : null,
-              _damage_values: values,
-            });
-            if (error) { toast.error(error.message); return; }
-            const result = data as unknown as { hits: number; defense: number; total_damage: number; hp_before: number; hp_after: number };
-            toast.success(`Dano aplicado em ${target.name}: ${result.hits} golpe(s), defesa ${result.defense}, ${result.total_damage} de dano total. HP: ${result.hp_before} → ${result.hp_after}.`);
-            await qc.invalidateQueries({ queryKey: ["battles"] });
-            await qc.invalidateQueries({ queryKey: ["character", target.id] });
-          } finally {
-            setApplyingDamage(false);
-          }
-        }}><HeartPulse className="mr-1 h-4 w-4" /> {applyingDamage ? "Aplicando…" : `Aplicar dano em ${target.name}`}</Button>
       </div>
-      {roll && (
-        <div className="space-y-2 rounded-md border border-gold/40 p-3">
-          <div className="font-display text-gold">{roll.title}</div>
-          {roll.lines.map((l) => (
-            <div key={l.who} className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <div className="text-sm">{l.who}</div>
-                <div className="text-xs text-muted-foreground">{l.detail} (mínimo 0)</div>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="tabular font-display text-2xl text-gold">{l.dice}</span>
-                <Button size="icon" variant="ghost" onClick={() => { navigator.clipboard.writeText(l.dice); toast.success("Copiado"); }}>
-                  <Copy className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      <div className="space-y-4">
+        <h2 className="text-xl text-gold">Aplicar dano por alvo</h2>
+        <p className="text-sm text-muted-foreground">Cada alvo tem campos próprios para quantidade e valores de dano; aplicar em um alvo não altera os outros.</p>
+        {targets.map((target) => <DamageApplier key={target.id} target={target} battleId={battleId} />)}
+      </div>
     </div>
   );
 }
