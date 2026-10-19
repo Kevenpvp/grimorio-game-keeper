@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { Crosshair, Dices, Plus, Swords, Trash2, Copy, HeartPulse, Flame, Sparkles } from "lucide-react";
+import { Crosshair, Dices, Plus, Swords, Trash2, Copy, HeartPulse } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -138,7 +138,6 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
   return (
     <div className="space-y-6">
       {isMaster && <BattleAdmin battle={battle} fighters={fighters} onUpdate={update} />}
-      {isMaster && <DamageTypesManager />}
       {!isMaster && <h2 className="text-xl text-gold">{battle.name}</h2>}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -253,57 +252,6 @@ function BattleAdmin({ battle, fighters, onUpdate }: {
   );
 }
 
-function DamageTypesManager() {
-  const qc = useQueryClient();
-  const [name, setName] = useState("");
-  const { data: types = [], isLoading } = useQuery({
-    queryKey: ["damage-types"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("damage_types").select("id,name").order("name");
-      if (error) throw error;
-      return data;
-    },
-  });
-
-  async function addType() {
-    const clean = name.trim();
-    if (!clean) { toast.error("Digite o nome do tipo mágico"); return; }
-    if (clean.length > 40) { toast.error("Use no máximo 40 caracteres"); return; }
-    const { error } = await supabase.from("damage_types").insert({ name: clean });
-    if (error) { toast.error(error.message.includes("duplicate") ? "Esse tipo já existe" : error.message); return; }
-    setName("");
-    await qc.invalidateQueries({ queryKey: ["damage-types"] });
-    toast.success("Tipo de dano mágico adicionado");
-  }
-
-  async function removeType(id: string) {
-    const { error } = await supabase.from("damage_types").delete().eq("id", id);
-    if (error) { toast.error(error.message); return; }
-    await qc.invalidateQueries({ queryKey: ["damage-types"] });
-    toast.success("Tipo removido");
-  }
-
-  return (
-    <section className="panel space-y-3 p-4">
-      <div className="flex items-center gap-2 text-lg text-gold"><Sparkles className="h-5 w-5" /> Tipos de dano mágico</div>
-      <p className="text-sm text-muted-foreground">Cadastre os tipos usados pelo RPG. Eles usam a Defesa Mágica do alvo.</p>
-      <form className="flex flex-wrap gap-2" onSubmit={(e) => { e.preventDefault(); void addType(); }}>
-        <Input aria-label="Nome do tipo mágico" className="max-w-xs" placeholder="Ex.: Gelo, Veneno, Elétrico" maxLength={40} value={name} onChange={(e) => setName(e.target.value)} />
-        <Button type="submit" disabled={!name.trim()}><Plus className="mr-1 h-4 w-4" /> Adicionar tipo</Button>
-      </form>
-      <div className="flex flex-wrap gap-2">
-        {isLoading ? <span className="text-sm text-muted-foreground">Carregando tipos…</span> : types.map((type) => (
-          <div key={type.id} className="flex items-center gap-1 rounded-md border px-2 py-1 text-sm">
-            <Flame className="h-3.5 w-3.5 text-gold" /> {type.name}
-            <Button size="icon" variant="ghost" className="h-6 w-6" aria-label={`Remover ${type.name}`} onClick={() => void removeType(type.id)}>
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
 
 type Roll = { title: string; lines: { who: string; dice: string; detail: string }[] };
 
