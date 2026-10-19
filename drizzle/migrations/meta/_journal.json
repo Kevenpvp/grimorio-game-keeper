@@ -78,6 +78,13 @@
       "when": 1792440000000,
       "tag": "0010_bulk_damage",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792526400000,
+      "tag": "0011_extended_damage_rules",
+      "breakpoints": true
     }
   ]
 }
