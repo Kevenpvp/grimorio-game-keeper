@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { LogOut, Swords } from "lucide-react";
+import { LogOut, Sparkles, Swords } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useMe } from "@/lib/sheets";
@@ -26,7 +26,10 @@ export function AppHeader() {
         <div className="flex items-center gap-3 text-sm">
           {me && <Link to="/combate" className="text-muted-foreground hover:text-gold">Combate</Link>}
           {me?.isMaster && (
-            <Link to="/racas" className="text-muted-foreground hover:text-gold">Raças</Link>
+            <>
+              <Link to="/racas" className="text-muted-foreground hover:text-gold">Raças</Link>
+              <Link to="/tipos-dano" className="flex items-center gap-1 text-muted-foreground hover:text-gold"><Sparkles className="h-3.5 w-3.5" /> Tipos de dano</Link>
+            </>
           )}
           {me && (
             <span className="hidden text-muted-foreground sm:inline">
