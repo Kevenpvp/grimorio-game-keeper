@@ -83,6 +83,24 @@ export type Database = {
           },
         ]
       }
+      damage_types: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
       battles: {
         Row: {
           active: boolean
@@ -319,6 +337,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      apply_battle_damage: {
+        Args: {
+          _battle_id: string
+          _character_id: string
+          _damage_kind: string
+          _damage_type_id: string | null
+          _damage_values: Json
+        }
+        Returns: Json
+      }
       choose_race: {
         Args: { _character_id: string; _race_id: string }
         Returns: undefined
