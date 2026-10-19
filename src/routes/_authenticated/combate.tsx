@@ -189,10 +189,10 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
         })}
       </div>
 
-      {isMaster && (actor && targets.length > 0 ? (
+      {isMaster && (actor ? (
         <Actions battleId={battle.id} actor={actor} targets={targets} fighters={fighters} defs={defs} val={val} />
       ) : (
-        <p className="text-sm text-muted-foreground">Escolha quem está na vez e selecione um ou mais alvos para ver as ações.</p>
+        <p className="text-sm text-muted-foreground">Selecione a opção "Vez" de um personagem para abrir as ações e o teste de esquiva.</p>
       ))}
     </div>
   );
@@ -353,19 +353,23 @@ function Actions({ battleId, actor, targets, fighters, defs, val }: {
     <div className="space-y-4">
       <div className="panel space-y-4 p-4">
         <h2 className="text-xl text-gold">Ações de {actor.name}</h2>
-        <div className="rounded-md border border-border p-3">
-          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Alvos selecionados ({targets.length})</div>
-          <div className="flex flex-wrap gap-2">
-            {targets.map((t) => <span key={t.id} className="rounded-md border border-blood/50 px-2 py-1 text-sm">{t.name}</span>)}
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button onClick={attack}><Swords className="mr-1 h-4 w-4" /> Atacar todos</Button>
-          <select className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={testKey} onChange={(e) => setTestKey(e.target.value)}>
-            {testable.map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
-          </select>
-          <Button variant="outline" onClick={test}><Dices className="mr-1 h-4 w-4" /> Teste contra todos</Button>
-        </div>
+        {targets.length > 0 && (
+          <>
+            <div className="rounded-md border border-border p-3">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Alvos selecionados ({targets.length})</div>
+              <div className="flex flex-wrap gap-2">
+                {targets.map((t) => <span key={t.id} className="rounded-md border border-blood/50 px-2 py-1 text-sm">{t.name}</span>)}
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button onClick={attack}><Swords className="mr-1 h-4 w-4" /> Atacar todos</Button>
+              <select className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={testKey} onChange={(e) => setTestKey(e.target.value)}>
+                {testable.map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
+              </select>
+              <Button variant="outline" onClick={test}><Dices className="mr-1 h-4 w-4" /> Teste contra todos</Button>
+            </div>
+          </>
+        )}
         <div className="space-y-2 border-t border-border pt-4">
           <h3 className="flex items-center gap-2 text-lg text-gold"><Footprints className="h-5 w-5" /> Teste de esquiva único</h3>
           <p className="text-sm text-muted-foreground">A esquiva usa sua Velocidade menos a Velocidade de Ataque do inimigo, dividido por 10, com modificador mínimo 0.</p>
@@ -397,11 +401,13 @@ function Actions({ battleId, actor, targets, fighters, defs, val }: {
           </div>
         )}
       </div>
-      <div className="space-y-4">
-        <h2 className="text-xl text-gold">Aplicar dano por alvo</h2>
-        <p className="text-sm text-muted-foreground">Cada alvo tem campos próprios para quantidade e valores de dano; aplicar em um alvo não altera os outros.</p>
-        {targets.map((target) => <DamageApplier key={target.id} target={target} battleId={battleId} />)}
-      </div>
+      {targets.length > 0 && (
+        <div className="space-y-4">
+          <h2 className="text-xl text-gold">Aplicar dano por alvo</h2>
+          <p className="text-sm text-muted-foreground">Cada alvo tem campos próprios para quantidade e valores de dano; aplicar em um alvo não altera os outros.</p>
+          {targets.map((target) => <DamageApplier key={target.id} target={target} battleId={battleId} />)}
+        </div>
+      )}
     </div>
   );
 }
