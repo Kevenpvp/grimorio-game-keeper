@@ -307,11 +307,27 @@ function DamageTypesManager() {
 
 type Roll = { title: string; lines: { who: string; dice: string; detail: string }[] };
 
-function Actions({ actor, target, defs, val }: {
-  actor: Fighter; target: Fighter; defs: AttributeDef[]; val: (f: Fighter, k: string) => number;
+function Actions({ battleId, actor, target, defs, val }: {
+  battleId: string; actor: Fighter; target: Fighter; defs: AttributeDef[]; val: (f: Fighter, k: string) => number;
 }) {
+  const qc = useQueryClient();
   const [roll, setRoll] = useState<Roll | null>(null);
   const [testKey, setTestKey] = useState("strength");
+  const [damageMode, setDamageMode] = useState<"repeat" | "list">("repeat");
+  const [damageKind, setDamageKind] = useState<"physical" | "magical">("physical");
+  const [damageValue, setDamageValue] = useState("20");
+  const [repeatCount, setRepeatCount] = useState("1");
+  const [damageList, setDamageList] = useState("50, 35, 45, 86, 20, 10, 50");
+  const [damageTypeId, setDamageTypeId] = useState("");
+  const [applyingDamage, setApplyingDamage] = useState(false);
+  const { data: damageTypes = [] } = useQuery({
+    queryKey: ["damage-types"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("damage_types").select("id,name").order("name");
+      if (error) throw error;
+      return data;
+    },
+  });
   const label = (k: string) => defs.find((d) => d.key === k)?.label ?? k;
 
   function attack() {
