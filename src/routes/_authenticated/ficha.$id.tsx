@@ -25,6 +25,7 @@ import { PointsDistribution } from "@/components/sheet/PointsDistribution";
 import { RacePicker } from "@/components/sheet/RacePicker";
 import { AttrIcon, barTone } from "@/components/sheet/icons";
 import { StatBar } from "@/components/sheet/StatBar";
+import { DamageApplier } from "@/components/combat/DamageApplier";
 
 export const Route = createFileRoute("/_authenticated/ficha/$id")({
   head: () => ({
@@ -227,6 +228,8 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
           </section>
 
           <RacePicker character={character} isMaster />
+
+          <DamageApplier target={{ id: character.id, name: character.name }} />
 
           <section className="grid gap-4 sm:grid-cols-2">
             <NumberField label="Pontos disponíveis" icon="sparkles" value={character.available_points}
