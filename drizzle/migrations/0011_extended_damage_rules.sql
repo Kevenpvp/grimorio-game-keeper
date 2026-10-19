@@ -1,5 +1,32 @@
 -- Expand damage rules for magical levels, hybrid and true damage.
--- Allow the same RPC to apply damage from a character sheet outside a battle.
+-- Ensure the magical damage types table exists even when this file is applied manually by itself.
+CREATE TABLE IF NOT EXISTS public.damage_types (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name text NOT NULL UNIQUE,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+INSERT INTO public.damage_types (name)
+SELECT v.name
+FROM (VALUES ('Fogo'), ('Luz'), ('Trevas'), ('Sagrado')) AS v(name)
+WHERE NOT EXISTS (
+  SELECT 1 FROM public.damage_types dt WHERE lower(dt.name) = lower(v.name)
+);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.damage_types TO authenticated;
+GRANT ALL ON public.damage_types TO service_role;
+ALTER TABLE public.damage_types ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "damage types readable" ON public.damage_types;
+CREATE POLICY "damage types readable" ON public.damage_types
+  FOR SELECT TO authenticated USING (true);
+DROP POLICY IF EXISTS "master manages damage types" ON public.damage_types;
+CREATE POLICY "master manages damage types" ON public.damage_types
+  FOR ALL TO authenticated
+  USING (public.has_role(auth.uid(), 'master'))
+  WITH CHECK (public.has_role(auth.uid(), 'master'));
+
+-- Replace the earlier combat-only RPC with the extended signature.
 DROP FUNCTION IF EXISTS public.apply_battle_damage(uuid, uuid, text, uuid, jsonb);
 
 CREATE OR REPLACE FUNCTION public.apply_battle_damage(
