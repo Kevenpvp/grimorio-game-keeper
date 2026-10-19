@@ -103,7 +103,7 @@ BEGIN
 
   _defense := GREATEST(0, COALESCE(_defense, 0));
 
-  FOR _item IN SELECT value FROM jsonb_array_elements(_damage_values) AS values(value) LOOP
+  FOR _item IN SELECT elem FROM jsonb_array_elements(_damage_values) AS items(elem) LOOP
     IF jsonb_typeof(_item) <> 'number' THEN
       RAISE EXCEPTION 'Cada dano precisa ser um número';
     END IF;
