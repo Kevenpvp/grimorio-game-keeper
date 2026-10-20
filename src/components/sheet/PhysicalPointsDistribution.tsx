@@ -106,7 +106,7 @@ export function PhysicalPointsDistribution({
                     {totalPoints} pts
                     {(fromRace > 0 || fromVirtue > 0 || pending > 0) && <span className="text-gold"> · físicos {fromRace + fromVirtue + pending}{pending > 0 ? ` (+${pending})` : ""}</span>}
                   </div>
-                  {(fromRace > 0 || fromVirtue > 0) && <div className="mt-1 text-[11px] text-muted-foreground">{fromRace > 0 ? `${fromRace} da raça` : ""}{fromRace > 0 && fromVirtue > 0 ? " · " : ""}{fromVirtue > 0 ? `${fromVirtue} da virtude` : ""}</div>}
+                  {(fromRace > 0 || fromVirtue > 0 || pending > 0) && <div className="mt-1 text-[11px] text-muted-foreground">{fromRace > 0 ? `${fromRace} da raça` : ""}{fromRace > 0 && fromVirtue > 0 ? " · " : ""}{fromVirtue > 0 ? `${fromVirtue} da virtude` : ""}{pending > 0 && <> · +{pending} pendentes da {source === "race" ? "raça" : "virtude"}</>}</div>}
                 </div>
                 <div className="flex items-center gap-1">
                   <Button size="icon" variant="outline" className="h-8 w-8" aria-label={`Desfazer ponto físico de ${def.label}`}
