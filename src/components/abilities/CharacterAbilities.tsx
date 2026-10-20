@@ -7,13 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useDefs } from "@/lib/sheets";
-import { parseAbilityEffects, useAbilities, useCharacterAbilities, useCharacterActiveEffects, type Ability, type AbilityEffectDefinition, type CharacterAbility } from "@/lib/abilities";
+import { parseAbilityEffects, useAbilities, useCharacterAbilities, useCharacterActiveEffects, useDamageTypes, type Ability, type AbilityEffectDefinition, type CharacterAbility } from "@/lib/abilities";
 import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
 import type { Json } from "@/integrations/supabase/types";
 
 type TargetOption = { id: string; name: string };
 
-function effectSummary(effect: AbilityEffectDefinition, defs: NonNullable<ReturnType<typeof useDefs>["data"]>) {
+function effectSummary(effect: AbilityEffectDefinition, defs: NonNullable<ReturnType<typeof useDefs>["data"]>, damageTypes: NonNullable<ReturnType<typeof useDamageTypes>["data"]>) {
   const amount = effect.value_mode === "percent" ? `${effect.amount}%` : effect.effect_type === "damage_dealt" ? String(effect.amount) : (effect.effect_type === "mana_regeneration" || effect.effect_type === "mana_used") ? `${effect.amount} Mana` : `${effect.amount} pontos`;
   const polarity = effect.polarity === "buff" ? "+" : "−";
   if (effect.effect_type === "status") return `${effect.name}: ${polarity}${amount} em ${defs.find((d) => d.key === effect.attribute_key)?.label ?? effect.attribute_key}`;
@@ -24,10 +24,16 @@ function effectSummary(effect: AbilityEffectDefinition, defs: NonNullable<Return
     const scope = effect.damage_scope === "physical" ? "dano físico" : effect.damage_scope === "magical" ? "dano mágico" : "qualquer dano";
     return `${effect.name}: ${polarity}${amount} de dano causado (${scope})`;
   }
+  if (effect.effect_type === "damage_reduction") {
+    const scope = effect.damage_reduction_scope === "magical"
+      ? `mágico (${damageTypes.find((type) => type.id === effect.damage_reduction_type_id)?.name ?? "tipo não selecionado"}, grau ${effect.damage_reduction_magic_level ?? "baixa"})`
+      : "físico";
+    const amountText = effect.value_mode === "percent" ? `${effect.amount}%` : `${effect.amount} fixos`;
+    return `${effect.name}: mitiga dano recebido ${scope} em ${amountText}`;
+  }
   if (effect.effect_type === "no_regen_hp") return `${effect.name}: bloqueia regeneração de HP`;
   if (effect.effect_type === "no_regen_mana") return `${effect.name}: bloqueia regeneração de Mana`;
   if (effect.effect_type === "magic_prohibition") return `${effect.name}: impede habilidades que consomem Mana`;
-  if (effect.effect_type === "no_mana") return `${effect.name}: Sem Mana — zera a Mana e bloqueia habilidades mágicas ou que consomem Mana`;
   if (effect.effect_type === "no_mana") return `${effect.name}: Sem Mana — zera a Mana e bloqueia habilidades mágicas ou que consomem Mana`;
   return `${effect.name}: Stun (visual)`;
 }
@@ -46,6 +52,7 @@ export function CharacterAbilitiesPanel({
   const { data: loadout, isLoading } = useCharacterAbilities(characterId);
   const { data: activeEffects = [] } = useCharacterActiveEffects(characterId);
   const { data: defs } = useDefs();
+  const { data: damageTypes = [] } = useDamageTypes();
   const [targetId, setTargetId] = useState(characterId);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(true);
@@ -157,7 +164,7 @@ export function CharacterAbilitiesPanel({
                 {ability.can_activate && ability.effects.length > 0 && (
                   <div className="mt-2 space-y-1 border-t border-border pt-2 text-xs text-muted-foreground">
                     <div className="font-semibold">Efeitos ao ativar</div>
-                    {ability.effects.map((effect, index) => <div key={index}>{effectSummary(effect, defs ?? [])} · {effect.duration} turno(s)</div>)}
+                    {ability.effects.map((effect, index) => <div key={index}>{effectSummary(effect, defs ?? [], damageTypes)} · {effect.duration} turno(s)</div>)}
                   </div>
                 )}
                 {ability.passive_effects.length > 0 && (
