@@ -17,16 +17,17 @@ import {
 } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  clampPct, computeValue, useCharacter, useCharacterLive, useCharacterTraitMods, useDefs, useMe,
+  clampPct, computeValue, physicalAttributePoints, useCharacter, useCharacterLive, useCharacterTraitMods, useDefs, useMe,
   type AttributeDef, type Character, type CharacterAttr,
 } from "@/lib/sheets";
 import { CharacterSheetView, Portrait } from "@/components/sheet/CharacterSheetView";
 import { PointsDistribution } from "@/components/sheet/PointsDistribution";
+import { PhysicalPointsDistribution } from "@/components/sheet/PhysicalPointsDistribution";
 import { RacePicker } from "@/components/sheet/RacePicker";
 import { AttrIcon, barTone } from "@/components/sheet/icons";
 import { StatBar } from "@/components/sheet/StatBar";
 import { DamageApplier } from "@/components/combat/DamageApplier";
-import { passiveStatusModifiers, statusEffectModifiers, useCharacterAbilities, useCharacterActiveEffects } from "@/lib/abilities";
+import { passiveEffectTypeActive, passiveStatusModifiers, statusEffectModifiers, useCharacterAbilities, useCharacterActiveEffects } from "@/lib/abilities";
 import { CharacterAbilitiesManager, CharacterAbilitiesPanel } from "@/components/abilities/CharacterAbilities";
 
 export const Route = createFileRoute("/_authenticated/ficha/$id")({
@@ -66,6 +67,9 @@ function FichaPage() {
         <CharacterSheetView character={data.character} attrs={data.attrs} defs={defs} />
         {data.character.available_points > 0 && (
           <PointsDistribution character={data.character} attrs={data.attrs} defs={defs} />
+        )}
+        {(data.character.race_physical_points_granted + data.character.virtue_physical_points_granted) > 0 && (
+          <PhysicalPointsDistribution character={data.character} attrs={data.attrs} defs={defs} />
         )}
       </div>
     );
@@ -152,6 +156,8 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
   const { data: characterAbilities = [] } = useCharacterAbilities(character.id);
   const { data: activeEffects = [] } = useCharacterActiveEffects(character.id);
   const passiveStatus = passiveStatusModifiers(characterAbilities);
+  const noMana = (activeEffects ?? []).some((effect) => effect.effect_type === "no_mana" && effect.polarity === "debuff")
+    || passiveEffectTypeActive(characterAbilities, "no_mana");
 
   return (
     <div className="space-y-6">
@@ -251,13 +257,16 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
           <section>
             <h2 className="mb-3 text-lg text-gold">Pontos de atributo</h2>
             <PointsDistribution character={character} attrs={attrs} defs={defs} canRemove />
+          {(character.race_physical_points_granted + character.virtue_physical_points_granted) > 0 && (
+            <PhysicalPointsDistribution character={character} attrs={attrs} defs={defs} />
+          )}
           </section>
 
           <section>
             <h2 className="mb-3 text-lg text-gold">Atributos</h2>
             <div className="grid gap-3 md:grid-cols-2">
               {defs.map((d) => (
-                <AttrEditor key={d.key} def={d} characterId={character.id} attr={byKey.get(d.key)} racePts={raceModifiers[d.key] ?? 0} virtuePts={virtueModifiers[d.key] ?? 0} statusModifier={{ fixed: (passiveStatus[d.key]?.fixed ?? 0) + statusEffectModifiers(activeEffects, d.key).fixed, percent: (passiveStatus[d.key]?.percent ?? 0) + statusEffectModifiers(activeEffects, d.key).percent }}
+                <AttrEditor key={d.key} def={d} characterId={character.id} attr={byKey.get(d.key)} racePts={raceModifiers[d.key] ?? 0} virtuePts={virtueModifiers[d.key] ?? 0} physicalPts={physicalAttributePoints(character, d.key)} noMana={noMana && d.key === "mana"} statusModifier={{ fixed: (passiveStatus[d.key]?.fixed ?? 0) + statusEffectModifiers(activeEffects, d.key).fixed, percent: (passiveStatus[d.key]?.percent ?? 0) + statusEffectModifiers(activeEffects, d.key).percent }}
                   onSaved={() => { mark(); refresh(); }} />
               ))}
             </div>
@@ -337,18 +346,18 @@ function PercentEditor({ label, icon, tone, value, onSave }: {
 }
 
 function AttrEditor({ def, characterId, attr, racePts, virtuePts, statusModifier, onSaved }: {
-  def: AttributeDef; characterId: string; attr: CharacterAttr | undefined; racePts: number; virtuePts: number; statusModifier: { fixed: number; percent: number }; onSaved: () => void;
+  def: AttributeDef; characterId: string; attr: CharacterAttr | undefined; racePts: number; virtuePts: number; physicalPts: number; noMana: boolean; statusModifier: { fixed: number; percent: number }; onSaved: () => void;
 }) {
   const cur0 = attr?.current_value ?? 0;
   const max0 = attr?.max_value ?? 0;
   const pts0 = attr?.points ?? 0;
   const bonus0 = attr?.bonus ?? 0;
-  const traitPts = racePts + virtuePts;
+  const traitPts = racePts + virtuePts + physicalPts;
   const base = def.accepts_points ? computeValue(def, pts0 + traitPts) : max0;
   const rawTotal = def.accepts_points ? base + bonus0 : max0 + traitPts + bonus0;
   const adjustedTotal = Math.floor((rawTotal + statusModifier.fixed) * (1 + statusModifier.percent / 100));
   // HP can receive negative trait modifiers, but its displayed maximum is always at least 1.
-  const total = def.key === "hp" ? Math.max(1, adjustedTotal) : Math.max(0, adjustedTotal);
+  const total = noMana ? 0 : def.key === "hp" ? Math.max(1, adjustedTotal) : Math.max(0, adjustedTotal);
   const [cur, setCur] = useState(cur0);
   const [max, setMax] = useState(max0);
   const [bonus, setBonus] = useState(bonus0);
@@ -375,7 +384,7 @@ function AttrEditor({ def, characterId, attr, racePts, virtuePts, statusModifier
   }
 
   function commitCur(n: number) {
-    let c = Math.max(0, Math.round(Number.isFinite(n) ? n : 0));
+    let c = noMana ? 0 : Math.max(0, Math.round(Number.isFinite(n) ? n : 0));
     if (def.accepts_points) c = Math.min(c, Math.max(0, total));
     else if (def.cap_current) c = Math.min(c, Math.max(0, Math.min(max, total)));
     setCur(c);
@@ -412,7 +421,7 @@ function AttrEditor({ def, characterId, attr, racePts, virtuePts, statusModifier
           <div className="flex flex-wrap items-end gap-3">
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">Pontos investidos</Label>
-              <div className="tabular panel px-4 py-1.5 text-center text-sm">{pts0}{racePts !== 0 && <span className={racePts > 0 ? "text-gold" : "text-destructive"}> {racePts > 0 ? "+" : ""}{racePts} raça</span>}{virtuePts !== 0 && <span className={virtuePts > 0 ? "text-gold" : "text-destructive"}> {virtuePts > 0 ? "+" : ""}{virtuePts} virtude</span>}</div>
+              <div className="tabular panel px-4 py-1.5 text-center text-sm">{pts0}{racePts !== 0 && <span className={racePts > 0 ? "text-gold" : "text-destructive"}> {racePts > 0 ? "+" : ""}{racePts} raça</span>}{virtuePts !== 0 && <span className={virtuePts > 0 ? "text-gold" : "text-destructive"}> {virtuePts > 0 ? "+" : ""}{virtuePts} virtude</span>}{physicalPts !== 0 && <span className="text-gold"> +{physicalPts} físicos</span>}</div>
             </div>
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">Valor por pontos</Label>
