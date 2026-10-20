@@ -109,7 +109,7 @@ export function RacePicker({ character, isMaster }: { character: Character; isMa
         <div className="min-w-0 flex-1">
           <h2 className="text-lg text-gold">{isMaster ? "Raça e Virtude da ficha" : "Escolha sua Raça e Virtude"}</h2>
           <p className="text-xs text-muted-foreground">
-            Selecione uma opção em cada grupo. Nada será salvo até você confirmar.
+            Confirme a Raça e a Virtude separadamente. Cada escolha é salva de forma independente.
           </p>
         </div>
       </div>
