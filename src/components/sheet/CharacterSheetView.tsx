@@ -1,7 +1,7 @@
 import { User } from "lucide-react";
 import type { AttributeDef, Character, CharacterAttr } from "@/lib/sheets";
 import { computeValue, useCharacterTraitMods, usePhotoUrl } from "@/lib/sheets";
-import { passiveStatusModifiers, useCharacterAbilities } from "@/lib/abilities";
+import { passiveStatusModifiers, statusEffectModifiers, useCharacterAbilities, useCharacterActiveEffects } from "@/lib/abilities";
 import { AttrIcon, barTone } from "./icons";
 import { StatBar } from "./StatBar";
 
@@ -40,6 +40,7 @@ export function CharacterSheetView({
   const byKey = new Map(attrs.map((a) => [a.attribute_key, a]));
   const { race, virtue, mods, raceModifiers, virtueModifiers } = useCharacterTraitMods(character.race_id, character.virtue_id);
   const { data: characterAbilities } = useCharacterAbilities(character.id);
+  const { data: activeEffects = [] } = useCharacterActiveEffects(character.id);
   const passiveMods = passiveStatusModifiers(characterAbilities);
   const barDefs = defs.filter((d) => d.show_bar);
   const otherDefs = defs.filter((d) => !d.show_bar);
@@ -82,7 +83,8 @@ export function CharacterSheetView({
               const base = d.accepts_points ? computeValue(d, pts) : 0;
               const rawMax = d.accepts_points ? base + bonus : (a?.max_value ?? 0) + rm + bonus;
               const passive = passiveMods[d.key] ?? { fixed: 0, percent: 0 };
-              const maxWithPassives = Math.floor((rawMax + passive.fixed) * (1 + passive.percent / 100));
+              const active = statusEffectModifiers(activeEffects, d.key);
+              const maxWithPassives = Math.floor((rawMax + passive.fixed + active.fixed) * (1 + (passive.percent + active.percent) / 100));
               const max = d.key === "hp" ? Math.max(1, maxWithPassives) : Math.max(0, maxWithPassives);
               return (
                 <div key={d.key} className="panel p-4">
@@ -121,8 +123,9 @@ export function CharacterSheetView({
             const bonus = a?.bonus ?? 0;
             const base = d.accepts_points ? computeValue(d, pts) : 0;
             const passive = passiveMods[d.key] ?? { fixed: 0, percent: 0 };
+            const active = statusEffectModifiers(activeEffects, d.key);
             const rawValue = d.accepts_points ? base + bonus : a?.current_value ?? 0;
-            const value = Math.max(0, Math.floor((rawValue + passive.fixed) * (1 + passive.percent / 100)));
+            const value = Math.max(0, Math.floor((rawValue + passive.fixed + active.fixed) * (1 + (passive.percent + active.percent) / 100)));
             return (
               <div key={d.key} className="panel p-4">
                 <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
