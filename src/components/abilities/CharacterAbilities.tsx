@@ -63,7 +63,7 @@ export function CharacterAbilitiesPanel({
       qc.invalidateQueries({ queryKey: ["character-abilities", characterId] }),
       qc.invalidateQueries({ queryKey: ["character-abilities-battle"] }),
       qc.invalidateQueries({ queryKey: ["battle-effects"] }),
-      qc.invalidateQueries({ queryKey: ["character-active-effects", characterId] }),
+      qc.invalidateQueries({ queryKey: ["character-active-effects"] }),
       qc.invalidateQueries({ queryKey: ["battles"] }),
       qc.invalidateQueries({ queryKey: ["character", characterId] }),
     ]);
