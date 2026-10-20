@@ -124,7 +124,7 @@ export function CharacterAbilitiesPanel({
                 </Button>
               )}
             </div>
-            {ability.effects.length > 0 && (
+            {ability.can_activate && ability.effects.length > 0 && (
               <div className="mt-2 space-y-1 border-t border-border pt-2 text-xs text-muted-foreground">
                 <div className="font-semibold">Efeitos ao ativar</div>
                 {ability.effects.map((effect, index) => <div key={index}>{effectSummary(effect, defs ?? [])} · {effect.duration} turno(s)</div>)}
