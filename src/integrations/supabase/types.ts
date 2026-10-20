@@ -105,6 +105,7 @@ export type Database = {
         Row: {
           active: boolean
           created_at: string
+          turn_count: number
           current_character_id: string | null
           id: string
           name: string
@@ -113,6 +114,7 @@ export type Database = {
         Insert: {
           active?: boolean
           created_at?: string
+          turn_count?: number
           current_character_id?: string | null
           id?: string
           name?: string
