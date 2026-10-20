@@ -11,10 +11,12 @@ type MagicLevel = "baixa" | "media" | "alta";
 type DamageType = { id: string; name: string };
 
 export type DamageTarget = { id: string; name: string };
+type DamageSource = { id: string; name: string };
 
-export function DamageApplier({ target, battleId = null }: {
+export function DamageApplier({ target, battleId = null, sources = [] }: {
   target: DamageTarget;
   battleId?: string | null;
+  sources?: DamageSource[];
 }) {
   const qc = useQueryClient();
   const [damageMode, setDamageMode] = useState<"repeat" | "list">("repeat");
@@ -24,6 +26,7 @@ export function DamageApplier({ target, battleId = null }: {
   const [damageList, setDamageList] = useState("50, 35, 45, 86, 20, 10, 50");
   const [damageTypeId, setDamageTypeId] = useState("");
   const [magicLevel, setMagicLevel] = useState<MagicLevel>("baixa");
+  const [sourceCharacterId, setSourceCharacterId] = useState("");
   const [applyingDamage, setApplyingDamage] = useState(false);
 
   const { data: damageTypes = [], isLoading: loadingTypes, error: typesError } = useQuery({
@@ -77,6 +80,7 @@ export function DamageApplier({ target, battleId = null }: {
         _damage_type_id: needsMagic ? damageTypeId : null,
         _damage_values: values,
         _magic_level: needsMagic ? magicLevel : null,
+        _source_character_id: sourceCharacterId || null,
       });
       if (error) {
         toast.error(error.message);
@@ -90,6 +94,9 @@ export function DamageApplier({ target, battleId = null }: {
         total_damage: number;
         hp_before: number;
         hp_after: number;
+        damage_fixed_modifier?: number;
+        damage_percent_modifier?: number;
+        source_character_id?: string | null;
       };
       let defenseText: string;
       if (damageKind === "true") defenseText = "defesas ignoradas";
@@ -101,8 +108,14 @@ export function DamageApplier({ target, battleId = null }: {
         ? damageTypes.find((t) => t.id === damageTypeId)?.name ?? "mágico"
         : damageKindName;
       const damageDescription = damageKind === "hybrid" ? `dano híbrido (${typeName})` : damageKind === "magical" ? `dano mágico (${typeName})` : damageKind === "true" ? "dano verdadeiro" : "dano físico";
+      const sourceName = sources.find((source) => source.id === sourceCharacterId)?.name;
+      const fixedModifier = Number(result.damage_fixed_modifier ?? 0);
+      const percentModifier = Number(result.damage_percent_modifier ?? 0);
+      const sourceSummary = sourceCharacterId
+        ? ` Origem: ${sourceName ?? "personagem selecionado"}; modificadores de dano: ${fixedModifier >= 0 ? "+" : ""}${fixedModifier} fixos, ${percentModifier >= 0 ? "+" : ""}${percentModifier}%.`
+        : "";
       toast.success(
-        `${target.name}: ${result.hits} golpe(s) de ${damageDescription}; ${defenseText}; ${result.total_damage} de dano total. HP: ${result.hp_before} → ${result.hp_after}.`,
+        `${target.name}: ${result.hits} golpe(s) de ${damageDescription}; ${defenseText}; ${result.total_damage} de dano total. HP: ${result.hp_before} → ${result.hp_after}.${sourceSummary}`,
         { duration: 8000 },
       );
       await Promise.all([
@@ -121,6 +134,14 @@ export function DamageApplier({ target, battleId = null }: {
       <h3 className="flex items-center gap-2 text-lg text-gold">
         <HeartPulse className="h-5 w-5" /> Aplicar dano em {target.name}
       </h3>
+      <div className="space-y-1">
+        <label className="text-xs text-muted-foreground">Quem está causando o dano?</label>
+        <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={sourceCharacterId} onChange={(e) => setSourceCharacterId(e.target.value)}>
+          <option value="">Nenhum atacante (sem modificadores de dano)</option>
+          {sources.map((source) => <option key={source.id} value={source.id}>{source.name}</option>)}
+        </select>
+        <p className="text-xs text-muted-foreground">Ao selecionar um personagem, os buffs/debuffs de Dano Causado dele serão aplicados antes da Defesa e da Defesa Mágica.</p>
+      </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1">
           <label className="text-xs text-muted-foreground">Categoria do dano</label>
