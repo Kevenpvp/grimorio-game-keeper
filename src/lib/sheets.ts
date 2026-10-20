@@ -118,6 +118,28 @@ export function computeValue(def: AttributeDef, points: number) {
 export type Race = Tables<"races">;
 export type Virtue = Tables<"virtues">;
 export type RaceMods = Record<string, number>;
+
+export function numberAllocation(value: unknown): RaceMods {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const result: RaceMods = {};
+  for (const [key, raw] of Object.entries(value)) {
+    const n = Number(raw);
+    if (Number.isFinite(n) && n > 0) result[key] = Math.floor(n);
+  }
+  return result;
+}
+
+export function physicalAttributePoints(
+  character: Pick<Character, "race_physical_allocations" | "virtue_physical_allocations">,
+  key: string,
+) {
+  return (numberAllocation(character.race_physical_allocations)[key] ?? 0)
+    + (numberAllocation(character.virtue_physical_allocations)[key] ?? 0);
+}
+
+export function allocationTotal(value: unknown) {
+  return Object.values(numberAllocation(value)).reduce((sum, points) => sum + points, 0);
+}
 export type Trait = Race | Virtue;
 
 export function useRaces() {
