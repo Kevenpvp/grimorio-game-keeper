@@ -78,6 +78,7 @@ function RaceEditor({ race, defs, isNew, onSaved }: { race: Race; defs: Attribut
   const [name, setName] = useState(race.name);
   const [description, setDescription] = useState(race.description ?? "");
   const [bonus, setBonus] = useState(race.bonus_points);
+  const [physicalBonus, setPhysicalBonus] = useState(race.physical_bonus_points);
   const [mods, setMods] = useState(raceMods(race));
 
   async function save() {
@@ -86,7 +87,8 @@ function RaceEditor({ race, defs, isNew, onSaved }: { race: Race; defs: Attribut
     for (const [k, v] of Object.entries(mods)) if (Math.round(v)) clean[k] = Math.round(v);
     const { error } = await supabase.from("races").update({
       name: name.trim(), description: description.trim() || null,
-      bonus_points: Math.max(0, Math.round(bonus) || 0), modifiers: clean,
+      bonus_points: Math.max(0, Math.round(bonus) || 0),
+      physical_bonus_points: Math.max(0, Math.round(physicalBonus) || 0), modifiers: clean,
     }).eq("id", race.id);
     if (error) { toast.error(error.message); return; }
     toast.success("Raça salva");
@@ -108,6 +110,7 @@ function RaceEditor({ race, defs, isNew, onSaved }: { race: Race; defs: Attribut
         <div className="space-y-1.5"><Label>Nome</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
         <div className="space-y-1.5"><Label>Pontos livres extras</Label>
           <Input type="number" min={0} value={bonus} onChange={(e) => setBonus(Number(e.target.value))} /></div>
+        <div className="space-y-1.5"><Label>Pontos extras de atributos físicos</Label><Input type="number" min={0} value={physicalBonus} onChange={(e) => setPhysicalBonus(Number(e.target.value))} /></div>
         <div className="space-y-1.5 sm:col-span-2"><Label>Descrição</Label>
           <Textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} /></div>
       </div>
