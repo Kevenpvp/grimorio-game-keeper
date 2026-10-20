@@ -98,7 +98,7 @@ function AbilityEditor({ ability, defs }: { ability: Ability; defs: NonNullable<
       description: description.trim() || null,
       is_passive: isPassive,
       cooldown_turns: cool,
-      mana_cost: mana,
+      mana_cost: isPassive ? 0 : mana,
       effects: effects.map((effect) => ({ ...effect, duration: isPassive ? 1 : Math.max(1, effect.duration) })) as unknown as Json,
     }).eq("id", ability.id);
     setBusy(false);
@@ -124,7 +124,7 @@ function AbilityEditor({ ability, defs }: { ability: Ability; defs: NonNullable<
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome da habilidade" />
         </div>
         <label className="flex min-h-10 items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
-          <input type="checkbox" checked={isPassive} onChange={(e) => { setIsPassive(e.target.checked); setCooldown(e.target.checked ? "0" : (Number(cooldown) > 0 ? cooldown : "1")); }} />
+          <input type="checkbox" checked={isPassive} onChange={(e) => { setIsPassive(e.target.checked); setCooldown(e.target.checked ? "0" : (Number(cooldown) > 0 ? cooldown : "1")); if (e.target.checked) setManaCost("0"); }} />
           Habilidade passiva
         </label>
       </div>
@@ -134,11 +134,11 @@ function AbilityEditor({ ability, defs }: { ability: Ability; defs: NonNullable<
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         {!isPassive && <div className="space-y-1.5"><Label>Cooldown (turnos)</Label><Input type="number" min="1" value={cooldown} onChange={(e) => setCooldown(e.target.value)} /></div>}
-        <div className="space-y-1.5">
+        {!isPassive && <div className="space-y-1.5">
           <Label>Custo de Mana (0 = não gasta)</Label>
           <Input type="number" min="0" value={manaCost} onChange={(e) => setManaCost(e.target.value)} />
-        </div>
-        {isPassive && <p className="text-xs text-muted-foreground">Habilidade passiva: não tem botão de ativação e não entra em cooldown.</p>}
+        </div>}
+        {isPassive && <p className="text-xs text-muted-foreground">Habilidade passiva: não tem botão de ativação, não gasta Mana e não entra em cooldown.</p>}
       </div>
       <AbilityEffectsEditor effects={effects} onChange={setEffects} isPassive={isPassive} defs={defs} />
       <div className="flex flex-wrap gap-2 border-t border-border pt-3">
