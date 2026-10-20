@@ -2,7 +2,7 @@ import { Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { AttributeDef } from "@/lib/sheets";
-import { useDamageTypes, type AbilityEffectDefinition, type AbilityEffectType, type DamageScope } from "@/lib/abilities";
+import { useDamageTypes, type AbilityEffectDefinition, type AbilityEffectType, type DamageScope, type DamageMagicLevel, type DamageReductionScope } from "@/lib/abilities";
 
 const effectTypeLabels: Record<AbilityEffectType, string> = {
   status: "Buff/debuff de atributo",
@@ -98,7 +98,10 @@ export function AbilityEffectsEditor({
                   patch(index, {
                     effect_type: type,
                     attribute_key: type === "mana_regeneration" ? "mana" : type === "regeneration" ? "hp" : type === "status" ? firstStatusKey() : null,
-                    polarity: type === "magic_prohibition" || type === "no_mana" ? "debuff" : effect.polarity,
+                    polarity: type === "magic_prohibition" || type === "no_mana" ? "debuff" : type === "damage_reduction" ? "buff" : effect.polarity,
+                    damage_reduction_scope: type === "damage_reduction" ? "physical" : effect.damage_reduction_scope,
+                    damage_reduction_type_id: type === "damage_reduction" ? (damageTypes[0]?.id ?? null) : null,
+                    damage_reduction_magic_level: type === "damage_reduction" ? "baixa" : null,
                   });
                 }}>
                 {Object.entries(effectTypeLabels).filter(([value]) => !isPermanent || value !== "magic_prohibition").map(([value, label]) => <option key={value} value={value}>{label}</option>)}
