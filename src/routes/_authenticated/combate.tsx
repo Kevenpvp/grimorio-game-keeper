@@ -29,7 +29,7 @@ export const Route = createFileRoute("/_authenticated/combate")({
 type Attr = { attribute_key: string; current_value: number; max_value: number; points: number; bonus: number };
 type Fighter = {
   id: string; name: string; player_name: string; photo_path: string | null; race_id: string | null;
-  body: number; sanity: number; mana_regen_mode?: "percent" | "fixed"; mana_regen_amount?: number; participant_turn_count?: number;
+  body: number; sanity: number; participant_turn_count?: number;
   character_attributes: Attr[];
 };
 
@@ -62,7 +62,7 @@ function useLiveBattles() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("battles")
-        .select("*, battle_participants(sort_order,turn_count, characters(id,name,player_name,photo_path,race_id,body,sanity,mana_regen_mode,mana_regen_amount,character_attributes(attribute_key,current_value,max_value,points,bonus)))")
+        .select("*, battle_participants(sort_order,turn_count, characters(id,name,player_name,photo_path,race_id,body,sanity,character_attributes(attribute_key,current_value,max_value,points,bonus)))")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data;
@@ -118,6 +118,7 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
   const { data: races } = useRaces();
   const qc = useQueryClient();
   const [selectedTargetIds, setSelectedTargetIds] = useState<string[]>(() => battle.target_character_id ? [battle.target_character_id] : []);
+  const [manaRegenSettings, setManaRegenSettings] = useState<Record<string, { mode: "percent" | "fixed"; amount: string }>>({});
   const fighters = useMemo(
     () => battle.battle_participants.slice().sort((a, b) => a.sort_order - b.sort_order).map((p) => ({ ...(p.characters as Fighter), participant_turn_count: p.turn_count ?? 0 })).filter((f) => !!f.id),
     [battle],
@@ -135,9 +136,17 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
   };
 
   function manaRegenFor(fighter: Fighter) {
-    const amount = Number(fighter.mana_regen_amount ?? 5);
+    const setting = manaRegenSettings[fighter.id] ?? { mode: "percent" as const, amount: "0" };
+    const amount = Number(setting.amount);
     if (!Number.isFinite(amount) || amount < 0) return null;
-    return (fighter.mana_regen_mode ?? "percent") === "percent" ? Math.ceil(val(fighter, "mana") * amount / 100) : Math.floor(amount);
+    return setting.mode === "percent" ? Math.ceil(val(fighter, "mana") * amount / 100) : Math.floor(amount);
+  }
+
+  function setManaRegen(fighterId: string, patch: Partial<{ mode: "percent" | "fixed"; amount: string }>) {
+    setManaRegenSettings((current) => ({
+      ...current,
+      [fighterId]: { mode: current[fighterId]?.mode ?? "percent", amount: current[fighterId]?.amount ?? "0", ...patch },
+    }));
   }
 
   async function advanceFighterTurn(fighter: Fighter) {
@@ -239,7 +248,7 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
                   <div key={d.key} className="rounded border border-border p-2"><span className="text-muted-foreground">{d.label}</span><div className="font-semibold">{val(f, d.key)}</div></div>
                 ))}
               </div>
-              {isMaster && <CombatResourceEditor fighter={f} val={val} onManaRegenSaved={() => void qc.invalidateQueries({ queryKey: ["battles"] })} /> }
+              {isMaster && <CombatResourceEditor fighter={f} val={val} manaRegenMode={manaRegenSettings[f.id]?.mode ?? "percent"} manaRegenAmount={manaRegenSettings[f.id]?.amount ?? "0"} onManaRegenModeChange={(mode) => setManaRegen(f.id, { mode })} onManaRegenAmountChange={(amount) => setManaRegen(f.id, { amount })} /> }
               <div className="flex flex-wrap items-center justify-between gap-2 rounded border border-border p-2">
                 <span className="text-xs text-muted-foreground">Turnos individuais: {f.participant_turn_count ?? 0}</span>
                 {isMaster && <Button size="sm" variant="outline" onClick={() => void advanceFighterTurn(f)}><RotateCw className="mr-1 h-3.5 w-3.5" /> Avançar turno</Button>}
@@ -273,28 +282,15 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
 }
 
 
-function CombatResourceEditor({ fighter, val, onManaRegenSaved }: { fighter: Fighter; val: (f: Fighter, k: string) => number; onManaRegenSaved: () => void }) {
+function CombatResourceEditor({ fighter, val, manaRegenMode, manaRegenAmount, onManaRegenModeChange, onManaRegenAmountChange }: { fighter: Fighter; val: (f: Fighter, k: string) => number; manaRegenMode: "percent" | "fixed"; manaRegenAmount: string; onManaRegenModeChange: (mode: "percent" | "fixed") => void; onManaRegenAmountChange: (amount: string) => void }) {
   const qc = useQueryClient();
   const [manaDelta, setManaDelta] = useState("10");
   const [sanityDelta, setSanityDelta] = useState("10");
   const [bodyDelta, setBodyDelta] = useState("10");
-  const [manaRegenMode, setManaRegenMode] = useState<"percent" | "fixed">(fighter.mana_regen_mode ?? "percent");
-  const [manaRegenAmount, setManaRegenAmount] = useState(String(fighter.mana_regen_amount ?? 5));
   const [hpRegenMode, setHpRegenMode] = useState<"percent" | "fixed">("percent");
   const [hpRegenAmount, setHpRegenAmount] = useState("10");
   const [busy, setBusy] = useState(false);
 
-  async function saveManaRegen() {
-    const amount = Number(manaRegenAmount);
-    if (!Number.isFinite(amount) || amount < 0) { toast.error("Informe uma regeneração de mana válida"); return; }
-    setBusy(true);
-    try {
-      const { error } = await supabase.from("characters").update({ mana_regen_mode: manaRegenMode, mana_regen_amount: amount }).eq("id", fighter.id);
-      if (error) { toast.error(error.message); return; }
-      toast.success("Regeneração de mana de " + fighter.name + " salva");
-      onManaRegenSaved();
-    } finally { setBusy(false); }
-  }
 
   async function regenerateHp() {
     const attr = fighter.character_attributes.find((a) => a.attribute_key === "hp");
@@ -348,12 +344,11 @@ function CombatResourceEditor({ fighter, val, onManaRegenSaved }: { fighter: Fig
       <div className="space-y-2 border-b border-border pb-2">
         <div className="text-xs font-medium">Regeneração de mana desta ficha</div>
         <div className="grid grid-cols-2 gap-2">
-          <select aria-label="Modo de regeneração de mana" className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={manaRegenMode} onChange={(e) => setManaRegenMode(e.target.value as "percent" | "fixed")}>
+          <select aria-label="Modo de regeneração de mana" className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={manaRegenMode} onChange={(e) => onManaRegenModeChange(e.target.value as "percent" | "fixed")}>
             <option value="percent">% da mana máxima</option><option value="fixed">Valor fixo</option>
           </select>
-          <Input aria-label="Valor de regeneração de mana" type="number" min="0" value={manaRegenAmount} onChange={(e) => setManaRegenAmount(e.target.value)} />
+          <Input aria-label="Valor de regeneração de mana" type="number" min="0" value={manaRegenAmount} onChange={(e) => onManaRegenAmountChange(e.target.value)} />
         </div>
-        <Button size="sm" variant="outline" disabled={busy} onClick={() => void saveManaRegen()}>Salvar regeneração de mana</Button>
         <div className="text-xs font-medium">Regenerar HP desta ficha</div>
         <div className="grid grid-cols-2 gap-2">
           <select aria-label="Modo de regeneração de HP" className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={hpRegenMode} onChange={(e) => setHpRegenMode(e.target.value as "percent" | "fixed")}>
