@@ -40,6 +40,10 @@ export function AbilityEffectsEditor({
     }]);
   }
 
+  function firstStatusKey() {
+    return defs.find((d) => d.key !== "hp" && d.key !== "mana")?.key ?? "hp";
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -105,8 +109,4 @@ export function AbilityEffectsEditor({
       })}
     </div>
   );
-
-  function firstStatusKey() {
-    return defs.find((d) => d.key !== "hp" && d.key !== "mana")?.key ?? "hp";
-  }
 }
