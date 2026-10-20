@@ -123,6 +123,7 @@ export type Database = {
         Update: {
           active?: boolean
           created_at?: string
+          turn_count?: number
           current_character_id?: string | null
           id?: string
           name?: string
