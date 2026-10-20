@@ -47,63 +47,6 @@ export type Database = {
         }
         Relationships: []
       }
-      character_abilities: {
-        Row: {
-          ability_id: string
-          character_id: string
-          cooldown_remaining: number
-          cooldown_turns: number
-          created_at: string
-          description: string | null
-          effects: Json
-          id: string
-          is_passive: boolean
-          mana_cost: number
-          name: string
-        }
-        Insert: {
-          ability_id: string
-          character_id: string
-          cooldown_remaining?: number
-          cooldown_turns?: number
-          created_at?: string
-          description?: string | null
-          effects?: Json
-          id?: string
-          is_passive?: boolean
-          mana_cost?: number
-          name: string
-        }
-        Update: {
-          ability_id?: string
-          character_id?: string
-          cooldown_remaining?: number
-          cooldown_turns?: number
-          created_at?: string
-          description?: string | null
-          effects?: Json
-          id?: string
-          is_passive?: boolean
-          mana_cost?: number
-          name?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "character_abilities_ability_id_fkey"
-            columns: ["ability_id"]
-            isOneToOne: false
-            referencedRelation: "abilities"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "character_abilities_character_id_fkey"
-            columns: ["character_id"]
-            isOneToOne: false
-            referencedRelation: "characters"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       attribute_definitions: {
         Row: {
           accepts_points: boolean
@@ -291,6 +234,63 @@ export type Database = {
           },
         ]
       }
+      character_abilities: {
+        Row: {
+          ability_id: string
+          character_id: string
+          cooldown_remaining: number
+          cooldown_turns: number
+          created_at: string
+          description: string | null
+          effects: Json
+          id: string
+          is_passive: boolean
+          mana_cost: number
+          name: string
+        }
+        Insert: {
+          ability_id: string
+          character_id: string
+          cooldown_remaining?: number
+          cooldown_turns?: number
+          created_at?: string
+          description?: string | null
+          effects?: Json
+          id?: string
+          is_passive?: boolean
+          mana_cost?: number
+          name: string
+        }
+        Update: {
+          ability_id?: string
+          character_id?: string
+          cooldown_remaining?: number
+          cooldown_turns?: number
+          created_at?: string
+          description?: string | null
+          effects?: Json
+          id?: string
+          is_passive?: boolean
+          mana_cost?: number
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "character_abilities_ability_id_fkey"
+            columns: ["ability_id"]
+            isOneToOne: false
+            referencedRelation: "abilities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "character_abilities_character_id_fkey"
+            columns: ["character_id"]
+            isOneToOne: false
+            referencedRelation: "characters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       character_attributes: {
         Row: {
           attribute_key: string
@@ -350,10 +350,10 @@ export type Database = {
           player_name: string
           race_id: string | null
           race_points_granted: number
-          virtue_id: string | null
-          virtue_points_granted: number
           sanity: number
           updated_at: string
+          virtue_id: string | null
+          virtue_points_granted: number
         }
         Insert: {
           available_points?: number
@@ -368,10 +368,10 @@ export type Database = {
           player_name?: string
           race_id?: string | null
           race_points_granted?: number
-          virtue_id?: string | null
-          virtue_points_granted?: number
           sanity?: number
           updated_at?: string
+          virtue_id?: string | null
+          virtue_points_granted?: number
         }
         Update: {
           available_points?: number
@@ -386,10 +386,10 @@ export type Database = {
           player_name?: string
           race_id?: string | null
           race_points_granted?: number
-          virtue_id?: string | null
-          virtue_points_granted?: number
           sanity?: number
           updated_at?: string
+          virtue_id?: string | null
+          virtue_points_granted?: number
         }
         Relationships: [
           {
@@ -493,6 +493,24 @@ export type Database = {
         }
         Relationships: []
       }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
       virtues: {
         Row: {
           bonus_points: number
@@ -520,35 +538,17 @@ export type Database = {
         }
         Relationships: []
       }
-      user_roles: {
-        Row: {
-          id: string
-          role: Database["public"]["Enums"]["app_role"]
-          user_id: string
-        }
-        Insert: {
-          id?: string
-          role: Database["public"]["Enums"]["app_role"]
-          user_id: string
-        }
-        Update: {
-          id?: string
-          role?: Database["public"]["Enums"]["app_role"]
-          user_id?: string
-        }
-        Relationships: []
-      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
       activate_character_ability: {
-        Args: { _battle_id?: string | null; _character_ability_id: string; _target_character_id: string }
-        Returns: undefined
-      }
-      tick_character_ability_cooldowns: {
-        Args: { _character_id: string }
+        Args: {
+          _battle_id?: string
+          _character_ability_id: string
+          _target_character_id: string
+        }
         Returns: undefined
       }
       apply_battle_damage: {
@@ -562,12 +562,12 @@ export type Database = {
         }
         Returns: Json
       }
-      choose_race: {
-        Args: { _character_id: string; _race_id: string }
+      choose_character_traits: {
+        Args: { _character_id: string; _race_id: string; _virtue_id: string }
         Returns: undefined
       }
-      choose_character_traits: {
-        Args: { _character_id: string; _race_id: string | null; _virtue_id: string | null }
+      choose_race: {
+        Args: { _character_id: string; _race_id: string }
         Returns: undefined
       }
       has_role: {
@@ -586,6 +586,10 @@ export type Database = {
       sync_my_role: {
         Args: never
         Returns: Database["public"]["Enums"]["app_role"]
+      }
+      tick_character_ability_cooldowns: {
+        Args: { _character_id: string }
+        Returns: undefined
       }
     }
     Enums: {
