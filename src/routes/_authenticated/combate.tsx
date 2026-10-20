@@ -12,7 +12,7 @@ import { StatBar } from "@/components/sheet/StatBar";
 import { cn } from "@/lib/utils";
 import { DamageApplier } from "@/components/combat/DamageApplier";
 import { CharacterAbilitiesPanel } from "@/components/abilities/CharacterAbilities";
-import { passiveEffectTypeActive, passiveRegenerationModifiers, passiveStatusModifiers, useBattleCharacterAbilities } from "@/lib/abilities";
+import { passiveEffectTypeActive, passiveRegenerationModifiers, passiveStatusModifiers, useBattleCharacterAbilities, useCharacterAbilities } from "@/lib/abilities";
 
 export const Route = createFileRoute("/_authenticated/combate")({
   head: () => ({
@@ -374,6 +374,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
 
 function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemoveEffect, hpRegenBlocked, manaRegenBlocked, manaRegenMode, manaRegenAmount, onManaRegenModeChange, onManaRegenAmountChange }: { fighter: Fighter; val: (f: Fighter, k: string) => number; effects: BattleEffect[]; defs: AttributeDef[]; onAddEffect: (effect: Omit<BattleEffect, "id" | "battle_id" | "character_id">) => void; onRemoveEffect: (id: string) => void; hpRegenBlocked: boolean; manaRegenBlocked: boolean; manaRegenMode: "percent" | "fixed"; manaRegenAmount: string; onManaRegenModeChange: (mode: "percent" | "fixed") => void; onManaRegenAmountChange: (amount: string) => void }) {
   const qc = useQueryClient();
+  const { data: characterAbilities = [] } = useCharacterAbilities(fighter.id);
   const [manaDelta, setManaDelta] = useState("10");
   const [manualManaAmount, setManualManaAmount] = useState("10");
   const [sanityDelta, setSanityDelta] = useState("10");
@@ -399,8 +400,9 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
     const maximum = val(fighter, "hp");
     const regen = hpRegenMode === "percent" ? Math.ceil(maximum * amount / 100) : Math.floor(amount);
     const regenEffects = effects.filter(e => e.effect_type === "regeneration" && e.attribute_key === "hp");
-    const fixedRegen = regenEffects.filter(e => e.value_mode === "fixed").reduce((n,e) => n + (e.polarity === "buff" ? 1 : -1) * Number(e.amount), 0);
-    const percentRegen = regenEffects.filter(e => e.value_mode === "percent").reduce((n,e) => n + (e.polarity === "buff" ? 1 : -1) * Number(e.amount), 0);
+    const passiveRegen = passiveRegenerationModifiers(characterAbilities, "hp");
+    const fixedRegen = passiveRegen.fixed + regenEffects.filter(e => e.value_mode === "fixed").reduce((n,e) => n + (e.polarity === "buff" ? 1 : -1) * Number(e.amount), 0);
+    const percentRegen = passiveRegen.percent + regenEffects.filter(e => e.value_mode === "percent").reduce((n,e) => n + (e.polarity === "buff" ? 1 : -1) * Number(e.amount), 0);
     const adjustedRegen = hpRegenBlocked ? 0 : Math.max(0, Math.floor(regen * (1 + percentRegen / 100) + fixedRegen));
     const next = Math.min(maximum, (attr.current_value ?? 0) + adjustedRegen);
     setBusy(true);
