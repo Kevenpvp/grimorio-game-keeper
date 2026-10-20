@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { Crosshair, Dices, Plus, Swords, Trash2, Copy, Footprints } from "lucide-react";
+import { Crosshair, Dices, Plus, Swords, Trash2, Copy, Footprints, RotateCw, Minus, Brain, Activity } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +29,7 @@ export const Route = createFileRoute("/_authenticated/combate")({
 type Attr = { attribute_key: string; current_value: number; max_value: number; points: number; bonus: number };
 type Fighter = {
   id: string; name: string; player_name: string; photo_path: string | null; race_id: string | null;
+  body: number; sanity: number;
   character_attributes: Attr[];
 };
 
@@ -61,7 +62,7 @@ function useLiveBattles() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("battles")
-        .select("*, battle_participants(sort_order, characters(id,name,player_name,photo_path,race_id,character_attributes(attribute_key,current_value,max_value,points,bonus)))")
+        .select("*, battle_participants(sort_order, characters(id,name,player_name,photo_path,race_id,body,sanity,character_attributes(attribute_key,current_value,max_value,points,bonus)))")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data;
@@ -133,6 +134,21 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
     qc.invalidateQueries({ queryKey: ["battles"] });
   };
 
+  async function advanceTurn() {
+    const nextTurn = (battle.turn_count ?? 0) + 1;
+    const { error: turnError } = await supabase.from("battles").update({ turn_count: nextTurn }).eq("id", battle.id);
+    if (turnError) { toast.error(turnError.message); return; }
+    for (const fighter of fighters) {
+      const manaAttr = fighter.character_attributes.find((a) => a.attribute_key === "mana");
+      if (!manaAttr) continue;
+      const nextMana = Math.min(val(fighter, "mana"), (manaAttr.current_value ?? 0) + Math.ceil(val(fighter, "mana") * 0.05));
+      const { error } = await supabase.from("character_attributes").update({ current_value: nextMana, updated_at: new Date().toISOString() }).eq("character_id", fighter.id).eq("attribute_key", "mana");
+      if (error) toast.error("Falha ao regenerar mana de " + fighter.name + ": " + error.message);
+    }
+    toast.success("Turno " + nextTurn + ": regeneração de 5% da mana máxima.");
+    await qc.invalidateQueries({ queryKey: ["battles"] });
+  }
+
   const actor = fighters.find((f) => f.id === battle.current_character_id);
   const targets = fighters.filter((f) => selectedTargetIds.includes(f.id) && f.id !== actor?.id);
 
@@ -149,6 +165,10 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
   return (
     <div className="space-y-6">
       {isMaster && <BattleAdmin battle={battle} fighters={fighters} onUpdate={update} />}
+      <div className="panel flex flex-wrap items-center justify-between gap-3 p-4">
+        <div><div className="text-sm text-muted-foreground">Turnos transcorridos</div><div className="font-display text-2xl text-gold">{battle.turn_count ?? 0}</div></div>
+        {isMaster && <Button onClick={() => void advanceTurn()}><RotateCw className="mr-2 h-4 w-4" /> Avançar turno (+5% Mana)</Button>}
+      </div>
       {!isMaster && <h2 className="text-xl text-gold">{battle.name}</h2>}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -169,7 +189,21 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
                 </div>
               </div>
               <Bar label="HP" cur={hp?.current_value ?? 0} max={val(f, "hp")} tone="bg-blood" />
+              {defs.filter((d) => d.key !== "hp" && d.key !== "mana" && d.show_bar).map((d) => {
+                const attr = f.character_attributes.find((a) => a.attribute_key === d.key);
+                return <Bar key={d.key} label={d.label} cur={attr?.current_value ?? val(f, d.key)} max={val(f, d.key)} tone="bg-sky-500" />;
+              })}
               <Bar label="Mana" cur={mana?.current_value ?? 0} max={val(f, "mana")} tone="bg-arcane" />
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="rounded border border-border p-2"><span className="text-muted-foreground">Corpo</span><div className="font-semibold">{f.body}%</div></div>
+                <div className="rounded border border-border p-2"><span className="text-muted-foreground">Sanidade</span><div className="font-semibold">{f.sanity}%</div></div>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                {defs.filter((d) => !d.show_bar && !["hp", "mana"].includes(d.key)).map((d) => (
+                  <div key={d.key} className="rounded border border-border p-2"><span className="text-muted-foreground">{d.label}</span><div className="font-semibold">{val(f, d.key)}</div></div>
+                ))}
+              </div>
+              {isMaster && <CombatResourceEditor fighter={f} val={val} />}
               {isMaster && (
                 <div className="flex gap-2 pt-1">
                   <Button size="sm" variant={isActor ? "default" : "outline"} onClick={() => {
@@ -194,6 +228,58 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
       ) : (
         <p className="text-sm text-muted-foreground">Selecione a opção "Vez" de um personagem para abrir as ações e o teste de esquiva.</p>
       ))}
+    </div>
+  );
+}
+
+
+function CombatResourceEditor({ fighter, val }: { fighter: Fighter; val: (f: Fighter, k: string) => number }) {
+  const qc = useQueryClient();
+  const [manaDelta, setManaDelta] = useState("10");
+  const [sanityDelta, setSanityDelta] = useState("10");
+  const [bodyDelta, setBodyDelta] = useState("10");
+  const [busy, setBusy] = useState(false);
+
+  async function changePercent(field: "sanity" | "body", deltaText: string) {
+    const delta = Number(deltaText);
+    if (!Number.isFinite(delta) || delta <= 0) { toast.error("Informe uma quantidade positiva"); return; }
+    setBusy(true);
+    try {
+      const current = field === "sanity" ? fighter.sanity : fighter.body;
+      const next = Math.max(0, Math.min(100, current - delta));
+      const { error } = await supabase.from("characters").update({ [field]: next }).eq("id", fighter.id);
+      if (error) { toast.error(error.message); return; }
+      toast.success((field === "sanity" ? "Sanidade" : "Corpo") + ": " + current + "% → " + next + "%");
+      await qc.invalidateQueries({ queryKey: ["battles"] });
+    } finally { setBusy(false); }
+  }
+
+  async function changeMana() {
+    const delta = Number(manaDelta);
+    if (!Number.isFinite(delta) || delta <= 0) { toast.error("Informe uma quantidade positiva"); return; }
+    const attr = fighter.character_attributes.find((a) => a.attribute_key === "mana");
+    if (!attr) { toast.error("Atributo Mana não encontrado"); return; }
+    setBusy(true);
+    try {
+      const next = Math.max(0, Math.min(val(fighter, "mana"), attr.current_value - delta));
+      const { error } = await supabase.from("character_attributes").update({ current_value: next, updated_at: new Date().toISOString() }).eq("character_id", fighter.id).eq("attribute_key", "mana");
+      if (error) { toast.error(error.message); return; }
+      toast.success("Mana: " + attr.current_value + " → " + next);
+      await qc.invalidateQueries({ queryKey: ["battles"] });
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="space-y-2 rounded-md border border-border p-2">
+      <div className="text-xs font-semibold text-muted-foreground">Reduzir recursos (mestre)</div>
+      <div className="grid grid-cols-[1fr_auto] gap-2">
+        <Input aria-label="Quantidade de mana a reduzir" type="number" min="1" value={manaDelta} onChange={(e) => setManaDelta(e.target.value)} />
+        <Button size="sm" variant="outline" disabled={busy} onClick={() => void changeMana()}><Minus className="mr-1 h-3 w-3" /> Mana</Button>
+        <Input aria-label="Quantidade de sanidade a reduzir" type="number" min="1" value={sanityDelta} onChange={(e) => setSanityDelta(e.target.value)} />
+        <Button size="sm" variant="outline" disabled={busy} onClick={() => void changePercent("sanity", sanityDelta)}><Brain className="mr-1 h-3 w-3" /> Sanidade</Button>
+        <Input aria-label="Quantidade de corpo a reduzir" type="number" min="1" value={bodyDelta} onChange={(e) => setBodyDelta(e.target.value)} />
+        <Button size="sm" variant="outline" disabled={busy} onClick={() => void changePercent("body", bodyDelta)}><Activity className="mr-1 h-3 w-3" /> Corpo</Button>
+      </div>
     </div>
   );
 }
