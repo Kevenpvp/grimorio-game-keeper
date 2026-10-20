@@ -215,7 +215,8 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
       }
       const manaAttr = fighter.character_attributes.find((a) => a.attribute_key === "mana");
       if (!manaAttr) continue;
-      const regen = manaRegenFor(fighter);
+      const baseRegen = manaRegenFor(fighter);
+      const regen = baseRegen === null ? null : regenValue(fighter.id, "mana", baseRegen);
       if (regen === null) { toast.error("Informe uma regeneração de mana válida"); return; }
       const nextMana = Math.min(val(fighter, "mana"), (manaAttr.current_value ?? 0) + regen);
       const { error } = await supabase.from("character_attributes").update({ current_value: nextMana, updated_at: new Date().toISOString() }).eq("character_id", fighter.id).eq("attribute_key", "mana");
@@ -342,7 +343,10 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
     if (!Number.isFinite(amount) || amount < 0) { toast.error("Informe uma regeneração de HP válida"); return; }
     const maximum = val(fighter, "hp");
     const regen = hpRegenMode === "percent" ? Math.ceil(maximum * amount / 100) : Math.floor(amount);
-    const adjustedRegen = hpRegenBlocked ? 0 : regen;
+    const regenEffects = effects.filter(e => e.effect_type === "regeneration" && e.attribute_key === "hp");
+    const fixedRegen = regenEffects.filter(e => e.value_mode === "fixed").reduce((n,e) => n + (e.polarity === "buff" ? 1 : -1) * Number(e.amount), 0);
+    const percentRegen = regenEffects.filter(e => e.value_mode === "percent").reduce((n,e) => n + (e.polarity === "buff" ? 1 : -1) * Number(e.amount), 0);
+    const adjustedRegen = hpRegenBlocked ? 0 : Math.max(0, Math.floor(regen * (1 + percentRegen / 100) + fixedRegen));
     const next = Math.min(maximum, (attr.current_value ?? 0) + adjustedRegen);
     setBusy(true);
     try {
