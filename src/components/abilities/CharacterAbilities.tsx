@@ -14,7 +14,7 @@ import type { Json } from "@/integrations/supabase/types";
 type TargetOption = { id: string; name: string };
 
 function effectSummary(effect: AbilityEffectDefinition, defs: NonNullable<ReturnType<typeof useDefs>["data"]>) {
-  const amount = effect.value_mode === "percent" ? `${effect.amount}%` : `${effect.amount} pontos`;
+  const amount = effect.value_mode === "percent" ? `${effect.amount}%` : (effect.effect_type === "mana_regeneration" || effect.effect_type === "mana_used") ? `${effect.amount} Mana` : `${effect.amount} pontos`;
   const polarity = effect.polarity === "buff" ? "+" : "−";
   if (effect.effect_type === "status") return `${effect.name}: ${polarity}${amount} em ${defs.find((d) => d.key === effect.attribute_key)?.label ?? effect.attribute_key}`;
   if (effect.effect_type === "regeneration") return `${effect.name}: regeneração ${polarity}${amount} de ${effect.attribute_key === "mana" ? "Mana" : "HP"}`;
