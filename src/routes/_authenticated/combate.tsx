@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Crosshair, Dices, Plus, Swords, Trash2, Copy, Footprints, RotateCw, Minus, Brain, Activity } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -126,6 +126,8 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
   const qc = useQueryClient();
   const [selectedTargetIds, setSelectedTargetIds] = useState<string[]>(() => battle.target_character_id ? [battle.target_character_id] : []);
   const [manaRegenSettings, setManaRegenSettings] = useState<Record<string, { mode: "percent" | "fixed"; amount: string }>>({});
+  const [turnAdvancing, setTurnAdvancing] = useState(false);
+  const turnAdvanceRef = useRef(false);
   const fighters = useMemo(
     () => battle.battle_participants.slice().sort((a, b) => a.sort_order - b.sort_order).map((p) => ({ ...(p.characters as Fighter), participant_turn_count: p.turn_count ?? 0 })).filter((f) => !!f.id),
     [battle],
@@ -177,25 +179,59 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
     const percent = passive.percent + active.filter(e => e.value_mode === "percent").reduce((n,e) => n + (e.polarity === "buff" ? 1 : -1) * Number(e.amount), 0);
     return Math.max(0, Math.floor(base * (1 + percent / 100) + fixed));
   };
-  // Regra única de duração: tanto turno individual quanto turno geral chamam esta função.
-  // Cada avanço reduz em 1 a duração de TODOS os efeitos ativos desta batalha.
-  async function tickEffects() {
-    const [battleResult, standaloneResult] = await Promise.all([
-      supabase.from("battle_effects").select("*").eq("battle_id", battle.id),
-      supabase.from("battle_effects").select("*").is("battle_id", null).in("character_id", fighterIds),
-    ]);
-    if (battleResult.error) { toast.error(battleResult.error.message); return; }
-    if (standaloneResult.error) { toast.error(standaloneResult.error.message); return; }
-    const rows = [...(battleResult.data ?? []), ...(standaloneResult.data ?? [])] as BattleEffect[];
-    for (const row of rows) {
-      const result = row.duration <= 1
-        ? await supabase.from("battle_effects").delete().eq("id", row.id)
-        : await supabase.from("battle_effects").update({ duration: row.duration - 1 }).eq("id", row.id);
-      if (result.error) toast.error(result.error.message);
+  async function advanceCombatTurn(characterId: string | null) {
+    // A synchronous ref guard blocks double-clicks before React can render the disabled buttons.
+    if (!isMaster || turnAdvanceRef.current) return;
+    turnAdvanceRef.current = true;
+    setTurnAdvancing(true);
+
+    try {
+      const turnFighters = characterId ? fighters.filter((fighter) => fighter.id === characterId) : fighters;
+      if (characterId && turnFighters.length === 0) {
+        toast.error("Personagem não encontrado nesta batalha");
+        return;
+      }
+
+      const baseManaRegeneration: Record<string, number> = {};
+      for (const fighter of turnFighters) {
+        if (!fighter.character_attributes.some((attribute) => attribute.attribute_key === "mana")) continue;
+        const baseRegen = manaRegenFor(fighter);
+        if (baseRegen === null) {
+          toast.error("Informe uma regeneração de mana válida para " + fighter.name);
+          return;
+        }
+        baseManaRegeneration[fighter.id] = baseRegen;
+      }
+
+      const { data: nextTurn, error } = await supabase.rpc("advance_combat_turn", {
+        _battle_id: battle.id,
+        _character_id: characterId,
+        _base_mana_regeneration: baseManaRegeneration,
+      });
+      if (error) {
+        toast.error("Não foi possível avançar o turno: " + error.message);
+        return;
+      }
+
+      if (characterId) {
+        const fighter = turnFighters[0];
+        toast.success("Turno individual de " + fighter.name + " avançado para " + nextTurn + "; regeneração configurada aplicada.");
+      } else {
+        toast.success("Turno " + nextTurn + ": regeneração configurada aplicada.");
+      }
+
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["battles"] }),
+        qc.invalidateQueries({ queryKey: ["battle-effects", battle.id] }),
+        qc.invalidateQueries({ queryKey: ["character-active-effects"] }),
+        qc.invalidateQueries({ queryKey: ["character-abilities-battle"] }),
+      ]);
+    } finally {
+      turnAdvanceRef.current = false;
+      setTurnAdvancing(false);
     }
-    await qc.invalidateQueries({ queryKey: ["battle-effects", battle.id] });
-    await qc.invalidateQueries({ queryKey: ["character-active-effects"] });
   }
+
   async function addEffect(characterId: string, effect: Omit<BattleEffect, "id" | "battle_id" | "character_id">) {
     const { error } = await supabase.from("battle_effects").insert({ ...effect, battle_id: battle.id, character_id: characterId });
     if (error) { toast.error(error.message); return; }
@@ -224,62 +260,6 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
     }));
   }
 
-  async function advanceFighterTurn(fighter: Fighter) {
-    const participant = battle.battle_participants.find((p) => p.characters?.id === fighter.id);
-    if (!participant) { toast.error("Personagem não encontrado nesta batalha"); return; }
-    const manaAttr = fighter.character_attributes.find((a) => a.attribute_key === "mana");
-    const baseRegen = manaAttr ? manaRegenFor(fighter) : 0;
-    if (baseRegen === null) { toast.error("Informe uma regeneração de mana válida"); return; }
-    const nextTurn = ((participant as typeof participant & { turn_count?: number }).turn_count ?? 0) + 1;
-    const { error: turnError } = await supabase.from("battle_participants").update({ turn_count: nextTurn }).eq("battle_id", battle.id).eq("character_id", fighter.id);
-    if (turnError) { toast.error(turnError.message); return; }
-    if (manaAttr) {
-      const maximum = val(fighter, "mana");
-      const regen = regenValue(fighter.id, "mana", baseRegen);
-      const nextMana = Math.min(maximum, (manaAttr.current_value ?? 0) + regen);
-      const { error } = await supabase.from("character_attributes").update({ current_value: nextMana, updated_at: new Date().toISOString() }).eq("character_id", fighter.id).eq("attribute_key", "mana");
-      if (error) { toast.error("Turno avançado, mas falhou a regeneração de mana: " + error.message); }
-    }
-    await tickEffects();
-    const { error: cooldownError } = await supabase.rpc("tick_character_ability_cooldowns", { _character_id: fighter.id });
-    if (cooldownError) toast.error("Turno avançado, mas não foi possível reduzir os cooldowns: " + cooldownError.message);
-    toast.success("Turno individual de " + fighter.name + " avançado para " + nextTurn + "; regeneração configurada aplicada.");
-    await qc.invalidateQueries({ queryKey: ["battles"] });
-  }
-
-  async function advanceTurn() {
-    // Validar todas as configurações antes de alterar qualquer contador de turno.
-    for (const fighter of fighters) {
-      if (fighter.character_attributes.some((a) => a.attribute_key === "mana") && manaRegenFor(fighter) === null) {
-        toast.error("Informe uma regeneração de mana válida para " + fighter.name);
-        return;
-      }
-    }
-    const nextTurn = (battle.turn_count ?? 0) + 1;
-    const { error: turnError } = await supabase.from("battles").update({ turn_count: nextTurn }).eq("id", battle.id);
-    if (turnError) { toast.error(turnError.message); return; }
-    for (const fighter of fighters) {
-      const participant = battle.battle_participants.find((p) => p.characters?.id === fighter.id);
-      if (participant) {
-        const participantTurns = ((participant as typeof participant & { turn_count?: number }).turn_count ?? 0) + 1;
-        const { error: participantTurnError } = await supabase.from("battle_participants").update({ turn_count: participantTurns }).eq("battle_id", battle.id).eq("character_id", fighter.id);
-        if (participantTurnError) toast.error("Falha ao atualizar o contador individual de " + fighter.name);
-      }
-      const { error: cooldownError } = await supabase.rpc("tick_character_ability_cooldowns", { _character_id: fighter.id });
-      if (cooldownError) toast.error("Não foi possível reduzir os cooldowns de " + fighter.name + ": " + cooldownError.message);
-      const manaAttr = fighter.character_attributes.find((a) => a.attribute_key === "mana");
-      if (!manaAttr) continue;
-      const baseRegen = manaRegenFor(fighter)!; // Já validado antes de avançar o turno.
-      const regen = regenValue(fighter.id, "mana", baseRegen);
-      const nextMana = Math.min(val(fighter, "mana"), (manaAttr.current_value ?? 0) + regen);
-      const { error } = await supabase.from("character_attributes").update({ current_value: nextMana, updated_at: new Date().toISOString() }).eq("character_id", fighter.id).eq("attribute_key", "mana");
-      if (error) toast.error("Falha ao regenerar mana de " + fighter.name + ": " + error.message);
-    }
-    await tickEffects();
-    toast.success("Turno " + nextTurn + ": regeneração configurada aplicada.");
-    await qc.invalidateQueries({ queryKey: ["battles"] });
-  }
-
   const actor = fighters.find((f) => f.id === battle.current_character_id);
   const targets = fighters.filter((f) => selectedTargetIds.includes(f.id) && f.id !== actor?.id);
 
@@ -299,7 +279,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
       <div className="panel space-y-3 p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div><div className="text-sm text-muted-foreground">Turnos transcorridos</div><div className="font-display text-2xl text-gold">{battle.turn_count ?? 0}</div></div>
-          {isMaster && <Button disabled={!battle.active} onClick={() => void advanceTurn()}><RotateCw className="mr-2 h-4 w-4" /> Avançar turno geral</Button>}
+          {isMaster && <Button disabled={!battle.active || turnAdvancing} onClick={() => void advanceCombatTurn(null)}><RotateCw className="mr-2 h-4 w-4" /> {turnAdvancing ? "Avançando..." : "Avançar turno geral"}</Button>}
         </div>
 
       </div>
@@ -343,7 +323,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
               {isMaster && <CombatResourceEditor fighter={f} val={val} effects={effects.filter(e => e.character_id === f.id)} defs={defs} onAddEffect={(effect) => void addEffect(f.id, effect)} onRemoveEffect={async (id) => { const { error } = await supabase.from("battle_effects").delete().eq("id", id); if (error) toast.error(error.message); await qc.invalidateQueries({ queryKey: ["battle-effects", battle.id] }); await qc.invalidateQueries({ queryKey: ["character-active-effects"] }); }} hpRegenBlocked={blocked(f.id, "no_regen_hp")} manaRegenBlocked={blocked(f.id, "no_regen_mana")} manaRegenMode={manaRegenSettings[f.id]?.mode ?? "percent"} manaRegenAmount={manaRegenSettings[f.id]?.amount ?? "0"} onManaRegenModeChange={(mode) => setManaRegen(f.id, { mode })} onManaRegenAmountChange={(amount) => setManaRegen(f.id, { amount })} /> }
               <div className="flex flex-wrap items-center justify-between gap-2 rounded border border-border p-2">
                 <span className="text-xs text-muted-foreground">Turnos individuais: {f.participant_turn_count ?? 0}</span>
-                {isMaster && <Button size="sm" variant="outline" disabled={!battle.active} onClick={() => void advanceFighterTurn(f)}><RotateCw className="mr-1 h-3.5 w-3.5" /> Avançar turno</Button>}
+                {isMaster && <Button size="sm" variant="outline" disabled={!battle.active || turnAdvancing} onClick={() => void advanceCombatTurn(f.id)}><RotateCw className="mr-1 h-3.5 w-3.5" /> {turnAdvancing ? "Avançando..." : "Avançar turno"}</Button>}
               </div>
               {isMaster && (
                 <div className="flex gap-2 pt-1">
