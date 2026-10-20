@@ -1,12 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { Check, Shield, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { raceMods, useDefs, useRaces, type AttributeDef, type Character, type Race } from "@/lib/sheets";
+import { traitMods, useDefs, useRaces, useVirtues, type AttributeDef, type Character, type Trait } from "@/lib/sheets";
 
-export function ModsList({ race, defs }: { race: Race; defs: AttributeDef[] }) {
-  const mods = raceMods(race);
+export function ModsList({ race, defs }: { race: Trait; defs: AttributeDef[] }) {
+  const mods = traitMods(race);
   const entries = defs.filter((d) => mods[d.key]);
   return (
     <div className="flex flex-wrap gap-1.5 text-xs">
@@ -23,48 +24,124 @@ export function ModsList({ race, defs }: { race: Race; defs: AttributeDef[] }) {
   );
 }
 
-/** Race choice. Players choose once; master can change anytime (rules enforced by choose_race in the database). */
+/** The player drafts both traits locally, then confirms them in one database transaction. */
 export function RacePicker({ character, isMaster }: { character: Character; isMaster: boolean }) {
   const qc = useQueryClient();
   const { data: races } = useRaces();
+  const { data: virtues } = useVirtues();
   const { data: defs } = useDefs();
   const [busy, setBusy] = useState(false);
-  const current = races?.find((r) => r.id === character.race_id);
+  const [pendingRaceId, setPendingRaceId] = useState<string | null>(character.race_id);
+  const [pendingVirtueId, setPendingVirtueId] = useState<string | null>(character.virtue_id);
 
-  if (!races || !defs) return null;
-  if (!isMaster && current) return null;
+  useEffect(() => {
+    setPendingRaceId(character.race_id);
+    setPendingVirtueId(character.virtue_id);
+  }, [character.id, character.race_id, character.virtue_id]);
 
-  async function choose(id: string | null) {
-    if (!isMaster && !confirm("Escolher esta raça? Depois só o mestre pode trocar.")) return;
+  if (!races || !virtues || !defs) return null;
+  // Once a player has both traits, the GM is the only one allowed to change them.
+  if (!isMaster && character.race_id && character.virtue_id) return null;
+
+  async function confirmChoice() {
+    if (!pendingRaceId || !pendingVirtueId) {
+      toast.error("Selecione uma raça e uma virtude antes de confirmar");
+      return;
+    }
     setBusy(true);
-    const { error } = await supabase.rpc("choose_race", { _character_id: character.id, _race_id: id as string });
+    const { error } = await supabase.rpc("choose_character_traits", {
+      _character_id: character.id,
+      _race_id: pendingRaceId,
+      _virtue_id: pendingVirtueId,
+    });
+    if (error) {
+      toast.error(error.message);
+      setBusy(false);
+      return;
+    }
+    toast.success("Raça e virtude confirmadas!");
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ["character", character.id] }),
+      qc.invalidateQueries({ queryKey: ["characters"] }),
+      qc.invalidateQueries({ queryKey: ["my-character"] }),
+    ]);
     setBusy(false);
-    if (error) { toast.error(error.message); return; }
-    toast.success(id ? "Raça definida" : "Raça removida");
-    qc.invalidateQueries({ queryKey: ["character", character.id] });
-    qc.invalidateQueries({ queryKey: ["characters"] });
   }
 
+  const raceOptions = races.length === 0;
+  const virtueOptions = virtues.length === 0;
+
   return (
-    <section className="panel space-y-3 p-5">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg text-gold">{isMaster ? `Raça: ${current?.name ?? "nenhuma"}` : "Escolha sua raça"}</h2>
-        {isMaster && current && <Button size="sm" variant="ghost" disabled={busy} onClick={() => choose(null)}>Remover raça</Button>}
+    <section className="panel space-y-5 p-4 sm:p-5">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="rounded-lg bg-gold/10 p-2 text-gold"><Shield className="h-5 w-5" /></div>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-lg text-gold">{isMaster ? "Raça e Virtude da ficha" : "Escolha sua Raça e Virtude"}</h2>
+          <p className="text-xs text-muted-foreground">
+            Selecione uma opção em cada grupo. Nada será salvo até você confirmar.
+          </p>
+        </div>
       </div>
-      {!races.length && <p className="text-sm text-muted-foreground">Nenhuma raça cadastrada ainda.</p>}
-      <div className="grid gap-3 sm:grid-cols-2">
-        {races.map((r) => (
-          <div key={r.id} className={`rounded-lg border p-3 ${r.id === character.race_id ? "border-gold" : "border-border"}`}>
-            <div className="flex items-center justify-between gap-2">
-              <span className="font-semibold">{r.name}</span>
-              <Button size="sm" variant="outline" disabled={busy || r.id === character.race_id} onClick={() => choose(r.id)}>
-                {r.id === character.race_id ? "Atual" : "Escolher"}
-              </Button>
-            </div>
-            {r.description && <p className="mt-1 text-xs text-muted-foreground">{r.description}</p>}
-            <div className="mt-2"><ModsList race={r} defs={defs} /></div>
+
+      <div className="space-y-3">
+        <h3 className="text-sm font-semibold">1. Raça</h3>
+        {raceOptions ? <p className="text-sm text-muted-foreground">Nenhuma raça cadastrada ainda.</p> : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {races.map((race) => {
+              const selected = pendingRaceId === race.id;
+              const lockedForPlayer = !isMaster && !!character.race_id && race.id !== character.race_id;
+              return (
+                <article key={race.id} className={`rounded-lg border p-3 transition-colors ${selected ? "border-gold bg-gold/5" : "border-border"}`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="font-semibold">{race.name}</div>
+                      {race.description && <p className="mt-1 text-xs text-muted-foreground">{race.description}</p>}
+                    </div>
+                    <Button size="sm" variant={selected ? "default" : "outline"} className="shrink-0" disabled={busy || lockedForPlayer} onClick={() => setPendingRaceId(race.id)}>
+                      {selected ? <><Check className="mr-1 h-3.5 w-3.5" /> Selecionada</> : "Selecionar"}
+                    </Button>
+                  </div>
+                  <div className="mt-2"><ModsList race={race} defs={defs} /></div>
+                </article>
+              );
+            })}
           </div>
-        ))}
+        )}
+      </div>
+
+      <div className="space-y-3">
+        <h3 className="flex items-center gap-2 text-sm font-semibold"><Sparkles className="h-4 w-4 text-gold" /> 2. Virtude</h3>
+        {virtueOptions ? <p className="text-sm text-muted-foreground">Nenhuma virtude cadastrada ainda. Peça ao mestre para cadastrar uma.</p> : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {virtues.map((virtue) => {
+              const selected = pendingVirtueId === virtue.id;
+              const lockedForPlayer = !isMaster && !!character.virtue_id && virtue.id !== character.virtue_id;
+              return (
+                <article key={virtue.id} className={`rounded-lg border p-3 transition-colors ${selected ? "border-gold bg-gold/5" : "border-border"}`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="font-semibold">{virtue.name}</div>
+                      {virtue.description && <p className="mt-1 text-xs text-muted-foreground">{virtue.description}</p>}
+                    </div>
+                    <Button size="sm" variant={selected ? "default" : "outline"} className="shrink-0" disabled={busy || lockedForPlayer} onClick={() => setPendingVirtueId(virtue.id)}>
+                      {selected ? <><Check className="mr-1 h-3.5 w-3.5" /> Selecionada</> : "Selecionar"}
+                    </Button>
+                  </div>
+                  <div className="mt-2"><ModsList race={virtue} defs={defs} /></div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-2 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-xs text-muted-foreground">
+          Selecionado: {races.find((r) => r.id === pendingRaceId)?.name ?? "nenhuma raça"} · {virtues.find((v) => v.id === pendingVirtueId)?.name ?? "nenhuma virtude"}
+        </p>
+        <Button disabled={busy || !pendingRaceId || !pendingVirtueId || (raceOptions || virtueOptions)} onClick={() => void confirmChoice()}>
+          <Check className="mr-1 h-4 w-4" /> {busy ? "Confirmando..." : "Confirmar escolha"}
+        </Button>
       </div>
     </section>
   );
