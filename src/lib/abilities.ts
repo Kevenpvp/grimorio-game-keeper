@@ -82,6 +82,57 @@ export function useBattleCharacterAbilities(battleId: string, characterIds: stri
   });
 }
 
+export type ActiveCharacterEffect = {
+  id: string;
+  battle_id: string | null;
+  character_id: string;
+  name: string;
+  effect_type: AbilityEffectType;
+  attribute_key: string | null;
+  polarity: "buff" | "debuff";
+  value_mode: "percent" | "fixed";
+  amount: number;
+  duration: number;
+  duration_scope: string;
+  source_character_ability_id: string | null;
+};
+
+export function useCharacterActiveEffects(characterId: string | undefined) {
+  return useQuery({
+    queryKey: ["character-active-effects", characterId],
+    enabled: !!characterId,
+    queryFn: async () => {
+      const [standaloneResult, battleParticipantsResult] = await Promise.all([
+        supabase.from("battle_effects").select("*").eq("character_id", characterId!).is("battle_id", null),
+        supabase.from("battle_participants").select("battle_id, battles!inner(active)")
+          .eq("character_id", characterId!).eq("battles.active", true),
+      ]);
+      if (standaloneResult.error) throw standaloneResult.error;
+      if (battleParticipantsResult.error) throw battleParticipantsResult.error;
+      const activeBattleIds = [...new Set((battleParticipantsResult.data ?? []).map((row) => row.battle_id))];
+      let battleEffects: ActiveCharacterEffect[] = [];
+      if (activeBattleIds.length > 0) {
+        const { data, error } = await supabase.from("battle_effects").select("*")
+          .eq("character_id", characterId!).in("battle_id", activeBattleIds);
+        if (error) throw error;
+        battleEffects = (data ?? []) as ActiveCharacterEffect[];
+      }
+      return [...(standaloneResult.data ?? []) as ActiveCharacterEffect[], ...battleEffects];
+    },
+  });
+}
+
+export function statusEffectModifiers(effects: ActiveCharacterEffect[] | undefined, attributeKey: string) {
+  const result = { fixed: 0, percent: 0 };
+  for (const effect of effects ?? []) {
+    if (effect.effect_type !== "status" || effect.attribute_key !== attributeKey) continue;
+    const value = effect.polarity === "buff" ? Number(effect.amount) : -Number(effect.amount);
+    if (effect.value_mode === "percent") result.percent += value;
+    else result.fixed += value;
+  }
+  return result;
+}
+
 export function passiveStatusModifiers(abilities: CharacterAbility[] | undefined) {
   const result: Record<string, { fixed: number; percent: number }> = {};
   for (const ability of abilities ?? []) {
