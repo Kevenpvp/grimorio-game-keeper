@@ -65,7 +65,7 @@ function FichaPage() {
         <RacePicker character={data.character} isMaster={false} />
         <CharacterAbilitiesPanel characterId={data.character.id} characterName={data.character.name} mode="sheet" canUse />
         <CharacterSheetView character={data.character} attrs={data.attrs} defs={defs} />
-        {data.character.available_points > 0 && (
+        {(data.character.available_points > 0 || data.character.race_points_granted > 0 || data.character.virtue_points_granted > 0) && (
           <PointsDistribution character={data.character} attrs={data.attrs} defs={defs} />
         )}
         {(data.character.race_physical_points_granted + data.character.virtue_physical_points_granted) > 0 && (
