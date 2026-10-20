@@ -330,6 +330,7 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
 function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemoveEffect, hpRegenBlocked, manaRegenBlocked, manaRegenMode, manaRegenAmount, onManaRegenModeChange, onManaRegenAmountChange }: { fighter: Fighter; val: (f: Fighter, k: string) => number; effects: BattleEffect[]; defs: AttributeDef[]; onAddEffect: (effect: Omit<BattleEffect, "id" | "battle_id" | "character_id">) => void; onRemoveEffect: (id: string) => void; hpRegenBlocked: boolean; manaRegenBlocked: boolean; manaRegenMode: "percent" | "fixed"; manaRegenAmount: string; onManaRegenModeChange: (mode: "percent" | "fixed") => void; onManaRegenAmountChange: (amount: string) => void }) {
   const qc = useQueryClient();
   const [manaDelta, setManaDelta] = useState("10");
+  const [manualManaAmount, setManualManaAmount] = useState("10");
   const [sanityDelta, setSanityDelta] = useState("10");
   const [bodyDelta, setBodyDelta] = useState("10");
   const [hpRegenMode, setHpRegenMode] = useState<"percent" | "fixed">("percent");
@@ -362,6 +363,47 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
       const { error } = await supabase.from("character_attributes").update({ current_value: next, updated_at: new Date().toISOString() }).eq("character_id", fighter.id).eq("attribute_key", "hp");
       if (error) { toast.error(error.message); return; }
       toast.success("HP de " + fighter.name + ": " + attr.current_value + " → " + next);
+      await qc.invalidateQueries({ queryKey: ["battles"] });
+    } finally { setBusy(false); }
+  }
+
+  async function regenerateMana() {
+    if (manaRegenBlocked) {
+      toast.error("A regeneração de Mana está bloqueada por um efeito ativo");
+      return;
+    }
+    const attr = fighter.character_attributes.find((a) => a.attribute_key === "mana");
+    if (!attr) { toast.error("Atributo Mana não encontrado"); return; }
+    const amount = Number(manualManaAmount);
+    if (!Number.isFinite(amount) || amount <= 0) { toast.error("Informe uma quantidade positiva de Mana"); return; }
+    const maximum = val(fighter, "mana");
+    const regenEffects = effects.filter(e => e.effect_type === "regeneration" && e.attribute_key === "mana");
+    const fixedRegen = regenEffects.filter(e => e.value_mode === "fixed").reduce((n,e) => n + (e.polarity === "buff" ? 1 : -1) * Number(e.amount), 0);
+    const percentRegen = regenEffects.filter(e => e.value_mode === "percent").reduce((n,e) => n + (e.polarity === "buff" ? 1 : -1) * Number(e.amount), 0);
+    const adjustedRegen = Math.max(0, Math.floor(amount * (1 + percentRegen / 100) + fixedRegen));
+    const next = Math.min(maximum, (attr.current_value ?? 0) + adjustedRegen);
+    setBusy(true);
+    try {
+      const { error } = await supabase.from("character_attributes").update({ current_value: next, updated_at: new Date().toISOString() }).eq("character_id", fighter.id).eq("attribute_key", "mana");
+      if (error) { toast.error(error.message); return; }
+      toast.success("Mana de " + fighter.name + ": " + attr.current_value + " → " + next);
+      await qc.invalidateQueries({ queryKey: ["battles"] });
+    } finally { setBusy(false); }
+  }
+
+  async function fillMana() {
+    const attr = fighter.character_attributes.find((a) => a.attribute_key === "mana");
+    if (!attr) { toast.error("Atributo Mana não encontrado"); return; }
+    const maximum = val(fighter, "mana");
+    if ((attr.current_value ?? 0) >= maximum) {
+      toast.info(fighter.name + " já está com a Mana cheia");
+      return;
+    }
+    setBusy(true);
+    try {
+      const { error } = await supabase.from("character_attributes").update({ current_value: maximum, updated_at: new Date().toISOString() }).eq("character_id", fighter.id).eq("attribute_key", "mana");
+      if (error) { toast.error(error.message); return; }
+      toast.success("Mana de " + fighter.name + " restaurada ao máximo: " + maximum);
       await qc.invalidateQueries({ queryKey: ["battles"] });
     } finally { setBusy(false); }
   }
@@ -409,7 +451,15 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
               </select>
               <Input aria-label="Valor de regeneração de mana" type="number" min="0" value={manaRegenAmount} onChange={(e) => onManaRegenAmountChange(e.target.value)} />
             </div>
-            {manaRegenBlocked && <div className="text-xs text-destructive">Regeneração de Mana bloqueada.</div>}
+            <div className="space-y-2 border-t border-border pt-3">
+              <div className="text-xs font-medium">Regenerar Mana manualmente</div>
+              <div className="grid grid-cols-[1fr_auto] gap-2">
+                <Input aria-label="Quantidade de Mana para regenerar manualmente" type="number" min="1" value={manualManaAmount} onChange={(e) => setManualManaAmount(e.target.value)} />
+                <Button size="sm" disabled={busy || manaRegenBlocked} onClick={() => void regenerateMana()}><Plus className="mr-1 h-3 w-3" /> Regenerar</Button>
+              </div>
+              <Button className="w-full" size="sm" variant="outline" disabled={busy} onClick={() => void fillMana()}>Encher Mana até o máximo</Button>
+            </div>
+            {manaRegenBlocked && <div className="text-xs text-destructive">Regeneração de Mana bloqueada. O preenchimento completo continua disponível para o mestre.</div>}
           </div>
         </details>
         <details className="rounded-md border border-border">
