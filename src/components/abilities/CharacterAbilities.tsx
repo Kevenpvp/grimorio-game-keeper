@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useDefs } from "@/lib/sheets";
-import { parseAbilityEffects, useAbilities, useCharacterAbilities, type Ability, type AbilityEffectDefinition, type CharacterAbility } from "@/lib/abilities";
+import { parseAbilityEffects, useAbilities, useCharacterAbilities, useCharacterActiveEffects, type Ability, type AbilityEffectDefinition, type CharacterAbility } from "@/lib/abilities";
 import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
 import type { Json } from "@/integrations/supabase/types";
 
@@ -35,6 +35,7 @@ export function CharacterAbilitiesPanel({
 }) {
   const qc = useQueryClient();
   const { data: loadout, isLoading } = useCharacterAbilities(characterId);
+  const { data: activeEffects = [] } = useCharacterActiveEffects(characterId);
   const { data: defs } = useDefs();
   const [targetId, setTargetId] = useState(characterId);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -62,6 +63,7 @@ export function CharacterAbilitiesPanel({
       qc.invalidateQueries({ queryKey: ["character-abilities", characterId] }),
       qc.invalidateQueries({ queryKey: ["character-abilities-battle"] }),
       qc.invalidateQueries({ queryKey: ["battle-effects"] }),
+      qc.invalidateQueries({ queryKey: ["character-active-effects", characterId] }),
       qc.invalidateQueries({ queryKey: ["battles"] }),
       qc.invalidateQueries({ queryKey: ["character", characterId] }),
     ]);
@@ -82,6 +84,18 @@ export function CharacterAbilitiesPanel({
             {targetOptions.map((target) => <option key={target.id} value={target.id}>{target.name}</option>)}
           </select>
         </label>
+      )}
+      {activeEffects.length > 0 && (
+        <div className="space-y-1.5 border-b border-border pb-3">
+          <div className="text-xs font-semibold text-muted-foreground">Efeitos ativos no personagem</div>
+          <div className="flex flex-wrap gap-1.5">
+            {activeEffects.map((effect) => (
+              <span key={effect.id} className="rounded bg-muted px-2 py-1 text-xs">
+                {effect.name} · {effect.duration} turno(s)
+              </span>
+            ))}
+          </div>
+        </div>
       )}
       <div className="space-y-2">
         {loadout.map((ability) => (
@@ -218,6 +232,7 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
     toast.success("Habilidade desta ficha atualizada");
     await qc.invalidateQueries({ queryKey: ["character-abilities", ability.character_id] });
     await qc.invalidateQueries({ queryKey: ["character-abilities-battle"] });
+    await qc.invalidateQueries({ queryKey: ["character-active-effects", ability.character_id] });
   }
 
   async function setCooldownRemaining(next: number) {
@@ -235,6 +250,7 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
     if (error) { toast.error(error.message); return; }
     await qc.invalidateQueries({ queryKey: ["character-abilities", ability.character_id] });
     await qc.invalidateQueries({ queryKey: ["character-abilities-battle"] });
+    await qc.invalidateQueries({ queryKey: ["character-active-effects", ability.character_id] });
     toast.success("Habilidade removida da ficha");
   }
 
