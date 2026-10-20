@@ -1,3 +1,4 @@
+import type { Json } from "@/integrations/supabase/types";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient, type QueryClient, type QueryKey } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -33,7 +34,7 @@ type Attr = { attribute_key: string; current_value: number; max_value: number; p
 type BattleEffect = { id: string; battle_id: string | null; character_id: string; name: string; effect_type: 'status' | 'regeneration' | 'mana_used' | 'no_regen_hp' | 'no_regen_mana' | 'magic_prohibition' | 'no_mana' | 'stun' | 'damage_dealt'; attribute_key: string | null; polarity: 'buff' | 'debuff'; value_mode: 'percent' | 'fixed'; amount: number; duration: number; duration_scope: 'individual' | 'global'; damage_scope?: 'any' | 'physical' | 'magical'; source_character_ability_id?: string | null; effect_group_id?: string | null; is_end_effect?: boolean };
 type Fighter = {
   id: string; name: string; player_name: string; photo_path: string | null; race_id: string | null; virtue_id: string | null; owner_id: string | null;
-  race_physical_allocations: unknown; virtue_physical_allocations: unknown; race_physical_points_granted: number; virtue_physical_points_granted: number;
+  race_physical_allocations: Json; virtue_physical_allocations: Json; race_physical_points_granted: number; virtue_physical_points_granted: number;
   body: number; sanity: number; participant_turn_count?: number;
   character_attributes: Attr[];
 };
