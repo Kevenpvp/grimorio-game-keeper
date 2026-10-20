@@ -137,10 +137,14 @@ export function AbilityEffectsEditor({
                           damage_reduction_type_id: null,
                           damage_reduction_magic_level: null,
                           damage_reduction_type_ids: scope === "magical"
-                            ? (effect.damage_reduction_type_ids != null ? effect.damage_reduction_type_ids : effect.damage_reduction_type_id ? [effect.damage_reduction_type_id] : damageTypes[0] ? [damageTypes[0].id] : [])
+                            ? (effect.damage_reduction_scope === "magical"
+                              ? (effect.damage_reduction_type_ids ?? (effect.damage_reduction_type_id ? [effect.damage_reduction_type_id] : []))
+                              : damageTypes[0] ? [damageTypes[0].id] : [])
                             : null,
                           damage_reduction_magic_levels: scope === "magical"
-                            ? (effect.damage_reduction_magic_levels != null ? effect.damage_reduction_magic_levels : effect.damage_reduction_magic_level ? [effect.damage_reduction_magic_level] : ["baixa"])
+                            ? (effect.damage_reduction_scope === "magical"
+                              ? (effect.damage_reduction_magic_levels ?? (effect.damage_reduction_magic_level ? [effect.damage_reduction_magic_level] : []))
+                              : ["baixa"])
                             : null,
                           polarity: "buff",
                         });
@@ -154,8 +158,8 @@ export function AbilityEffectsEditor({
                       <fieldset className="space-y-2 text-xs sm:col-span-2">
                         <legend className="font-medium">Tipo mágico</legend>
                         <label className="flex items-center gap-2 rounded-md border border-border px-2 py-2">
-                          <input type="checkbox" checked={selectedReductionTypeIds.length === 0}
-                            onChange={(e) => { if (e.target.checked) patch(index, { damage_reduction_type_ids: [], damage_reduction_type_id: null, polarity: "buff" }); }} />
+                          <input type="radio" name={`mitigacao-tipos-${index}`} checked={selectedReductionTypeIds.length === 0}
+                            onChange={() => patch(index, { damage_reduction_type_ids: [], damage_reduction_type_id: null, polarity: "buff" })} />
                           Todos os tipos
                         </label>
                         <p className="text-muted-foreground">{selectedReductionTypeIds.length === 0 ? "A redução afeta todos os tipos mágicos cadastrados." : `${selectedReductionTypeIds.length} tipo(s) selecionado(s).`}</p>
@@ -179,8 +183,8 @@ export function AbilityEffectsEditor({
                       <fieldset className="space-y-2 text-xs sm:col-span-2">
                         <legend className="font-medium">Grau da magia</legend>
                         <label className="flex items-center gap-2 rounded-md border border-border px-2 py-2">
-                          <input type="checkbox" checked={selectedReductionMagicLevels.length === 0}
-                            onChange={(e) => { if (e.target.checked) patch(index, { damage_reduction_magic_levels: [], damage_reduction_magic_level: null, polarity: "buff" }); }} />
+                          <input type="radio" name={`mitigacao-graus-${index}`} checked={selectedReductionMagicLevels.length === 0}
+                            onChange={() => patch(index, { damage_reduction_magic_levels: [], damage_reduction_magic_level: null, polarity: "buff" })} />
                           Todos os graus
                         </label>
                         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
