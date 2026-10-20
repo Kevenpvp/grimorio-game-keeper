@@ -58,6 +58,9 @@ export function AbilityEffectsEditor({
       amount: 10,
       duration: 2,
       damage_scope: "any",
+      damage_reduction_scope: "physical",
+      damage_reduction_type_id: null,
+      damage_reduction_magic_level: "baixa",
     }]);
   }
 
@@ -79,8 +82,9 @@ export function AbilityEffectsEditor({
         const isMagicProhibition = effect.effect_type === "magic_prohibition";
         const isDamageDealt = effect.effect_type === "damage_dealt";
         const isNoMana = effect.effect_type === "no_mana";
+        const isDamageReduction = effect.effect_type === "damage_reduction";
         const needsAttribute = effect.effect_type === "status" || effect.effect_type === "regeneration";
-        const needsValue = needsAttribute || effect.effect_type === "mana_regeneration" || effect.effect_type === "mana_used" || effect.effect_type === "damage_dealt";
+        const needsValue = needsAttribute || effect.effect_type === "mana_regeneration" || effect.effect_type === "mana_used" || effect.effect_type === "damage_dealt" || isDamageReduction;
         return (
           <div key={index} className="space-y-3 rounded-md border border-border bg-muted/20 p-3">
             <div className="flex items-center gap-2">
