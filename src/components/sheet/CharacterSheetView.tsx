@@ -1,6 +1,6 @@
 import { User } from "lucide-react";
 import type { AttributeDef, Character, CharacterAttr } from "@/lib/sheets";
-import { computeValue, usePhotoUrl, useRaceMods } from "@/lib/sheets";
+import { computeValue, useCharacterTraitMods, usePhotoUrl } from "@/lib/sheets";
 import { AttrIcon, barTone } from "./icons";
 import { StatBar } from "./StatBar";
 
@@ -37,7 +37,7 @@ export function CharacterSheetView({
   character, attrs, defs,
 }: { character: Character; attrs: CharacterAttr[]; defs: AttributeDef[] }) {
   const byKey = new Map(attrs.map((a) => [a.attribute_key, a]));
-  const { race, mods } = useRaceMods(character.race_id);
+  const { race, virtue, mods, raceModifiers, virtueModifiers } = useCharacterTraitMods(character.race_id, character.virtue_id);
   const barDefs = defs.filter((d) => d.show_bar);
   const otherDefs = defs.filter((d) => !d.show_bar);
 
@@ -56,6 +56,9 @@ export function CharacterSheetView({
             {race && (
               <span className="panel px-3 py-1.5 text-xs uppercase tracking-wider text-gold">Raça: {race.name}</span>
             )}
+            {virtue && (
+              <span className="panel px-3 py-1.5 text-xs uppercase tracking-wider text-gold">Virtude: {virtue.name}</span>
+            )}
             <span className="panel tabular px-3 py-1.5 text-xs uppercase tracking-wider text-gold">
               {character.available_points} ponto{character.available_points === 1 ? "" : "s"} livre{character.available_points === 1 ? "" : "s"}
             </span>
@@ -69,6 +72,8 @@ export function CharacterSheetView({
               const a = byKey.get(d.key);
               const cur = a?.current_value ?? 0;
               const rm = mods[d.key] ?? 0;
+              const raceMod = raceModifiers[d.key] ?? 0;
+              const virtueMod = virtueModifiers[d.key] ?? 0;
               const pts = (a?.points ?? 0) + (d.accepts_points ? rm : 0);
               const bonus = a?.bonus ?? 0;
               const base = d.accepts_points ? computeValue(d, pts) : 0;
@@ -87,7 +92,7 @@ export function CharacterSheetView({
                   <StatBar value={cur} max={max} tone={barTone(d.key)} />
                   {d.accepts_points && (
                     <div className="tabular mt-2 text-xs text-muted-foreground">
-                      {pts} pts{rm !== 0 && <> ({rm > 0 ? "+" : ""}{rm} raça)</>} · {base} por pontos{bonus !== 0 && <> · <span className={bonus > 0 ? "text-gold" : "text-destructive"}>{bonus > 0 ? "+" : ""}{bonus} buff/debuff</span></>}
+                      {pts} pts{(raceMod !== 0 || virtueMod !== 0) && <> ({raceMod !== 0 && <>{raceMod > 0 ? "+" : ""}{raceMod} raça</>}{raceMod !== 0 && virtueMod !== 0 && ", "}{virtueMod !== 0 && <>{virtueMod > 0 ? "+" : ""}{virtueMod} virtude</>})</>} · {base} por pontos{bonus !== 0 && <> · <span className={bonus > 0 ? "text-gold" : "text-destructive"}>{bonus > 0 ? "+" : ""}{bonus} buff/debuff</span></>}
                     </div>
                   )}
                 </div>
@@ -105,7 +110,9 @@ export function CharacterSheetView({
           {otherDefs.map((d) => {
             const a = byKey.get(d.key);
             const rm = mods[d.key] ?? 0;
-            const pts = (a?.points ?? 0) + rm;
+            const raceMod = raceModifiers[d.key] ?? 0;
+            const virtueMod = virtueModifiers[d.key] ?? 0;
+            const pts = (a?.points ?? 0) + (d.accepts_points ? rm : 0);
             const bonus = a?.bonus ?? 0;
             const base = d.accepts_points ? computeValue(d, pts) : 0;
             const value = d.accepts_points ? base + bonus : a?.current_value ?? 0;
@@ -117,7 +124,7 @@ export function CharacterSheetView({
                 <div className="tabular mt-2 text-2xl font-bold">{value}</div>
                 {d.accepts_points && (
                   <div className="tabular mt-1 text-xs text-muted-foreground">
-                    {base} por pontos ({pts} pt{pts === 1 ? "" : "s"}{rm !== 0 && <>, {rm > 0 ? "+" : ""}{rm} raça</>})
+                    {base} por pontos ({pts} pt{pts === 1 ? "" : "s"}{(raceMod !== 0 || virtueMod !== 0) && <>{raceMod !== 0 && <>, {raceMod > 0 ? "+" : ""}{raceMod} raça</>}{virtueMod !== 0 && <>, {virtueMod > 0 ? "+" : ""}{virtueMod} virtude</>}</>})
                     {bonus !== 0 && <> · <span className={bonus > 0 ? "text-gold" : "text-destructive"}>{bonus > 0 ? "+" : ""}{bonus}</span></>}
                   </div>
                 )}
