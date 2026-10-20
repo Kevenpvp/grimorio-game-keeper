@@ -128,7 +128,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
   const [selectedTargetIds, setSelectedTargetIds] = useState<string[]>(() => battle.target_character_id ? [battle.target_character_id] : []);
   const [manaRegenSettings, setManaRegenSettings] = useState<Record<string, { mode: "percent" | "fixed"; amount: string }>>({});
   const [turnAdvancing, setTurnAdvancing] = useState(false);
-  const turnAdvanceRef = useRef(false);
+  const turnAdvanceRef = useRef(0);
   const fighters = useMemo(
     () => battle.battle_participants.slice().sort((a, b) => a.sort_order - b.sort_order).map((p) => ({ ...(p.characters as Fighter), participant_turn_count: p.turn_count ?? 0 })).filter((f) => !!f.id),
     [battle],
@@ -181,9 +181,10 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
     return Math.max(0, Math.floor(base * (1 + percent / 100) + fixed));
   };
   async function advanceCombatTurn(characterId: string | null) {
-    // A synchronous ref guard blocks double-clicks before React can render the disabled buttons.
-    if (!isMaster || turnAdvanceRef.current) return;
-    turnAdvanceRef.current = true;
+    // Each click is accepted. The database locks the battle row and serializes turns,
+    // so rapid clicks queue as separate atomic advances instead of overwriting counters.
+    if (!isMaster) return;
+    turnAdvanceRef.current += 1;
     setTurnAdvancing(true);
 
     try {
@@ -229,8 +230,8 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
         qc.invalidateQueries({ queryKey: ["character-abilities-battle"] }),
       ]);
     } finally {
-      turnAdvanceRef.current = false;
-      setTurnAdvancing(false);
+      turnAdvanceRef.current = Math.max(0, turnAdvanceRef.current - 1);
+      setTurnAdvancing(turnAdvanceRef.current > 0);
     }
   }
 
@@ -275,7 +276,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
       <div className="panel space-y-3 p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div><div className="text-sm text-muted-foreground">Turnos transcorridos</div><div className="font-display text-2xl text-gold">{battle.turn_count ?? 0}</div></div>
-          {isMaster && <Button disabled={!battle.active || turnAdvancing} onClick={() => void advanceCombatTurn(null)}><RotateCw className="mr-2 h-4 w-4" /> {turnAdvancing ? "Avançando..." : "Avançar turno geral"}</Button>}
+          {isMaster && <Button disabled={!battle.active} onClick={() => void advanceCombatTurn(null)}><RotateCw className="mr-2 h-4 w-4" /> {turnAdvancing ? "Avançando..." : "Avançar turno geral"}</Button>}
         </div>
 
       </div>
@@ -319,7 +320,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
               {isMaster && <CombatResourceEditor fighter={f} val={val} effects={effects.filter(e => e.character_id === f.id)} defs={defs} onAddEffect={(effect) => void addEffect(f.id, effect)} onRemoveEffect={async (id) => { const { error } = await supabase.from("battle_effects").delete().eq("id", id); if (error) toast.error(error.message); await qc.invalidateQueries({ queryKey: ["battle-effects", battle.id] }); await qc.invalidateQueries({ queryKey: ["character-active-effects"] }); }} hpRegenBlocked={blocked(f.id, "no_regen_hp")} manaRegenBlocked={blocked(f.id, "no_regen_mana")} manaRegenMode={manaRegenSettings[f.id]?.mode ?? "percent"} manaRegenAmount={manaRegenSettings[f.id]?.amount ?? "0"} onManaRegenModeChange={(mode) => setManaRegen(f.id, { mode })} onManaRegenAmountChange={(amount) => setManaRegen(f.id, { amount })} /> }
               <div className="flex flex-wrap items-center justify-between gap-2 rounded border border-border p-2">
                 <span className="text-xs text-muted-foreground">Turnos individuais: {f.participant_turn_count ?? 0}</span>
-                {isMaster && <Button size="sm" variant="outline" disabled={!battle.active || turnAdvancing} onClick={() => void advanceCombatTurn(f.id)}><RotateCw className="mr-1 h-3.5 w-3.5" /> {turnAdvancing ? "Avançando..." : "Avançar turno"}</Button>}
+                {isMaster && <Button size="sm" variant="outline" disabled={!battle.active} onClick={() => void advanceCombatTurn(f.id)}><RotateCw className="mr-1 h-3.5 w-3.5" /> {turnAdvancing ? "Avançando..." : "Avançar turno"}</Button>}
               </div>
               {isMaster && (
                 <div className="flex gap-2 pt-1">
