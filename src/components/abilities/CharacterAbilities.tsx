@@ -22,6 +22,7 @@ function effectSummary(effect: AbilityEffectDefinition, defs: NonNullable<Return
   if (effect.effect_type === "mana_used") return `${effect.name}: Mana usada ${effect.polarity === "buff" ? "−" : "+"}${amount}`;
   if (effect.effect_type === "no_regen_hp") return `${effect.name}: bloqueia regeneração de HP`;
   if (effect.effect_type === "no_regen_mana") return `${effect.name}: bloqueia regeneração de Mana`;
+  if (effect.effect_type === "magic_prohibition") return `${effect.name}: impede habilidades que consomem Mana`;
   return `${effect.name}: Stun (visual)`;
 }
 
@@ -42,7 +43,7 @@ export function CharacterAbilitiesPanel({
   const [targetId, setTargetId] = useState(characterId);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(true);
-  const hasActivatableAbility = loadout?.some((ability) => ability.can_activate) ?? false;
+  const hasSelectableTargetAbility = loadout?.some((ability) => ability.can_activate && !ability.self_target_only) ?? false;
   const targetOptions = useMemo(() => [
     { id: characterId, name: `${characterName} (si mesmo)` },
     ...targets.filter((target) => target.id !== characterId),
@@ -57,7 +58,7 @@ export function CharacterAbilitiesPanel({
     setBusyId(ability.id);
     const { data: spentMana, error } = await supabase.rpc("activate_character_ability", {
       _character_ability_id: ability.id,
-      _target_character_id: targetId || characterId,
+      _target_character_id: ability.self_target_only ? characterId : (targetId || characterId),
       _battle_id: mode === "combat" ? battleId ?? null : null,
     });
     setBusyId(null);
@@ -95,7 +96,7 @@ export function CharacterAbilitiesPanel({
       </div>
       {expanded && (
         <div className="space-y-3">
-          {mode === "combat" && canUse && hasActivatableAbility && targetOptions.length > 1 && (
+          {mode === "combat" && canUse && hasSelectableTargetAbility && targetOptions.length > 1 && (
             <label className="block space-y-1 text-xs">
               <span className="font-medium text-muted-foreground">Alvo da próxima habilidade</span>
               <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={targetId} onChange={(e) => setTargetId(e.target.value)}>
@@ -126,7 +127,8 @@ export function CharacterAbilitiesPanel({
                       {ability.granted_by_virtue_id && (
                         <span className="rounded bg-gold/10 px-2 py-1 text-gold">Concedida por virtude</span>
                       )}
-                      {!ability.can_activate ? (
+                      {ability.can_activate && ability.self_target_only && <span className="rounded bg-muted px-2 py-1">Só em si mesmo</span>}
+                  {!ability.can_activate ? (
                         <span className="rounded bg-gold/10 px-2 py-1 text-gold"><Sparkles className="mr-1 inline h-3 w-3" /> Não ativável</span>
                       ) : (
                         <span className={`rounded px-2 py-1 ${ability.cooldown_remaining > 0 ? "bg-muted text-muted-foreground" : "bg-emerald-500/10 text-emerald-500"}`}>
@@ -155,6 +157,12 @@ export function CharacterAbilitiesPanel({
                     {ability.passive_effects.map((effect, index) => <div key={index}>{effectSummary(effect, defs ?? [])}</div>)}
                   </div>
                 )}
+                {ability.end_effects.length > 0 && ability.can_activate && (
+                  <div className="mt-2 space-y-1 border-t border-border pt-2 text-xs text-muted-foreground">
+                    <div className="font-semibold text-gold">Efeitos quando a habilidade acaba</div>
+                    {ability.end_effects.map((effect, index) => <div key={index}>{effectSummary(effect, defs ?? [])} · {effect.duration} turno(s)</div>)}
+                  </div>
+                )}
               </article>
             ))}
           </div>
@@ -180,12 +188,14 @@ export function CharacterAbilitiesManager({ characterId }: { characterId: string
       name: ability.name,
       description: ability.description,
       can_activate: ability.can_activate,
+      self_target_only: ability.self_target_only,
       is_passive: !ability.can_activate,
       cooldown_turns: ability.can_activate ? ability.cooldown_turns : 0,
       cooldown_remaining: 0,
       mana_cost: ability.can_activate ? ability.mana_cost : 0,
       effects: ability.effects,
       passive_effects: ability.passive_effects,
+      end_effects: ability.end_effects,
     });
     if (error) { toast.error(error.message); return; }
     toast.success(`${ability.name} adicionada à ficha`);
@@ -245,10 +255,12 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
   const [name, setName] = useState(ability.name);
   const [description, setDescription] = useState(ability.description ?? "");
   const [canActivate, setCanActivate] = useState(ability.can_activate);
+  const [selfTargetOnly, setSelfTargetOnly] = useState(ability.self_target_only);
   const [cooldown, setCooldown] = useState(String(ability.cooldown_turns));
   const [manaCost, setManaCost] = useState(String(ability.mana_cost));
   const [effects, setEffects] = useState<AbilityEffectDefinition[]>(ability.effects);
   const [passiveEffects, setPassiveEffects] = useState<AbilityEffectDefinition[]>(ability.passive_effects);
+  const [endEffects, setEndEffects] = useState<AbilityEffectDefinition[]>(ability.end_effects);
   const [busy, setBusy] = useState(false);
   const [expanded, setExpanded] = useState(true);
 
@@ -256,10 +268,12 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
     setName(ability.name);
     setDescription(ability.description ?? "");
     setCanActivate(ability.can_activate);
+    setSelfTargetOnly(ability.self_target_only);
     setCooldown(String(ability.cooldown_turns));
     setManaCost(String(ability.mana_cost));
     setEffects(parseAbilityEffects(ability.effects));
     setPassiveEffects(parseAbilityEffects(ability.passive_effects));
+    setEndEffects(parseAbilityEffects(ability.end_effects));
   }, [ability]);
 
   async function save() {
@@ -273,12 +287,14 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
       name: name.trim(),
       description: description.trim() || null,
       can_activate: canActivate,
+      self_target_only: canActivate && selfTargetOnly,
       is_passive: !canActivate,
       cooldown_turns: cooldownTurns,
       cooldown_remaining: canActivate ? Math.min(ability.cooldown_remaining, cooldownTurns) : 0,
       mana_cost: canActivate ? cost : 0,
       effects: effects.map((effect) => ({ ...effect, duration: Math.max(1, effect.duration) })) as unknown as Json,
       passive_effects: passiveEffects.map((effect) => ({ ...effect, duration: 1 })) as unknown as Json,
+      end_effects: endEffects.map((effect) => ({ ...effect, duration: Math.max(1, effect.duration) })) as unknown as Json,
     }).eq("id", ability.id);
     setBusy(false);
     if (error) { toast.error(error.message); return; }
@@ -341,6 +357,12 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
           }} />
           Habilidade não ativável nesta ficha
         </label>
+        {canActivate && (
+          <label className="flex min-h-10 items-center gap-2 rounded-md border border-border px-3 py-2 text-sm sm:col-span-2">
+            <input type="checkbox" checked={selfTargetOnly} onChange={(e) => setSelfTargetOnly(e.target.checked)} />
+            Só pode ser usada no próprio personagem
+          </label>
+        )}
         {canActivate && <div className="space-y-1"><Label>Custo base de Mana</Label><Input type="number" min="0" value={manaCost} onChange={(e) => setManaCost(e.target.value)} /></div>}
         {!canActivate && <p className="text-xs text-muted-foreground">Não ativável: não gasta Mana nem possui cooldown; seus efeitos passivos continuam funcionando.</p>}
         {canActivate && <div className="space-y-1"><Label>Cooldown máximo (turnos)</Label><Input type="number" min="1" value={cooldown} onChange={(e) => setCooldown(e.target.value)} /></div>}
@@ -352,6 +374,14 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
         permanent={false}
         title="Efeitos ao ativar"
         description="Aplicados ao alvo escolhido quando esta habilidade for ativada."
+        defs={defs}
+      />}
+      {canActivate && <AbilityEffectsEditor
+        effects={endEffects}
+        onChange={setEndEffects}
+        permanent={false}
+        title="Efeitos quando a habilidade acaba"
+        description="Aplicados ao alvo quando todos os efeitos desta ativação terminarem."
         defs={defs}
       />}
       <AbilityEffectsEditor
