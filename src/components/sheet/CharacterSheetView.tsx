@@ -131,6 +131,11 @@ export function CharacterSheetView({
             const rawValue = d.accepts_points ? base + bonus : a?.current_value ?? 0;
             const calculatedValue = Math.max(0, Math.floor((rawValue + passive.fixed + active.fixed) * (1 + (passive.percent + active.percent) / 100)));
             const value = noMana && d.key === "mana" ? 0 : conditionAdjustedValue(character, d.key, calculatedValue);
+            const conditionHint = ["phys_def", "speed", "atk_speed"].includes(d.key)
+              ? character.body < 100 ? `Corpo: ${character.body}% aplicado` : null
+              : ["iq", "mental"].includes(d.key)
+                ? character.sanity < 100 ? `Sanidade: ${character.sanity}% aplicada` : null
+                : null;
             return (
               <div key={d.key} className="panel p-4">
                 <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
@@ -143,6 +148,7 @@ export function CharacterSheetView({
                     {bonus !== 0 && <> · <span className={bonus > 0 ? "text-gold" : "text-destructive"}>{bonus > 0 ? "+" : ""}{bonus}</span></>}
                   </div>
                 )}
+                {conditionHint && <div className="mt-1 text-[11px] text-amber-500">{conditionHint}</div>}
               </div>
             );
           })}
