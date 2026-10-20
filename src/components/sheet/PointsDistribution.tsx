@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { allocationTotal, computeValue, numberAllocation, type AttributeDef, type Character, type CharacterAttr } from "@/lib/sheets";
+import { allocationTotal, computeValue, conditionAdjustedValue, numberAllocation, type AttributeDef, type Character, type CharacterAttr } from "@/lib/sheets";
 import { AttrIcon } from "./icons";
 
 export function PointsDistribution({
@@ -109,7 +109,7 @@ export function PointsDistribution({
               </div>
               <div className="mt-2 flex items-center justify-between gap-2">
                 <div>
-                  <div className="tabular text-xl font-bold">{computeValue(d, total)}</div>
+                  <div className="tabular text-xl font-bold">{conditionAdjustedValue(character, d.key, computeValue(d, total))}</div>
                   <div className="tabular text-xs text-muted-foreground">
                     {total} pts {pending !== 0 && <span className="text-gold">({pending > 0 ? "+" : ""}{pending})</span>}
                   </div>
