@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,14 +29,31 @@ function RacasPage() {
   const { data: races } = useRaces();
   const { data: defs } = useDefs();
   const qc = useQueryClient();
+  const [search, setSearch] = useState("");
+  const [pendingSaveIds, setPendingSaveIds] = useState<string[]>([]);
   if (!me || !races || !defs) return <p className="text-muted-foreground">Carregando…</p>;
   if (!me.isMaster) return <p className="text-muted-foreground">Apenas o mestre gerencia raças.</p>;
 
   async function create() {
-    const { error } = await supabase.from("races").insert({ name: "Nova raça" });
-    if (error) toast.error(error.message);
-    qc.invalidateQueries({ queryKey: ["races"] });
+    const { data, error } = await supabase.from("races").insert({ name: "Nova raça" }).select("id").single();
+    if (error) { toast.error(error.message); return; }
+    setPendingSaveIds((current) => [data.id, ...current.filter((id) => id !== data.id)]);
+    toast.success("Nova raça criada. Ela ficará no topo até você salvar.");
+    await qc.invalidateQueries({ queryKey: ["races"] });
   }
+
+  const normalizedSearch = search.trim().toLocaleLowerCase("pt-BR");
+  const visibleRaces = races
+    .filter((race) => race.name.toLocaleLowerCase("pt-BR").includes(normalizedSearch))
+    .slice()
+    .sort((a, b) => {
+      const aPending = pendingSaveIds.indexOf(a.id);
+      const bPending = pendingSaveIds.indexOf(b.id);
+      if (aPending >= 0 && bPending >= 0) return aPending - bPending;
+      if (aPending >= 0) return -1;
+      if (bPending >= 0) return 1;
+      return 0;
+    });
 
   return (
     <div className="space-y-6">
@@ -44,13 +61,18 @@ function RacasPage() {
         <h1 className="text-2xl text-gold">Raças</h1>
         <Button onClick={create}><Plus className="mr-1 h-4 w-4" /> Nova raça</Button>
       </div>
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input className="pl-9" aria-label="Pesquisar raças pelo nome" placeholder="Pesquisar raça pelo nome..." value={search} onChange={(e) => setSearch(e.target.value)} />
+      </div>
       {!races.length && <p className="text-muted-foreground">Nenhuma raça ainda.</p>}
-      {races.map((r) => <RaceEditor key={r.id} race={r} defs={defs} />)}
+      {races.length > 0 && visibleRaces.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma raça encontrada para “{search}”.</p>}
+      {visibleRaces.map((r) => <RaceEditor key={r.id} race={r} defs={defs} isNew={pendingSaveIds.includes(r.id)} onSaved={() => setPendingSaveIds((current) => current.filter((id) => id !== r.id))} />)}
     </div>
   );
 }
 
-function RaceEditor({ race, defs }: { race: Race; defs: AttributeDef[] }) {
+function RaceEditor({ race, defs, isNew, onSaved }: { race: Race; defs: AttributeDef[]; isNew: boolean; onSaved: () => void }) {
   const qc = useQueryClient();
   const [name, setName] = useState(race.name);
   const [description, setDescription] = useState(race.description ?? "");
@@ -67,7 +89,8 @@ function RaceEditor({ race, defs }: { race: Race; defs: AttributeDef[] }) {
     }).eq("id", race.id);
     if (error) { toast.error(error.message); return; }
     toast.success("Raça salva");
-    qc.invalidateQueries({ queryKey: ["races"] });
+    await qc.invalidateQueries({ queryKey: ["races"] });
+    onSaved();
   }
 
   async function remove() {
@@ -79,6 +102,7 @@ function RaceEditor({ race, defs }: { race: Race; defs: AttributeDef[] }) {
 
   return (
     <section className="panel space-y-4 p-5">
+      {isNew && <p className="text-xs font-semibold text-amber-500">Nova raça — salve para confirmar as alterações.</p>}
       <div className="grid gap-4 sm:grid-cols-[1fr_180px]">
         <div className="space-y-1.5"><Label>Nome</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
         <div className="space-y-1.5"><Label>Pontos livres extras</Label>
@@ -99,7 +123,7 @@ function RaceEditor({ race, defs }: { race: Race; defs: AttributeDef[] }) {
         </div>
       </div>
       <div className="flex gap-2">
-        <Button onClick={save}>Salvar</Button>
+        <Button onClick={save}>{isNew ? "Salvar nova raça" : "Salvar"}</Button>
         <Button variant="destructive" onClick={remove}><Trash2 className="mr-1 h-4 w-4" /> Excluir</Button>
       </div>
     </section>
