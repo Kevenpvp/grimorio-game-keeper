@@ -6,7 +6,9 @@ import type { AbilityEffectDefinition, AbilityEffectType } from "@/lib/abilities
 
 const effectTypeLabels: Record<AbilityEffectType, string> = {
   status: "Buff/debuff de atributo",
-  regeneration: "Modificador de regeneração",
+  regeneration: "Modificador de regeneração (HP/Mana)",
+  mana_regeneration: "Regeneração de Mana",
+  mana_used: "Mana Usada",
   no_regen_hp: "Bloquear regeneração de HP",
   no_regen_mana: "Bloquear regeneração de Mana",
   stun: "Stun (visual)",
@@ -15,24 +17,37 @@ const effectTypeLabels: Record<AbilityEffectType, string> = {
 export function AbilityEffectsEditor({
   effects,
   onChange,
+  permanent,
   isPassive,
+  title = "Efeitos da habilidade",
+  description,
   defs,
 }: {
   effects: AbilityEffectDefinition[];
   onChange: (effects: AbilityEffectDefinition[]) => void;
-  isPassive: boolean;
+  /** When true, values are permanent while the ability stays on the character. */
+  permanent?: boolean;
+  /** Backwards-compatible prop for older callers. */
+  isPassive?: boolean;
+  title?: string;
+  description?: string;
   defs: AttributeDef[];
 }) {
+  const isPermanent = permanent ?? isPassive ?? false;
+
   function patch(index: number, values: Partial<AbilityEffectDefinition>) {
     onChange(effects.map((effect, i) => i === index ? { ...effect, ...values } : effect));
   }
 
+  function firstStatusKey() {
+    return defs.find((d) => d.key !== "hp" && d.key !== "mana")?.key ?? "hp";
+  }
+
   function add() {
-    const firstStatusKey = defs.find((d) => d.key !== "hp" && d.key !== "mana")?.key ?? "hp";
     onChange([...effects, {
       name: "Novo efeito",
       effect_type: "status",
-      attribute_key: firstStatusKey,
+      attribute_key: firstStatusKey(),
       polarity: "buff",
       value_mode: "fixed",
       amount: 10,
@@ -40,22 +55,23 @@ export function AbilityEffectsEditor({
     }]);
   }
 
-  function firstStatusKey() {
-    return defs.find((d) => d.key !== "hp" && d.key !== "mana")?.key ?? "hp";
-  }
-
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h4 className="text-sm font-semibold">Efeitos da habilidade</h4>
-          <p className="text-xs text-muted-foreground">{isPassive ? "Estes efeitos permanecem ativos enquanto a habilidade estiver na ficha." : "Ao ativar, os efeitos são aplicados ao alvo escolhido."}</p>
+          <h4 className="text-sm font-semibold">{title}</h4>
+          <p className="text-xs text-muted-foreground">
+            {description ?? (isPermanent
+              ? "Estes efeitos ficam ativos enquanto a habilidade estiver na ficha."
+              : "Estes efeitos são aplicados ao alvo quando a habilidade é ativada.")}
+          </p>
         </div>
         <Button size="sm" type="button" variant="outline" onClick={add}><Plus className="mr-1 h-3.5 w-3.5" /> Adicionar efeito</Button>
       </div>
       {effects.length === 0 && <p className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">Nenhum efeito configurado.</p>}
       {effects.map((effect, index) => {
         const needsAttribute = effect.effect_type === "status" || effect.effect_type === "regeneration";
+        const needsValue = needsAttribute || effect.effect_type === "mana_regeneration" || effect.effect_type === "mana_used";
         return (
           <div key={index} className="space-y-3 rounded-md border border-border bg-muted/20 p-3">
             <div className="flex items-center gap-2">
@@ -68,7 +84,7 @@ export function AbilityEffectsEditor({
                   const type = e.target.value as AbilityEffectType;
                   patch(index, {
                     effect_type: type,
-                    attribute_key: type === "regeneration" ? "hp" : type === "status" ? firstStatusKey() : null,
+                    attribute_key: type === "regeneration" || type === "mana_regeneration" ? "mana" : type === "status" ? firstStatusKey() : null,
                   });
                 }}>
                 {Object.entries(effectTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
@@ -80,7 +96,7 @@ export function AbilityEffectsEditor({
                     .map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
                 </select>
               )}
-              {needsAttribute && (
+              {needsValue && (
                 <>
                   <select aria-label="Buff ou debuff" className="h-9 min-w-0 rounded-md border border-input bg-background px-2 text-sm" value={effect.polarity}
                     onChange={(e) => patch(index, { polarity: e.target.value as "buff" | "debuff" })}>
@@ -88,7 +104,7 @@ export function AbilityEffectsEditor({
                   </select>
                   <select aria-label="Modo do valor" className="h-9 min-w-0 rounded-md border border-input bg-background px-2 text-sm" value={effect.value_mode}
                     onChange={(e) => patch(index, { value_mode: e.target.value as "percent" | "fixed" })}>
-                    <option value="fixed">Pontos fixos</option><option value="percent">Porcentagem</option>
+                    <option value="fixed">Valor fixo</option><option value="percent">Porcentagem</option>
                   </select>
                   <label className="space-y-1 text-xs font-medium">
                     Valor ({effect.value_mode === "percent" ? "%" : "pontos"})
@@ -96,13 +112,15 @@ export function AbilityEffectsEditor({
                   </label>
                 </>
               )}
-              {!isPassive && (
+              {!isPermanent && (
                 <label className="space-y-1 text-xs font-medium">
                   Duração do efeito (turnos)
                   <Input type="number" min="1" value={effect.duration} onChange={(e) => patch(index, { duration: Math.max(1, Math.floor(Number(e.target.value) || 1)) })} />
                 </label>
               )}
-              {isPassive && <p className="self-end text-xs text-muted-foreground">Efeito permanente enquanto a habilidade estiver atribuída.</p>}
+              {isPermanent && <p className="self-end text-xs text-muted-foreground">Efeito permanente enquanto a habilidade estiver atribuída.</p>}
+              {effect.effect_type === "mana_regeneration" && <p className="self-end text-xs text-muted-foreground">Afeta regeneração de Mana por turno e recuperação manual, mas não o preenchimento completo.</p>}
+              {effect.effect_type === "mana_used" && <p className="self-end text-xs text-muted-foreground">Buff reduz Mana gasta; debuff aumenta o custo das habilidades.</p>}
             </div>
           </div>
         );
