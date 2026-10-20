@@ -14,6 +14,7 @@ const effectTypeLabels: Record<AbilityEffectType, string> = {
   magic_prohibition: "Proibição de magia (debuff)",
   stun: "Stun (visual)",
   damage_dealt: "Dano Causado",
+  no_mana: "Sem Mana",
 };
 
 export function AbilityEffectsEditor({
@@ -75,6 +76,7 @@ export function AbilityEffectsEditor({
       {effects.map((effect, index) => {
         const isMagicProhibition = effect.effect_type === "magic_prohibition";
         const isDamageDealt = effect.effect_type === "damage_dealt";
+        const isNoMana = effect.effect_type === "no_mana";
         const needsAttribute = effect.effect_type === "status" || effect.effect_type === "regeneration";
         const needsValue = needsAttribute || effect.effect_type === "mana_regeneration" || effect.effect_type === "mana_used" || effect.effect_type === "damage_dealt";
         return (
@@ -90,7 +92,7 @@ export function AbilityEffectsEditor({
                   patch(index, {
                     effect_type: type,
                     attribute_key: type === "mana_regeneration" ? "mana" : type === "regeneration" ? "hp" : type === "status" ? firstStatusKey() : null,
-                    polarity: type === "magic_prohibition" ? "debuff" : effect.polarity,
+                    polarity: type === "magic_prohibition" || type === "no_mana" ? "debuff" : effect.polarity,
                   });
                 }}>
                 {Object.entries(effectTypeLabels).filter(([value]) => !isPermanent || value !== "magic_prohibition").map(([value, label]) => <option key={value} value={value}>{label}</option>)}
@@ -137,7 +139,8 @@ export function AbilityEffectsEditor({
                 </label>
               )}
               {isPermanent && <p className="self-end text-xs text-muted-foreground">Efeito permanente enquanto a habilidade estiver atribuída.</p>}
-              {isMagicProhibition && <p className="self-end text-xs text-amber-500 sm:col-span-2">Debuff: impede a ativação de habilidades que consomem Mana enquanto durar. Não é possível mudar sua polaridade.</p>}
+              {isMagicProhibition && <p className="self-end text-xs text-amber-500 sm:col-span-2">Debuff: impede a ativação de habilidades mágicas ou que consomem Mana enquanto durar.</p>}
+              {isNoMana && <p className="self-end text-xs text-amber-500 sm:col-span-2">Debuff: zera a Mana atual e máxima enquanto durar e bloqueia habilidades mágicas ou que gastem Mana. Não é possível mudar sua polaridade.</p>}
               {effect.effect_type === "mana_regeneration" && <p className="self-end text-xs text-muted-foreground">Afeta regeneração de Mana por turno e recuperação manual, mas não o preenchimento completo.</p>}
               {effect.effect_type === "mana_used" && <p className="self-end text-xs text-muted-foreground">Buff reduz Mana gasta; debuff aumenta o custo das habilidades.</p>}
               {effect.effect_type === "damage_dealt" && <p className="self-end text-xs text-muted-foreground">Modifica o dano correspondente ao tipo selecionado antes das defesas. Em dano híbrido, efeitos físicos e mágicos ajustam sua metade correspondente; “Qualquer dano” também afeta dano verdadeiro.</p>}
