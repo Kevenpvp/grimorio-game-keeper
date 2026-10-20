@@ -31,7 +31,20 @@ export const Route = createFileRoute("/_authenticated/combate")({
 });
 
 type Attr = { attribute_key: string; current_value: number; max_value: number; points: number; bonus: number };
-type BattleEffect = { id: string; battle_id: string | null; character_id: string; name: string; effect_type: 'status' | 'regeneration' | 'mana_used' | 'no_regen_hp' | 'no_regen_mana' | 'magic_prohibition' | 'no_mana' | 'stun' | 'damage_dealt' | 'damage_reduction'; attribute_key: string | null; polarity: 'buff' | 'debuff'; value_mode: 'percent' | 'fixed'; amount: number; duration: number; duration_scope: 'individual' | 'global'; damage_scope?: 'any' | 'physical' | 'magical'; damage_reduction_scope?: 'physical' | 'magical'; damage_reduction_type_id?: string | null; damage_reduction_magic_level?: 'baixa' | 'media' | 'alta' | null; source_character_ability_id?: string | null; effect_group_id?: string | null; is_end_effect?: boolean };
+type BattleEffect = { id: string; battle_id: string | null; character_id: string; name: string; effect_type: 'status' | 'regeneration' | 'mana_used' | 'no_regen_hp' | 'no_regen_mana' | 'magic_prohibition' | 'no_mana' | 'stun' | 'damage_dealt' | 'damage_reduction'; attribute_key: string | null; polarity: 'buff' | 'debuff'; value_mode: 'percent' | 'fixed'; amount: number; duration: number; duration_scope: 'individual' | 'global'; damage_scope?: 'any' | 'physical' | 'magical'; damage_reduction_scope?: 'physical' | 'magical'; damage_reduction_type_id?: string | null; damage_reduction_magic_level?: 'baixa' | 'media' | 'alta' | null; damage_reduction_type_ids?: string[] | null; damage_reduction_magic_levels?: ('baixa' | 'media' | 'alta')[] | null; source_character_ability_id?: string | null; effect_group_id?: string | null; is_end_effect?: boolean };
+function damageReductionSummary(effect: BattleEffect, damageTypes: { id: string; name: string }[]) {
+  const selectedTypeIds = effect.damage_reduction_type_ids ?? (effect.damage_reduction_type_id ? [effect.damage_reduction_type_id] : []);
+  const selectedLevels = effect.damage_reduction_magic_levels ?? (effect.damage_reduction_magic_level ? [effect.damage_reduction_magic_level] : []);
+  const typeNames = selectedTypeIds.length === 0
+    ? "todos os tipos"
+    : selectedTypeIds.map((id) => damageTypes.find((type) => type.id === id)?.name ?? "tipo removido").join(", ");
+  const levelNames = selectedLevels.length === 0
+    ? "todos os graus"
+    : selectedLevels.map((level) => level === "baixa" ? "baixa" : level === "media" ? "média" : "alta").join(", ");
+  const scope = effect.damage_reduction_scope === "magical" ? `mágica (${typeNames}; grau(s) ${levelNames})` : "física";
+  return `Mitigação ${scope}: ${effect.value_mode === "percent" ? `${effect.amount}%` : `${effect.amount} fixos`} reduzidos depois da defesa`;
+}
+
 type Fighter = {
   id: string; name: string; player_name: string; photo_path: string | null; race_id: string | null; virtue_id: string | null; owner_id: string | null;
   race_physical_allocations: Json; virtue_physical_allocations: Json; race_physical_points_granted: number; virtue_physical_points_granted: number;
@@ -437,8 +450,8 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
   const [effectMode, setEffectMode] = useState<"percent" | "fixed">("fixed");
   const [effectDamageScope, setEffectDamageScope] = useState<"any" | "physical" | "magical">("any");
   const [reductionScope, setReductionScope] = useState<"physical" | "magical">("physical");
-  const [reductionTypeId, setReductionTypeId] = useState("");
-  const [reductionMagicLevel, setReductionMagicLevel] = useState<"baixa" | "media" | "alta">("baixa");
+  const [reductionTypeIds, setReductionTypeIds] = useState<string[]>([]);
+  const [reductionMagicLevels, setReductionMagicLevels] = useState<("baixa" | "media" | "alta")[]>([]);
   const { data: damageTypes = [] } = useDamageTypes();
   const [effectAmount, setEffectAmount] = useState("10");
   const [effectDuration, setEffectDuration] = useState("2");
@@ -607,7 +620,7 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
               effect.effect_type === "status" ? `${effect.polarity === "buff" ? "Buff" : "Debuff"} de ${defs.find(d => d.key === effect.attribute_key)?.label ?? effect.attribute_key} (${effect.value_mode === "percent" ? `${effect.polarity === "debuff" ? "-" : "+"}${effect.amount}%` : `${effect.polarity === "debuff" ? "-" : "+"}${effect.amount} pontos`})` :
               effect.effect_type === "regeneration" ? `${effect.polarity === "buff" ? "Buff" : "Debuff"} de regeneração de ${effect.attribute_key === "hp" ? "HP" : "Mana"}: ${effect.value_mode === "percent" ? `${effect.polarity === "debuff" ? "-" : "+"}${effect.amount}%` : `${effect.polarity === "debuff" ? "-" : "+"}${effect.amount} fixos`}` :
               effect.effect_type === "no_regen_hp" ? "Impede regeneração de HP" :
-              effect.effect_type === "no_regen_mana" ? "Impede regeneração de Mana" : effect.effect_type === "no_mana" ? "Sem Mana: Mana zerada e habilidades mágicas/que usam Mana bloqueadas" : effect.effect_type === "damage_reduction" ? `Mitigação ${effect.damage_reduction_scope === "magical" ? `mágica (${damageTypes.find(t => t.id === effect.damage_reduction_type_id)?.name ?? "tipo não selecionado"}, grau ${effect.damage_reduction_magic_level ?? "baixa"})` : "física"}: ${effect.value_mode === "percent" ? `${effect.amount}%` : `${effect.amount} fixos`} reduzidos depois da defesa` : effect.effect_type === "mana_used" ? `Mana usada ${effect.polarity === "buff" ? "−" : "+"}${effect.value_mode === "percent" ? `${effect.amount}%` : `${effect.amount} Mana`}` : effect.effect_type === "damage_dealt" ? `${effect.polarity === "buff" ? "Buff" : "Debuff"} de dano ${effect.damage_scope === "physical" ? "físico" : effect.damage_scope === "magical" ? "mágico" : "qualquer dano"}: ${effect.polarity === "debuff" ? "-" : "+"}${effect.value_mode === "percent" ? `${effect.amount}%` : `${effect.amount} de dano`}` : effect.effect_type === "magic_prohibition" ? "Proibição de magia: não pode usar habilidades que consomem Mana" : "Stun (apenas visual)"
+              effect.effect_type === "no_regen_mana" ? "Impede regeneração de Mana" : effect.effect_type === "no_mana" ? "Sem Mana: Mana zerada e habilidades mágicas/que usam Mana bloqueadas" : effect.effect_type === "damage_reduction" ? damageReductionSummary(effect, damageTypes) : effect.effect_type === "mana_used" ? `Mana usada ${effect.polarity === "buff" ? "−" : "+"}${effect.value_mode === "percent" ? `${effect.amount}%` : `${effect.amount} Mana`}` : effect.effect_type === "damage_dealt" ? `${effect.polarity === "buff" ? "Buff" : "Debuff"} de dano ${effect.damage_scope === "physical" ? "físico" : effect.damage_scope === "magical" ? "mágico" : "qualquer dano"}: ${effect.polarity === "debuff" ? "-" : "+"}${effect.value_mode === "percent" ? `${effect.amount}%` : `${effect.amount} de dano`}` : effect.effect_type === "magic_prohibition" ? "Proibição de magia: não pode usar habilidades que consomem Mana" : "Stun (apenas visual)"
             ];
             const expanded = expandedEffectId === effect.id;
             return <div key={effect.id} className="w-full rounded-md border border-border bg-muted/30 p-2">
@@ -628,7 +641,7 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
         </div>}
         <Input placeholder="Nome do efeito" value={effectName} onChange={e => setEffectName(e.target.value)} />
         <div className="grid grid-cols-2 gap-2">
-          <select className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={effectType} onChange={e => { const type = e.target.value as BattleEffect["effect_type"]; setEffectType(type); if(type === "regeneration") setEffectAttr("hp"); if(type === "magic_prohibition" || type === "no_mana") setEffectPolarity("debuff"); if(type === "damage_reduction") { setEffectPolarity("buff"); setReductionScope("physical"); setReductionTypeId(damageTypes[0]?.id ?? ""); setReductionMagicLevel("baixa"); } }}>
+          <select className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={effectType} onChange={e => { const type = e.target.value as BattleEffect["effect_type"]; setEffectType(type); if(type === "regeneration") setEffectAttr("hp"); if(type === "magic_prohibition" || type === "no_mana") setEffectPolarity("debuff"); if(type === "damage_reduction") { setEffectPolarity("buff"); setReductionScope("physical"); setReductionTypeIds(damageTypes[0] ? [damageTypes[0].id] : []); setReductionMagicLevels(["baixa"]); } }}>
             <option value="status">Buff/debuff de status</option><option value="regeneration">Buff/debuff de regeneração</option><option value="no_regen_hp">Não regenera HP</option><option value="no_regen_mana">Não regenera Mana</option><option value="no_mana">Sem Mana (debuff)</option><option value="damage_dealt">Dano Causado</option><option value="damage_reduction">Mitigação de Dano</option><option value="magic_prohibition">Proibição de magia (debuff)</option><option value="stun">Stun (visual)</option>
           </select>
           {(effectType === "status" || effectType === "regeneration") && <select className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={effectAttr} onChange={e => setEffectAttr(e.target.value)}>{(effectType === "regeneration" ? [{key:"hp",label:"HP"},{key:"mana",label:"Mana"}] : defs.map(d => ({key:d.key,label:d.key === "hp" ? "HP máximo" : d.key === "mana" ? "Mana máxima" : d.label}))).map(d => <option key={d.key} value={d.key}>{d.label}</option>)}</select>}
@@ -636,8 +649,39 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
           {effectType === "damage_reduction" && <>
             <label className="col-span-2 space-y-1 text-xs font-medium"><span>Categoria a mitigar</span><select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={reductionScope} onChange={e => setReductionScope(e.target.value as "physical" | "magical")}><option value="physical">Físico</option><option value="magical">Mágico</option></select></label>
             {reductionScope === "magical" && <>
-              <label className="col-span-2 space-y-1 text-xs font-medium"><span>Tipo mágico</span><select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={reductionTypeId || (damageTypes[0]?.id ?? "")} onChange={e => setReductionTypeId(e.target.value)}><option value="" disabled>{damageTypes.length ? "Selecione um tipo" : "Nenhum tipo mágico cadastrado"}</option>{damageTypes.map(type => <option key={type.id} value={type.id}>{type.name}</option>)}</select></label>
-              <label className="col-span-2 space-y-1 text-xs font-medium"><span>Grau da magia</span><select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={reductionMagicLevel} onChange={e => setReductionMagicLevel(e.target.value as "baixa" | "media" | "alta")}><option value="baixa">Baixa</option><option value="media">Média</option><option value="alta">Alta</option></select></label>
+              <fieldset className="col-span-2 space-y-2 text-xs">
+                <legend className="font-medium">Tipo mágico</legend>
+                <label className="flex items-center gap-2 rounded-md border border-border px-2 py-2">
+                  <input type="checkbox" checked={reductionTypeIds.length === 0} onChange={e => { if (e.target.checked) setReductionTypeIds([]); }} />
+                  Todos os tipos
+                </label>
+                <p className="text-muted-foreground">{reductionTypeIds.length === 0 ? "A redução afeta todos os tipos mágicos cadastrados." : `${reductionTypeIds.length} tipo(s) selecionado(s).`}</p>
+                {damageTypes.length === 0
+                  ? <p className="text-amber-500">Nenhum tipo mágico cadastrado.</p>
+                  : <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      {damageTypes.map(type => (
+                        <label key={type.id} className="flex items-center gap-2 rounded-md border border-border px-2 py-2">
+                          <input type="checkbox" checked={reductionTypeIds.includes(type.id)} onChange={e => setReductionTypeIds(current => e.target.checked ? [...current, type.id] : current.filter(id => id !== type.id))} />
+                          {type.name}
+                        </label>
+                      ))}
+                    </div>}
+              </fieldset>
+              <fieldset className="col-span-2 space-y-2 text-xs">
+                <legend className="font-medium">Grau da magia</legend>
+                <label className="flex items-center gap-2 rounded-md border border-border px-2 py-2">
+                  <input type="checkbox" checked={reductionMagicLevels.length === 0} onChange={e => { if (e.target.checked) setReductionMagicLevels([]); }} />
+                  Todos os graus
+                </label>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  {([["baixa", "Baixa"], ["media", "Média"], ["alta", "Alta"]] as const).map(([level, label]) => (
+                    <label key={level} className="flex items-center gap-2 rounded-md border border-border px-2 py-2">
+                      <input type="checkbox" checked={reductionMagicLevels.includes(level)} onChange={e => setReductionMagicLevels(current => e.target.checked ? [...current, level] : current.filter(selected => selected !== level))} />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
             </>}
             <p className="col-span-2 text-xs text-muted-foreground">Aplica-se depois da defesa correspondente. A redução fixa vem primeiro e a porcentagem depois.</p>
           </>}
@@ -651,13 +695,12 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
           const amount = Number(effectAmount);
           const needsAttribute = effectType === "status" || effectType === "regeneration";
           const needsAmount = needsAttribute || effectType === "damage_dealt" || effectType === "damage_reduction";
-          const reductionType = reductionTypeId || damageTypes[0]?.id || null;
           if (!effectName.trim() || duration < 1 || !Number.isFinite(duration) || (needsAmount && (!Number.isFinite(amount) || amount < 0))) {
             toast.error("Preencha o nome, uma duração e um valor válidos.");
             return;
           }
-          if (effectType === "damage_reduction" && reductionScope === "magical" && !reductionType) {
-            toast.error("Cadastre e selecione um tipo mágico para esta mitigação.");
+          if (effectType === "damage_reduction" && reductionScope === "magical" && damageTypes.length === 0) {
+            toast.error("Cadastre ao menos um tipo mágico antes de criar esta mitigação.");
             return;
           }
           onAddEffect({
@@ -666,8 +709,10 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
             attribute_key: needsAttribute ? effectAttr : null,
             damage_scope: effectType === "damage_dealt" ? effectDamageScope : "any",
             damage_reduction_scope: effectType === "damage_reduction" ? reductionScope : "physical",
-            damage_reduction_type_id: effectType === "damage_reduction" && reductionScope === "magical" ? reductionType : null,
-            damage_reduction_magic_level: effectType === "damage_reduction" && reductionScope === "magical" ? reductionMagicLevel : null,
+            damage_reduction_type_id: null,
+            damage_reduction_magic_level: null,
+            damage_reduction_type_ids: effectType === "damage_reduction" && reductionScope === "magical" ? reductionTypeIds : null,
+            damage_reduction_magic_levels: effectType === "damage_reduction" && reductionScope === "magical" ? reductionMagicLevels : null,
             polarity: effectType === "magic_prohibition" || effectType === "no_mana" ? "debuff" : effectType === "damage_reduction" ? "buff" : effectPolarity,
             value_mode: effectType === "magic_prohibition" || effectType === "no_mana" ? "fixed" : effectMode,
             amount: needsAmount ? amount : 0,
