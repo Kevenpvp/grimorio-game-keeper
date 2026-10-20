@@ -225,6 +225,13 @@
       "when": 1792670400000,
       "tag": "0031_sync_physical_point_grants",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1792674000000,
+      "tag": "0032_condition_attribute_scaling",
+      "breakpoints": true
     }
   ]
 }
