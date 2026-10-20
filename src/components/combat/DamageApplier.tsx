@@ -97,6 +97,12 @@ export function DamageApplier({ target, battleId = null, sources = [] }: {
         damage_fixed_modifier?: number;
         damage_percent_modifier?: number;
         damage_source_character_id?: string | null;
+        damage_any_fixed_modifier?: number;
+        damage_any_percent_modifier?: number;
+        damage_physical_fixed_modifier?: number;
+        damage_physical_percent_modifier?: number;
+        damage_magical_fixed_modifier?: number;
+        damage_magical_percent_modifier?: number;
       };
       let defenseText: string;
       if (damageKind === "true") defenseText = "defesas ignoradas";
@@ -111,9 +117,18 @@ export function DamageApplier({ target, battleId = null, sources = [] }: {
       const sourceName = sources.find((source) => source.id === sourceCharacterId)?.name;
       const fixedModifier = Number(result.damage_fixed_modifier ?? 0);
       const percentModifier = Number(result.damage_percent_modifier ?? 0);
-      const sourceSummary = sourceCharacterId
-        ? ` Origem: ${sourceName ?? "personagem selecionado"}; modificadores de dano: ${fixedModifier >= 0 ? "+" : ""}${fixedModifier} fixos, ${percentModifier >= 0 ? "+" : ""}${percentModifier}%.`
-        : "";
+      const signed = (value: number) => `${value >= 0 ? "+" : ""}${value}`;
+      const anyFixed = Number(result.damage_any_fixed_modifier ?? 0);
+      const anyPercent = Number(result.damage_any_percent_modifier ?? 0);
+      const physicalFixed = Number(result.damage_physical_fixed_modifier ?? 0);
+      const physicalPercent = Number(result.damage_physical_percent_modifier ?? 0);
+      const magicalFixed = Number(result.damage_magical_fixed_modifier ?? 0);
+      const magicalPercent = Number(result.damage_magical_percent_modifier ?? 0);
+      const sourceSummary = !sourceCharacterId
+        ? ""
+        : damageKind === "hybrid"
+          ? ` Origem: ${sourceName ?? "personagem selecionado"}; metade física: ${signed(anyFixed + physicalFixed)} fixos, ${signed(anyPercent + physicalPercent)}%; metade mágica: ${signed(anyFixed + magicalFixed)} fixos, ${signed(anyPercent + magicalPercent)}%.`
+          : ` Origem: ${sourceName ?? "personagem selecionado"}; modificadores de dano: ${signed(fixedModifier)} fixos, ${signed(percentModifier)}%.`;
       toast.success(
         `${target.name}: ${result.hits} golpe(s) de ${damageDescription}; ${defenseText}; ${result.total_damage} de dano total. HP: ${result.hp_before} → ${result.hp_after}.${sourceSummary}`,
         { duration: 8000 },
