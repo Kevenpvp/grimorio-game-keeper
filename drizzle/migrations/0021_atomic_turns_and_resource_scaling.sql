@@ -12,10 +12,9 @@ create or replace function public.calculate_character_resource_max(
 )
 returns numeric
 language plpgsql
-stable
 security definer
 set search_path = public
-as $$
+as $
 declare
   _accepts_points boolean;
   _base_value numeric;
@@ -210,9 +209,7 @@ begin
     if old.effect_type = 'status' and old.attribute_key in ('hp', 'mana') then
       _character_id := old.character_id;
       _attribute_key := old.attribute_key;
-      _old_max := public.calculate_character_resource_max(
-        _character_id, _attribute_key, old.id
-      );
+      _old_max := public.calculate_character_resource_max(_character_id, _attribute_key);
       _extra := jsonb_build_array(jsonb_build_object(
         'effect_type', new.effect_type,
         'attribute_key', new.attribute_key,
@@ -270,6 +267,7 @@ set search_path = public
 as $$
 declare
   _character_id uuid;
+  _attribute_key text;
   _old_max numeric;
   _new_max numeric;
 begin
