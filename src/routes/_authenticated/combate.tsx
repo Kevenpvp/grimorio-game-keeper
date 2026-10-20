@@ -118,6 +118,8 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
   const { data: races } = useRaces();
   const qc = useQueryClient();
   const [selectedTargetIds, setSelectedTargetIds] = useState<string[]>(() => battle.target_character_id ? [battle.target_character_id] : []);
+  const [manaRegenMode, setManaRegenMode] = useState<"percent" | "fixed">("percent");
+  const [manaRegenAmount, setManaRegenAmount] = useState("5");
   const fighters = useMemo(
     () => battle.battle_participants.slice().sort((a, b) => a.sort_order - b.sort_order).map((p) => ({ ...(p.characters as Fighter), participant_turn_count: p.turn_count ?? 0 })).filter((f) => !!f.id),
     [battle],
@@ -134,6 +136,12 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
     qc.invalidateQueries({ queryKey: ["battles"] });
   };
 
+  function manaRegenFor(fighter: Fighter) {
+    const amount = Number(manaRegenAmount);
+    if (!Number.isFinite(amount) || amount < 0) return null;
+    return manaRegenMode === "percent" ? Math.ceil(val(fighter, "mana") * amount / 100) : Math.floor(amount);
+  }
+
   async function advanceFighterTurn(fighter: Fighter) {
     const participant = battle.battle_participants.find((p) => p.characters?.id === fighter.id);
     if (!participant) { toast.error("Personagem não encontrado nesta batalha"); return; }
@@ -143,15 +151,19 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
     const manaAttr = fighter.character_attributes.find((a) => a.attribute_key === "mana");
     if (manaAttr) {
       const maximum = val(fighter, "mana");
-      const nextMana = Math.min(maximum, (manaAttr.current_value ?? 0) + Math.ceil(maximum * 0.05));
+      const regen = manaRegenFor(fighter);
+      if (regen === null) { toast.error("Informe uma regeneração de mana válida"); return; }
+      const nextMana = Math.min(maximum, (manaAttr.current_value ?? 0) + regen);
       const { error } = await supabase.from("character_attributes").update({ current_value: nextMana, updated_at: new Date().toISOString() }).eq("character_id", fighter.id).eq("attribute_key", "mana");
       if (error) { toast.error("Turno avançado, mas falhou a regeneração de mana: " + error.message); }
     }
-    toast.success("Turno individual de " + fighter.name + " avançado para " + nextTurn + "; regenerou 5% da Mana máxima.");
+    toast.success("Turno individual de " + fighter.name + " avançado para " + nextTurn + "; regeneração configurada aplicada.");
     await qc.invalidateQueries({ queryKey: ["battles"] });
   }
 
   async function advanceTurn() {
+    const regenAmount = Number(manaRegenAmount);
+    if (!Number.isFinite(regenAmount) || regenAmount < 0) { toast.error("Informe uma regeneração de mana válida"); return; }
     const nextTurn = (battle.turn_count ?? 0) + 1;
     const { error: turnError } = await supabase.from("battles").update({ turn_count: nextTurn }).eq("id", battle.id);
     if (turnError) { toast.error(turnError.message); return; }
@@ -164,11 +176,13 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
       }
       const manaAttr = fighter.character_attributes.find((a) => a.attribute_key === "mana");
       if (!manaAttr) continue;
-      const nextMana = Math.min(val(fighter, "mana"), (manaAttr.current_value ?? 0) + Math.ceil(val(fighter, "mana") * 0.05));
+      const regen = manaRegenFor(fighter);
+      if (regen === null) { toast.error("Informe uma regeneração de mana válida"); return; }
+      const nextMana = Math.min(val(fighter, "mana"), (manaAttr.current_value ?? 0) + regen);
       const { error } = await supabase.from("character_attributes").update({ current_value: nextMana, updated_at: new Date().toISOString() }).eq("character_id", fighter.id).eq("attribute_key", "mana");
       if (error) toast.error("Falha ao regenerar mana de " + fighter.name + ": " + error.message);
     }
-    toast.success("Turno " + nextTurn + ": regeneração de 5% da mana máxima.");
+    toast.success("Turno " + nextTurn + ": regeneração configurada aplicada.");
     await qc.invalidateQueries({ queryKey: ["battles"] });
   }
 
@@ -188,9 +202,16 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
   return (
     <div className="space-y-6">
       {isMaster && <BattleAdmin battle={battle} fighters={fighters} onUpdate={update} />}
-      <div className="panel flex flex-wrap items-center justify-between gap-3 p-4">
-        <div><div className="text-sm text-muted-foreground">Turnos transcorridos</div><div className="font-display text-2xl text-gold">{battle.turn_count ?? 0}</div></div>
-        {isMaster && <Button onClick={() => void advanceTurn()}><RotateCw className="mr-2 h-4 w-4" /> Avançar turno (+5% Mana)</Button>}
+      <div className="panel space-y-3 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div><div className="text-sm text-muted-foreground">Turnos transcorridos</div><div className="font-display text-2xl text-gold">{battle.turn_count ?? 0}</div></div>
+          {isMaster && <Button onClick={() => void advanceTurn()}><RotateCw className="mr-2 h-4 w-4" /> Avançar turno geral</Button>}
+        </div>
+        {isMaster && <div className="flex flex-wrap items-end gap-3 border-t border-border pt-3">
+          <div className="space-y-1"><label className="text-xs text-muted-foreground">Regeneração de mana</label><select className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={manaRegenMode} onChange={(e) => setManaRegenMode(e.target.value as "percent" | "fixed")}><option value="percent">Porcentagem da Mana máxima</option><option value="fixed">Valor fixo de Mana</option></select></div>
+          <div className="space-y-1"><label className="text-xs text-muted-foreground">{manaRegenMode === "percent" ? "Porcentagem (%)" : "Quantidade de Mana"}</label><Input className="w-36" type="number" min="0" value={manaRegenAmount} onChange={(e) => setManaRegenAmount(e.target.value)} /></div>
+          <p className="pb-2 text-xs text-muted-foreground">A configuração vale para avançar o turno geral ou individual.</p>
+        </div>}
       </div>
       {!isMaster && <h2 className="text-xl text-gold">{battle.name}</h2>}
 
