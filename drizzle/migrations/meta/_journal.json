@@ -190,6 +190,13 @@
       "when": 1792652400000,
       "tag": "0026_damage_dealt_modifier",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1792656000000,
+      "tag": "0027_damage_dealt_scope",
+      "breakpoints": true
     }
   ]
 }
