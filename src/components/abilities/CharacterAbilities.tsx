@@ -169,6 +169,7 @@ export function CharacterAbilitiesManager({ characterId }: { characterId: string
   const { data: allAbilities = [], isLoading: catalogLoading } = useAbilities();
   const { data: assigned = [], isLoading: assignedLoading } = useCharacterAbilities(characterId);
   const { data: defs } = useDefs();
+  const [expanded, setExpanded] = useState(true);
   const assignedIds = new Set(assigned.map((ability) => ability.ability_id));
   const available = allAbilities.filter((ability) => !assignedIds.has(ability.id));
 
@@ -197,27 +198,44 @@ export function CharacterAbilitiesManager({ characterId }: { characterId: string
   if (!defs) return null;
   return (
     <section className="panel space-y-4 p-4 sm:p-5">
-      <div>
-        <h2 className="flex items-center gap-2 text-lg text-gold"><WandSparkles className="h-5 w-5" /> Habilidades da ficha</h2>
-        <p className="mt-1 text-xs text-muted-foreground">Adicione habilidades do catálogo. Depois, personalize custo, cooldown e efeitos para este personagem.</p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="flex items-center gap-2 text-lg text-gold"><WandSparkles className="h-5 w-5" /> Habilidades da ficha</h2>
+          <p className="mt-1 text-xs text-muted-foreground">Adicione habilidades do catálogo. Depois, personalize custo, cooldown e efeitos para este personagem.</p>
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="shrink-0"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((value) => !value)}
+        >
+          {expanded ? <ChevronUp className="mr-1 h-4 w-4" /> : <ChevronDown className="mr-1 h-4 w-4" />}
+          {expanded ? "Minimizar" : "Maximizar"}
+        </Button>
       </div>
-      {catalogLoading || assignedLoading ? <p className="text-sm text-muted-foreground">Carregando habilidades…</p> : available.length > 0 ? (
-        <div className="space-y-2">
-          <Label>Adicionar do catálogo</Label>
-          <div className="flex flex-wrap gap-2">
-            {available.map((ability) => (
-              <Button key={ability.id} size="sm" variant="outline" onClick={() => void give(ability)}>
-                <Plus className="mr-1 h-3.5 w-3.5" /> {ability.name}
-              </Button>
-            ))}
+      {expanded && (
+        <div className="space-y-4">
+          {catalogLoading || assignedLoading ? <p className="text-sm text-muted-foreground">Carregando habilidades…</p> : available.length > 0 ? (
+            <div className="space-y-2">
+              <Label>Adicionar do catálogo</Label>
+              <div className="flex flex-wrap gap-2">
+                {available.map((ability) => (
+                  <Button key={ability.id} size="sm" variant="outline" onClick={() => void give(ability)}>
+                    <Plus className="mr-1 h-3.5 w-3.5" /> {ability.name}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">{allAbilities.length ? "Todas as habilidades do catálogo já foram atribuídas." : "O mestre ainda não cadastrou habilidades."}</p>
+          )}
+          <div className="space-y-3">
+            {assigned.map((ability) => <AssignedAbilityEditor key={ability.id} ability={ability} defs={defs!} />)}
           </div>
         </div>
-      ) : (
-        <p className="text-xs text-muted-foreground">{allAbilities.length ? "Todas as habilidades do catálogo já foram atribuídas." : "O mestre ainda não cadastrou habilidades."}</p>
       )}
-      <div className="space-y-3">
-        {assigned.map((ability) => <AssignedAbilityEditor key={ability.id} ability={ability} defs={defs} />)}
-      </div>
     </section>
   );
 }
