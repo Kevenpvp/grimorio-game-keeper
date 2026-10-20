@@ -112,7 +112,7 @@ export function CharacterAbilitiesPanel({
                       <Clock3 className="mr-1 inline h-3 w-3" /> {ability.cooldown_remaining > 0 ? `Cooldown: ${ability.cooldown_remaining} turno(s)` : "Pronta para usar"}
                     </span>
                   )}
-                  {ability.mana_cost > 0 && <span className="rounded bg-muted px-2 py-1">Custo: {ability.mana_cost} Mana</span>}
+                  {!ability.is_passive && ability.mana_cost > 0 && <span className="rounded bg-muted px-2 py-1">Custo: {ability.mana_cost} Mana</span>}
                   {!ability.mana_cost && !ability.is_passive && <span className="rounded bg-muted px-2 py-1">Sem custo de Mana</span>}
                 </div>
               </div>
@@ -153,7 +153,7 @@ export function CharacterAbilitiesManager({ characterId }: { characterId: string
       is_passive: ability.is_passive,
       cooldown_turns: ability.is_passive ? 0 : ability.cooldown_turns,
       cooldown_remaining: 0,
-      mana_cost: ability.mana_cost,
+      mana_cost: ability.is_passive ? 0 : ability.mana_cost,
       effects: ability.effects,
     });
     if (error) { toast.error(error.message); return; }
@@ -224,7 +224,7 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
       is_passive: isPassive,
       cooldown_turns: cooldownTurns,
       cooldown_remaining: isPassive ? 0 : Math.min(ability.cooldown_remaining, cooldownTurns),
-      mana_cost: cost,
+      mana_cost: ability.is_passive ? 0 : cost,
       effects: effects.map((effect) => ({ ...effect, duration: Math.max(1, effect.duration) })) as unknown as Json,
     }).eq("id", ability.id);
     setBusy(false);
@@ -262,7 +262,8 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1"><Label>Nome nesta ficha</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
-        <div className="space-y-1"><Label>Custo de Mana</Label><Input type="number" min="0" value={manaCost} onChange={(e) => setManaCost(e.target.value)} /></div>
+        {!isPassive && <div className="space-y-1"><Label>Custo de Mana</Label><Input type="number" min="0" value={manaCost} onChange={(e) => setManaCost(e.target.value)} /></div>}
+        {isPassive && <p className="text-xs text-muted-foreground">Passiva: sem ativação, custo de Mana ou cooldown.</p>}
         {!isPassive && <div className="space-y-1"><Label>Cooldown máximo (turnos)</Label><Input type="number" min="1" value={cooldown} onChange={(e) => setCooldown(e.target.value)} /></div>}
         <div className="space-y-1 sm:col-span-2"><Label>Descrição para este jogador</Label><Input value={description} onChange={(e) => setDescription(e.target.value)} /></div>
       </div>
