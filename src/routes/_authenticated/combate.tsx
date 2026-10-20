@@ -144,12 +144,14 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
     const percent = active.filter(e => e.value_mode === "percent").reduce((n,e) => n + (e.polarity === "buff" ? 1 : -1) * Number(e.amount), 0);
     return Math.max(0, Math.floor(base * (1 + percent / 100) + fixed));
   };
-  async function tickEffects(scope: "global" | "individual", characterId?: string) {
-    const { data: rows, error } = await supabase.from("battle_effects").select("*").eq("battle_id", battle.id).eq("duration_scope", scope);
+  // Qualquer avanço de turno (individual ou geral) consome 1 turno de TODOS os efeitos da batalha.
+  async function tickEffects() {
+    const { data: rows, error } = await supabase.from("battle_effects").select("*").eq("battle_id", battle.id);
     if (error) { toast.error(error.message); return; }
     for (const row of (rows ?? []) as BattleEffect[]) {
-      if (scope === "individual" && row.character_id !== characterId) continue;
-      const result = row.duration <= 1 ? await supabase.from("battle_effects").delete().eq("id", row.id) : await supabase.from("battle_effects").update({ duration: row.duration - 1 }).eq("id", row.id);
+      const result = row.duration <= 1
+        ? await supabase.from("battle_effects").delete().eq("id", row.id)
+        : await supabase.from("battle_effects").update({ duration: row.duration - 1 }).eq("id", row.id);
       if (result.error) toast.error(result.error.message);
     }
     await qc.invalidateQueries({ queryKey: ["battle-effects", battle.id] });
@@ -197,7 +199,7 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
       const { error } = await supabase.from("character_attributes").update({ current_value: nextMana, updated_at: new Date().toISOString() }).eq("character_id", fighter.id).eq("attribute_key", "mana");
       if (error) { toast.error("Turno avançado, mas falhou a regeneração de mana: " + error.message); }
     }
-    await tickEffects("individual", fighter.id);
+    await tickEffects();
     toast.success("Turno individual de " + fighter.name + " avançado para " + nextTurn + "; regeneração configurada aplicada.");
     await qc.invalidateQueries({ queryKey: ["battles"] });
   }
@@ -222,7 +224,7 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
       const { error } = await supabase.from("character_attributes").update({ current_value: nextMana, updated_at: new Date().toISOString() }).eq("character_id", fighter.id).eq("attribute_key", "mana");
       if (error) toast.error("Falha ao regenerar mana de " + fighter.name + ": " + error.message);
     }
-    await tickEffects("global");
+    await tickEffects();
     toast.success("Turno " + nextTurn + ": regeneração configurada aplicada.");
     await qc.invalidateQueries({ queryKey: ["battles"] });
   }
@@ -333,7 +335,7 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
   const [effectMode, setEffectMode] = useState<"percent" | "fixed">("fixed");
   const [effectAmount, setEffectAmount] = useState("10");
   const [effectDuration, setEffectDuration] = useState("2");
-  const [effectScope, setEffectScope] = useState<"individual" | "global">("individual");
+  const [expandedEffectId, setExpandedEffectId] = useState<string | null>(null);
 
 
   async function regenerateHp() {
@@ -421,19 +423,38 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
         </div>
       </div>
       <div className="space-y-2 border-t border-border pt-2">
-        <div className="text-xs font-semibold text-muted-foreground">Efeitos ativos</div>
-        {effects.map(effect => <div key={effect.id} className="flex items-center justify-between gap-2 rounded border border-border p-2 text-xs"><div><strong>{effect.name}</strong> · {effect.effect_type} · {effect.duration} turno(s)</div><Button size="sm" variant="ghost" onClick={() => onRemoveEffect(effect.id)}><Trash2 className="h-3 w-3" /></Button></div>)}
+        <div className="text-xs font-semibold text-muted-foreground">Efeitos ativos — toque/clique ou passe o mouse para ver detalhes</div>
+        {effects.length === 0 ? <p className="text-xs text-muted-foreground">Nenhum efeito ativo.</p> : <div className="flex flex-wrap gap-2">
+          {effects.map(effect => {
+            const details = [
+              effect.effect_type === "status" ? `${effect.polarity === "buff" ? "Buff" : "Debuff"} de ${defs.find(d => d.key === effect.attribute_key)?.label ?? effect.attribute_key} (${effect.value_mode === "percent" ? `+${effect.polarity === "debuff" ? "-" : ""}${effect.amount}%` : `${effect.polarity === "debuff" ? "-" : "+"}${effect.amount} pontos`})` :
+              effect.effect_type === "regeneration" ? `${effect.polarity === "buff" ? "Buff" : "Debuff"} de regeneração de ${effect.attribute_key === "hp" ? "HP" : "Mana"}: ${effect.value_mode === "percent" ? `${effect.polarity === "debuff" ? "-" : "+"}${effect.amount}%` : `${effect.polarity === "debuff" ? "-" : "+"}${effect.amount} fixos`}` :
+              effect.effect_type === "no_regen_hp" ? "Impede regeneração de HP" :
+              effect.effect_type === "no_regen_mana" ? "Impede regeneração de Mana" : "Stun (apenas visual)";
+            return <div key={effect.id} className="group relative">
+              <button type="button" title={`${details} · Restam ${effect.duration} turno(s)`} onClick={() => setExpandedEffectId(expandedEffectId === effect.id ? null : effect.id)} className="rounded-md border border-border bg-muted/40 px-3 py-1.5 pr-7 text-left text-xs hover:border-gold">
+                <span className="font-medium">{effect.name}</span><span className="ml-1 text-muted-foreground">({effect.duration})</span>
+              </button>
+              <button type="button" aria-label={`Remover efeito ${effect.name}`} title="Remover efeito" onClick={() => onRemoveEffect(effect.id)} className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:bg-destructive/15 hover:text-destructive"><span className="text-sm leading-none">×</span></button>
+              <div className={cn("pointer-events-none absolute bottom-full left-0 z-20 mb-2 hidden min-w-44 max-w-64 rounded-md border border-border bg-popover p-3 text-xs shadow-lg group-hover:block", expandedEffectId === effect.id && "pointer-events-auto block")}>
+                <div className="font-semibold">{effect.name}</div><div className="mt-1">{details}</div><div className="mt-1 text-muted-foreground">Duração restante: {effect.duration} turno(s)</div>
+                <button type="button" className="pointer-events-auto mt-2 text-gold underline" onClick={() => setExpandedEffectId(null)}>Fechar</button>
+              </div>
+            </div>;
+          })}
+        </div>}
         <Input placeholder="Nome do efeito" value={effectName} onChange={e => setEffectName(e.target.value)} />
         <div className="grid grid-cols-2 gap-2">
           <select className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={effectType} onChange={e => { const type = e.target.value as BattleEffect["effect_type"]; setEffectType(type); if(type === "regeneration") setEffectAttr("hp"); }}>
             <option value="status">Buff/debuff de status</option><option value="regeneration">Buff/debuff de regeneração</option><option value="no_regen_hp">Não regenera HP</option><option value="no_regen_mana">Não regenera Mana</option><option value="stun">Stun (visual)</option>
           </select>
           {(effectType === "status" || effectType === "regeneration") && <select className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={effectAttr} onChange={e => setEffectAttr(e.target.value)}>{(effectType === "regeneration" ? [{key:"hp",label:"HP"},{key:"mana",label:"Mana"}] : defs.map(d => ({key:d.key,label:d.key === "hp" ? "HP máximo" : d.key === "mana" ? "Mana máxima" : d.label}))).map(d => <option key={d.key} value={d.key}>{d.label}</option>)}</select>}
-          {(effectType === "status" || effectType === "regeneration") && <><select className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={effectPolarity} onChange={e => setEffectPolarity(e.target.value as "buff" | "debuff")}><option value="buff">Buff</option><option value="debuff">Debuff</option></select><select className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={effectMode} onChange={e => setEffectMode(e.target.value as "percent" | "fixed")}><option value="percent">Porcentagem</option><option value="fixed">Pontos fixos</option></select><Input type="number" min="0" value={effectAmount} onChange={e => setEffectAmount(e.target.value)} /></>}
-          <Input type="number" min="1" value={effectDuration} onChange={e => setEffectDuration(e.target.value)} />
-          <select className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={effectScope} onChange={e => setEffectScope(e.target.value as "individual" | "global")}><option value="individual">Turno individual</option><option value="global">Turno geral</option></select>
+          {(effectType === "status" || effectType === "regeneration") && <><select className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={effectPolarity} onChange={e => setEffectPolarity(e.target.value as "buff" | "debuff")}><option value="buff">Buff</option><option value="debuff">Debuff</option></select><select className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={effectMode} onChange={e => setEffectMode(e.target.value as "percent" | "fixed")}><option value="percent">Porcentagem</option><option value="fixed">Pontos fixos</option></select></>}
+          <label className="col-span-2 space-y-1 text-xs font-medium"><span>Valor do efeito ({effectMode === "percent" ? "%" : "pontos fixos"})</span><Input aria-label="Valor do efeito em porcentagem ou pontos fixos" type="number" min="0" value={effectAmount} onChange={e => setEffectAmount(e.target.value)} /></label>
+          <label className="col-span-2 space-y-1 text-xs font-medium"><span>Duração (quantos turnos)</span><Input aria-label="Duração em turnos" type="number" min="1" value={effectDuration} onChange={e => setEffectDuration(e.target.value)} /></label>
+          <p className="col-span-2 text-xs text-muted-foreground">Cada vez que qualquer turno for avançado, todos os efeitos ativos perdem 1 turno de duração.</p>
         </div>
-        <Button size="sm" onClick={() => { const duration = Math.floor(Number(effectDuration)), amount = Number(effectAmount); if (!effectName.trim() || duration < 1 || !Number.isFinite(duration) || !Number.isFinite(amount) || amount < 0) { toast.error("Preencha nome, valor e duração válidos"); return; } onAddEffect({name:effectName.trim(),effect_type:effectType,attribute_key:effectType === "status" || effectType === "regeneration" ? effectAttr : null,polarity:effectPolarity,value_mode:effectMode,amount,duration,duration_scope:effectScope}); setEffectName(""); }}><Plus className="mr-1 h-3 w-3" /> Aplicar efeito</Button>
+        <Button size="sm" onClick={() => { const duration = Math.floor(Number(effectDuration)), amount = Number(effectAmount); if (!effectName.trim() || duration < 1 || !Number.isFinite(duration) || !Number.isFinite(amount) || amount < 0) { toast.error("Preencha nome, valor e duração válidos"); return; } onAddEffect({name:effectName.trim(),effect_type:effectType,attribute_key:effectType === "status" || effectType === "regeneration" ? effectAttr : null,polarity:effectPolarity,value_mode:effectMode,amount,duration,duration_scope:"global"}); setEffectName(""); }}><Plus className="mr-1 h-3 w-3" /> Aplicar efeito</Button>
         {hpRegenBlocked && <div className="text-xs text-destructive">Regeneração de HP bloqueada.</div>}{manaRegenBlocked && <div className="text-xs text-destructive">Regeneração de Mana bloqueada.</div>}
       </div>
     </div>
