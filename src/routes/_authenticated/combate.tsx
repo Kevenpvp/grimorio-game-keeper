@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import { computeValue, traitMods, useDefs, useMe, useRaces, useVirtues, type AttributeDef } from "@/lib/sheets";
 import { Portrait } from "@/components/sheet/CharacterSheetView";
 import { StatBar } from "@/components/sheet/StatBar";
@@ -207,7 +208,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
       const { data: nextTurn, error } = await supabase.rpc("advance_combat_turn", {
         _battle_id: battle.id,
         _character_id: characterId,
-        _mana_regeneration_settings: manaRegenerationSettingsForTurn,
+        _mana_regeneration_settings: manaRegenerationSettingsForTurn as unknown as Json,
       });
       if (error) {
         toast.error("Não foi possível avançar o turno: " + error.message);
