@@ -192,21 +192,22 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
         return;
       }
 
-      const baseManaRegeneration: Record<string, number> = {};
+      const manaRegenerationSettingsForTurn: Record<string, { mode: "percent" | "fixed"; amount: number }> = {};
       for (const fighter of turnFighters) {
         if (!fighter.character_attributes.some((attribute) => attribute.attribute_key === "mana")) continue;
-        const baseRegen = manaRegenFor(fighter);
-        if (baseRegen === null) {
+        const setting = manaRegenSettings[fighter.id] ?? { mode: "percent" as const, amount: "0" };
+        const amount = Number(setting.amount);
+        if (!Number.isFinite(amount) || amount < 0) {
           toast.error("Informe uma regeneração de mana válida para " + fighter.name);
           return;
         }
-        baseManaRegeneration[fighter.id] = baseRegen;
+        manaRegenerationSettingsForTurn[fighter.id] = { mode: setting.mode, amount };
       }
 
       const { data: nextTurn, error } = await supabase.rpc("advance_combat_turn", {
         _battle_id: battle.id,
         _character_id: characterId,
-        _base_mana_regeneration: baseManaRegeneration,
+        _mana_regeneration_settings: manaRegenerationSettingsForTurn,
       });
       if (error) {
         toast.error("Não foi possível avançar o turno: " + error.message);
@@ -246,12 +247,6 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
     qc.invalidateQueries({ queryKey: ["battles"] });
   };
 
-  function manaRegenFor(fighter: Fighter) {
-    const setting = manaRegenSettings[fighter.id] ?? { mode: "percent" as const, amount: "0" };
-    const amount = Number(setting.amount);
-    if (!Number.isFinite(amount) || amount < 0) return null;
-    return setting.mode === "percent" ? Math.ceil(val(fighter, "mana") * amount / 100) : Math.floor(amount);
-  }
 
   function setManaRegen(fighterId: string, patch: Partial<{ mode: "percent" | "fixed"; amount: string }>) {
     setManaRegenSettings((current) => ({
