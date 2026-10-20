@@ -202,8 +202,6 @@ export type Database = {
           description: string | null
           id: string
           kills: number
-          mana_regen_mode: string
-          mana_regen_amount: number
           name: string
           owner_id: string | null
           photo_path: string | null
@@ -220,8 +218,6 @@ export type Database = {
           description?: string | null
           id?: string
           kills?: number
-          mana_regen_mode?: string
-          mana_regen_amount?: number
           name: string
           owner_id?: string | null
           photo_path?: string | null
