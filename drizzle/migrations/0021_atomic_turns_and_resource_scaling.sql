@@ -147,7 +147,7 @@ begin
         else coalesce(ca.current_value, 0)
       end
     )
-  ),
+  )::integer,
   updated_at = now()
   where ca.character_id = _character_id
     and ca.attribute_key = _attribute_key;
@@ -617,7 +617,7 @@ begin
     if not _regen_blocked then
       _adjusted_regen := greatest(0, floor(_base_regen * (1 + coalesce(_percent_regen, 0) / 100) + coalesce(_fixed_regen, 0)));
       update public.character_attributes
-      set current_value = least(_mana_max, greatest(0, coalesce(current_value, 0) + _adjusted_regen)),
+      set current_value = least(_mana_max, greatest(0, coalesce(current_value, 0) + _adjusted_regen))::integer,
           updated_at = now()
       where character_id = _fighter_id and attribute_key = 'mana';
     end if;
