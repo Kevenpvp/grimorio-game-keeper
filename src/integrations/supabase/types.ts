@@ -557,7 +557,7 @@ export type Database = {
     Functions: {
       activate_character_ability: {
         Args: {
-          _battle_id?: string
+          _battle_id?: string | null
           _character_ability_id: string
           _target_character_id: string
         }
