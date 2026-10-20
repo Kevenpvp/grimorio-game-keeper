@@ -175,15 +175,15 @@ begin
 
   -- Passive mana-use modifiers: a buff lowers cost, a debuff raises it.
   select
-    coalesce(sum((case when e->>'polarity' = 'buff' then -1 else 1 end)
-      * coalesce(nullif(e->>'amount','')::numeric, 0))
-      filter (where e->>'effect_type' = 'mana_used' and coalesce(e->>'value_mode','fixed') = 'fixed'), 0),
-    coalesce(sum((case when e->>'polarity' = 'buff' then -1 else 1 end)
-      * coalesce(nullif(e->>'amount','')::numeric, 0))
-      filter (where e->>'effect_type' = 'mana_used' and coalesce(e->>'value_mode','fixed') = 'percent'), 0)
+    coalesce(sum((case when effect->>'polarity' = 'buff' then -1 else 1 end)
+      * coalesce(nullif(effect->>'amount','')::numeric, 0))
+      filter (where effect->>'effect_type' = 'mana_used' and coalesce(effect->>'value_mode','fixed') = 'fixed'), 0),
+    coalesce(sum((case when effect->>'polarity' = 'buff' then -1 else 1 end)
+      * coalesce(nullif(effect->>'amount','')::numeric, 0))
+      filter (where effect->>'effect_type' = 'mana_used' and coalesce(effect->>'value_mode','fixed') = 'percent'), 0)
   into _mana_fixed_modifier, _mana_percent_modifier
   from public.character_abilities ca
-  cross join lateral jsonb_array_elements(ca.passive_effects) e
+  cross join lateral jsonb_array_elements(ca.passive_effects) as passive_effect(effect)
   where ca.character_id = _assignment.character_id;
 
   -- Temporary mana-use modifiers on the caster apply only to standalone effects
@@ -298,5 +298,3 @@ $$;
 revoke all on function public.tick_character_ability_cooldowns(uuid) from public, anon;
 grant execute on function public.tick_character_ability_cooldowns(uuid) to authenticated;
 
-alter publication supabase_realtime add table public.abilities;
-alter publication supabase_realtime add table public.character_abilities;
