@@ -218,6 +218,13 @@
       "when": 1792666800000,
       "tag": "0030_multi_select_damage_mitigation",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1792670400000,
+      "tag": "0031_sync_physical_point_grants",
+      "breakpoints": true
     }
   ]
 }
