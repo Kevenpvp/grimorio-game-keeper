@@ -640,12 +640,13 @@ export type Database = {
       }
       apply_battle_damage: {
         Args: {
-          _battle_id: string
+          _battle_id: string | null
           _character_id: string
           _damage_kind: string
-          _damage_type_id: string
+          _damage_type_id: string | null
           _damage_values: Json
-          _magic_level: string
+          _magic_level: string | null
+          _source_character_id?: string | null
         }
         Returns: Json
       }
