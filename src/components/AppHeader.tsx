@@ -29,6 +29,7 @@ export function AppHeader() {
             <>
               <Link to="/racas" className="text-muted-foreground hover:text-gold">Raças</Link>
               <Link to="/virtudes" className="text-muted-foreground hover:text-gold">Virtudes</Link>
+              <Link to="/habilidades" className="text-muted-foreground hover:text-gold">Habilidades</Link>
               <Link to="/tipos-dano" className="flex items-center gap-1 text-muted-foreground hover:text-gold"><Sparkles className="h-3.5 w-3.5" /> Tipos de dano</Link>
             </>
           )}
