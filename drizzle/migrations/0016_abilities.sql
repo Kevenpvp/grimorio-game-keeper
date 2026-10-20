@@ -173,18 +173,24 @@ begin
     _duration := coalesce(nullif(_effect->>'duration', '')::integer, 1);
     _effect_name := coalesce(nullif(_effect->>'name', ''), _assignment.name);
 
-    if _effect_type not in ('status','regeneration','no_regen_hp','no_regen_mana','stun') then
+    if _effect_type is null or _effect_type not in ('status','regeneration','no_regen_hp','no_regen_mana','stun') then
       raise exception 'Tipo de efeito inválido na habilidade';
     end if;
     if _polarity not in ('buff','debuff') or _value_mode not in ('percent','fixed') then
       raise exception 'Configuração de efeito inválida';
     end if;
     if _amount < 0 or _duration < 1 then raise exception 'Valor ou duração do efeito inválido'; end if;
-    if (_effect_type = 'status' and _attribute_key is null)
-      or (_effect_type = 'regeneration' and _attribute_key not in ('hp','mana'))
-      or (_effect_type in ('no_regen_hp','no_regen_mana','stun')) then
-      if _effect_type = 'status' then raise exception 'Buff/debuff de status precisa de atributo'; end if;
-      if _effect_type = 'regeneration' then raise exception 'Regeneração só pode afetar HP ou Mana'; end if;
+    if _effect_type = 'status' then
+      if _attribute_key is null or not exists (select 1 from public.attribute_definitions where key = _attribute_key) then
+        raise exception 'Buff/debuff de status precisa de um atributo válido';
+      end if;
+    elsif _effect_type = 'regeneration' then
+      if _attribute_key not in ('hp','mana') then raise exception 'Regeneração só pode afetar HP ou Mana'; end if;
+    else
+      _attribute_key := null;
+      _amount := 0;
+      _value_mode := 'fixed';
+      _polarity := 'buff';
     end if;
 
     insert into public.battle_effects (
@@ -219,3 +225,7 @@ end;
 $$;
 revoke all on function public.tick_character_ability_cooldowns(uuid) from public, anon;
 grant execute on function public.tick_character_ability_cooldowns(uuid) to authenticated;
+
+alter publication supabase_realtime add table public.abilities;
+alter publication supabase_realtime add table public.character_abilities;
+
