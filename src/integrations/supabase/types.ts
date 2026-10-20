@@ -50,6 +50,12 @@ export type Database = {
         }
         Relationships: []
       }
+      battle_effects: {
+        Row: { id: string; battle_id: string; character_id: string; name: string; effect_type: string; attribute_key: string | null; polarity: string; value_mode: string; amount: number; duration: number; duration_scope: string; created_at: string }
+        Insert: { id?: string; battle_id: string; character_id: string; name: string; effect_type: string; attribute_key?: string | null; polarity?: string; value_mode?: string; amount?: number; duration: number; duration_scope?: string; created_at?: string }
+        Update: { id?: string; battle_id?: string; character_id?: string; name?: string; effect_type?: string; attribute_key?: string | null; polarity?: string; value_mode?: string; amount?: number; duration?: number; duration_scope?: string; created_at?: string }
+        Relationships: []
+      }
       battle_participants: {
         Row: {
           battle_id: string
