@@ -251,6 +251,8 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
 
       const confirmedTurn = Number(nextTurn);
       if (Number.isFinite(confirmedTurn)) {
+        // Stop an older Realtime-triggered read from overwriting this newly confirmed counter.
+        await qc.cancelQueries({ queryKey: ["battles"] });
         qc.setQueryData<BattlesData>(["battles"], (current) => {
           if (!current) return current;
           return current.map((cachedBattle) => {
