@@ -38,7 +38,7 @@ function HabilidadesPage() {
 
   async function create() {
     const { error } = await supabase.from("abilities").insert({
-      name: "Nova habilidade", description: "", is_passive: false, cooldown_turns: 1, mana_cost: 0, effects: [],
+      name: "Nova habilidade", description: "", is_passive: false, can_activate: true, cooldown_turns: 1, mana_cost: 0, effects: [], passive_effects: [],
     });
     if (error) { toast.error(error.message); return; }
     toast.success("Habilidade criada");
@@ -64,42 +64,50 @@ function AbilityEditor({ ability, defs }: { ability: Ability; defs: NonNullable<
   const qc = useQueryClient();
   const [name, setName] = useState(ability.name);
   const [description, setDescription] = useState(ability.description ?? "");
-  const [isPassive, setIsPassive] = useState(ability.is_passive);
+  const [canActivate, setCanActivate] = useState(ability.can_activate);
   const [cooldown, setCooldown] = useState(String(ability.cooldown_turns));
   const [manaCost, setManaCost] = useState(String(ability.mana_cost));
   const [effects, setEffects] = useState<AbilityEffectDefinition[]>(() => parseAbilityEffects(ability.effects));
+  const [passiveEffects, setPassiveEffects] = useState<AbilityEffectDefinition[]>(() => parseAbilityEffects(ability.passive_effects));
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     setName(ability.name);
     setDescription(ability.description ?? "");
-    setIsPassive(ability.is_passive);
+    setCanActivate(ability.can_activate);
     setCooldown(String(ability.cooldown_turns));
     setManaCost(String(ability.mana_cost));
     setEffects(parseAbilityEffects(ability.effects));
+    setPassiveEffects(parseAbilityEffects(ability.passive_effects));
   }, [ability]);
 
   async function save() {
-    const cool = isPassive ? 0 : Math.floor(Number(cooldown));
+    const cool = canActivate ? Math.floor(Number(cooldown)) : 0;
     const mana = Math.floor(Number(manaCost));
     if (!name.trim()) { toast.error("Informe o nome da habilidade"); return; }
     if (!Number.isFinite(mana) || mana < 0) { toast.error("O custo de Mana não pode ser negativo"); return; }
-    if (!isPassive && (!Number.isFinite(cool) || cool < 1)) {
+    if (canActivate && (!Number.isFinite(cool) || cool < 1)) {
       toast.error("Uma habilidade ativa precisa ter cooldown de pelo menos 1 turno. Marque como passiva se não puder ser ativada.");
       return;
     }
-    if (effects.some((effect) => !effect.name.trim() || ((effect.effect_type === "status" || effect.effect_type === "regeneration") && (!Number.isFinite(effect.amount) || effect.amount < 0)))) {
-      toast.error("Revise os nomes e valores dos efeitos");
+    const allConfiguredEffects = [...effects, ...passiveEffects];
+    if (allConfiguredEffects.some((effect) => !effect.name.trim() || (
+      ["status", "regeneration", "mana_regeneration", "mana_used"].includes(effect.effect_type) &&
+      (!Number.isFinite(effect.amount) || effect.amount < 0)
+    ))) {
+      toast.error("Revise os nomes e valores dos efeitos ativos e passivos");
       return;
     }
     setBusy(true);
     const { error } = await supabase.from("abilities").update({
       name: name.trim(),
       description: description.trim() || null,
-      is_passive: isPassive,
+      can_activate: canActivate,
+      is_passive: !canActivate,
       cooldown_turns: cool,
-      mana_cost: isPassive ? 0 : mana,
-      effects: effects.map((effect) => ({ ...effect, duration: isPassive ? 1 : Math.max(1, effect.duration) })) as unknown as Json,
+      mana_cost: canActivate ? mana : 0,
+      effects: effects.map((effect) => ({ ...effect, duration: Math.max(1, effect.duration) })) as unknown as Json,
+      passive_effects: passiveEffects.map((effect) => ({ ...effect, duration: 1 })) as unknown as Json,
     }).eq("id", ability.id);
     setBusy(false);
     if (error) { toast.error(error.message); return; }
@@ -124,8 +132,13 @@ function AbilityEditor({ ability, defs }: { ability: Ability; defs: NonNullable<
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome da habilidade" />
         </div>
         <label className="flex min-h-10 items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
-          <input type="checkbox" checked={isPassive} onChange={(e) => { setIsPassive(e.target.checked); setCooldown(e.target.checked ? "0" : (Number(cooldown) > 0 ? cooldown : "1")); if (e.target.checked) setManaCost("0"); }} />
-          Habilidade passiva
+          <input type="checkbox" checked={!canActivate} onChange={(e) => {
+            const notActivatable = e.target.checked;
+            setCanActivate(!notActivatable);
+            setCooldown(notActivatable ? "0" : (Number(cooldown) > 0 ? cooldown : "1"));
+            if (notActivatable) setManaCost("0");
+          }} />
+          Habilidade não ativável
         </label>
       </div>
       <div className="space-y-1.5">
@@ -133,14 +146,29 @@ function AbilityEditor({ ability, defs }: { ability: Ability; defs: NonNullable<
         <Textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="O que a habilidade faz..." />
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
-        {!isPassive && <div className="space-y-1.5"><Label>Cooldown (turnos)</Label><Input type="number" min="1" value={cooldown} onChange={(e) => setCooldown(e.target.value)} /></div>}
-        {!isPassive && <div className="space-y-1.5">
+        {canActivate && <div className="space-y-1.5"><Label>Cooldown (turnos)</Label><Input type="number" min="1" value={cooldown} onChange={(e) => setCooldown(e.target.value)} /></div>}
+        {canActivate && <div className="space-y-1.5">
           <Label>Custo de Mana (0 = não gasta)</Label>
           <Input type="number" min="0" value={manaCost} onChange={(e) => setManaCost(e.target.value)} />
         </div>}
-        {isPassive && <p className="text-xs text-muted-foreground">Habilidade passiva: não tem botão de ativação, não gasta Mana e não entra em cooldown.</p>}
+        {!canActivate && <p className="text-xs text-muted-foreground">Esta habilidade não pode ser ativada. Seus efeitos passivos permanecem aplicados enquanto estiver na ficha.</p>}
       </div>
-      <AbilityEffectsEditor effects={effects} onChange={setEffects} isPassive={isPassive} defs={defs} />
+      {canActivate && <AbilityEffectsEditor
+        effects={effects}
+        onChange={setEffects}
+        permanent={false}
+        title="Efeitos ao ativar"
+        description="Aplicados ao alvo escolhido quando a habilidade for ativada."
+        defs={defs}
+      />}
+      <AbilityEffectsEditor
+        effects={passiveEffects}
+        onChange={setPassiveEffects}
+        permanent
+        title="Efeitos passivos"
+        description="Aplicados continuamente a quem tiver esta habilidade na ficha."
+        defs={defs}
+      />
       <div className="flex flex-wrap gap-2 border-t border-border pt-3">
         <Button disabled={busy} onClick={() => void save()}>{busy ? "Salvando..." : "Salvar habilidade"}</Button>
         <Button disabled={busy} variant="destructive" onClick={() => void remove()}><Trash2 className="mr-1 h-4 w-4" /> Excluir</Button>
