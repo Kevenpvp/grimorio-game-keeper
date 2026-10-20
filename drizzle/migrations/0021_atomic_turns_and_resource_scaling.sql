@@ -14,7 +14,7 @@ returns numeric
 language plpgsql
 security definer
 set search_path = public
-as $
+as $$
 declare
   _accepts_points boolean;
   _base_value numeric;
@@ -262,7 +262,7 @@ begin
 
   return null;
 end;
-$;
+$$;
 
 revoke all on function public.scale_resource_on_battle_effect_change() from public, anon, authenticated;
 grant execute on function public.scale_resource_on_battle_effect_change() to service_role;
