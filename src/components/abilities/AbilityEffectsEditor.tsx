@@ -52,7 +52,6 @@ export function AbilityEffectsEditor({
       {effects.length === 0 && <p className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">Nenhum efeito configurado.</p>}
       {effects.map((effect, index) => {
         const needsAttribute = effect.effect_type === "status" || effect.effect_type === "regeneration";
-        const needsValue = needsAttribute;
         return (
           <div key={index} className="space-y-3 rounded-md border border-border bg-muted/20 p-3">
             <div className="flex items-center gap-2">
