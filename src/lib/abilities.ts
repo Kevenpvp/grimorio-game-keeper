@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Tables } from "@/integrations/supabase/types";
 import { supabase } from "@/integrations/supabase/client";
 
-export type AbilityEffectType = "status" | "regeneration" | "mana_regeneration" | "mana_used" | "no_regen_hp" | "no_regen_mana" | "stun";
+export type AbilityEffectType = "status" | "regeneration" | "mana_regeneration" | "mana_used" | "no_regen_hp" | "no_regen_mana" | "magic_prohibition" | "stun";
 export type AbilityEffectDefinition = {
   name: string;
   effect_type: AbilityEffectType;
@@ -14,11 +14,11 @@ export type AbilityEffectDefinition = {
 };
 export type Ability = Tables<"abilities">;
 export type CharacterAbilityRow = Tables<"character_abilities">;
-export type CharacterAbility = Omit<CharacterAbilityRow, "effects" | "passive_effects"> & { effects: AbilityEffectDefinition[]; passive_effects: AbilityEffectDefinition[] };
+export type CharacterAbility = Omit<CharacterAbilityRow, "effects" | "passive_effects" | "end_effects"> & { effects: AbilityEffectDefinition[]; passive_effects: AbilityEffectDefinition[]; end_effects: AbilityEffectDefinition[] };
 
 export function parseAbilityEffects(value: unknown): AbilityEffectDefinition[] {
   if (!Array.isArray(value)) return [];
-  const validTypes: AbilityEffectType[] = ["status", "regeneration", "mana_regeneration", "mana_used", "no_regen_hp", "no_regen_mana", "stun"];
+  const validTypes: AbilityEffectType[] = ["status", "regeneration", "mana_regeneration", "mana_used", "no_regen_hp", "no_regen_mana", "magic_prohibition", "stun"];
   return value.flatMap((item): AbilityEffectDefinition[] => {
     if (!item || typeof item !== "object") return [];
     const raw = item as Record<string, unknown>;
@@ -63,6 +63,7 @@ export function useCharacterAbilities(characterId: string | undefined) {
         ...row,
         effects: parseAbilityEffects(row.effects),
         passive_effects: parseAbilityEffects(row.passive_effects),
+        end_effects: parseAbilityEffects(row.end_effects),
       })) as CharacterAbility[];
     },
   });
@@ -79,6 +80,7 @@ export function useBattleCharacterAbilities(battleId: string, characterIds: stri
         ...row,
         effects: parseAbilityEffects(row.effects),
         passive_effects: parseAbilityEffects(row.passive_effects),
+        end_effects: parseAbilityEffects(row.end_effects),
       })) as CharacterAbility[];
     },
   });
