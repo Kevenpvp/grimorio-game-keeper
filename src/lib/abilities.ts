@@ -122,6 +122,9 @@ export type ActiveCharacterEffect = {
   duration: number;
   duration_scope: string;
   source_character_ability_id: string | null;
+  damage_reduction_scope?: DamageReductionScope;
+  damage_reduction_type_id?: string | null;
+  damage_reduction_magic_level?: DamageMagicLevel | null;
 };
 
 export function useCharacterActiveEffects(characterId: string | undefined) {
