@@ -102,14 +102,20 @@ export function useCharacterActiveEffects(characterId: string | undefined) {
     queryKey: ["character-active-effects", characterId],
     enabled: !!characterId,
     queryFn: async () => {
-      const [standaloneResult, battleParticipantsResult] = await Promise.all([
+      const [standaloneResult, participantsResult] = await Promise.all([
         supabase.from("battle_effects").select("*").eq("character_id", characterId!).is("battle_id", null),
-        supabase.from("battle_participants").select("battle_id, battles!inner(active)")
-          .eq("character_id", characterId!).eq("battles.active", true),
+        supabase.from("battle_participants").select("battle_id").eq("character_id", characterId!),
       ]);
       if (standaloneResult.error) throw standaloneResult.error;
-      if (battleParticipantsResult.error) throw battleParticipantsResult.error;
-      const activeBattleIds = [...new Set((battleParticipantsResult.data ?? []).map((row) => row.battle_id))];
+      if (participantsResult.error) throw participantsResult.error;
+      const participantBattleIds = [...new Set((participantsResult.data ?? []).map((row) => row.battle_id))];
+      let activeBattleIds: string[] = [];
+      if (participantBattleIds.length > 0) {
+        const { data, error } = await supabase.from("battles").select("id")
+          .in("id", participantBattleIds).eq("active", true);
+        if (error) throw error;
+        activeBattleIds = (data ?? []).map((row) => row.id);
+      }
       let battleEffects: ActiveCharacterEffect[] = [];
       if (activeBattleIds.length > 0) {
         const { data, error } = await supabase.from("battle_effects").select("*")
