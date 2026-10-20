@@ -276,13 +276,11 @@ BEGIN
   -- A character at 80% Body keeps 80% of their effective physical defense.
   _physical_defense := GREATEST(
     0,
-    floor(
-      COALESCE(_physical_defense, 0)
-      * COALESCE(
-          (SELECT c.body::numeric FROM public.characters c WHERE c.id = _character_id),
-          100::numeric
-        ) / 100
-    )
+    COALESCE(_physical_defense, 0)
+    * COALESCE(
+        (SELECT c.body::numeric FROM public.characters c WHERE c.id = _character_id),
+        100::numeric
+      ) / 100
   );
   _magical_defense := GREATEST(0, COALESCE(_magical_defense, 0));
 
