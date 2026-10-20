@@ -13,6 +13,7 @@ const effectTypeLabels: Record<AbilityEffectType, string> = {
   no_regen_mana: "Bloquear regeneração de Mana",
   magic_prohibition: "Proibição de magia (debuff)",
   stun: "Stun (visual)",
+  damage_dealt: "Dano Causado",
 };
 
 export function AbilityEffectsEditor({
@@ -73,7 +74,7 @@ export function AbilityEffectsEditor({
       {effects.map((effect, index) => {
         const isMagicProhibition = effect.effect_type === "magic_prohibition";
         const needsAttribute = effect.effect_type === "status" || effect.effect_type === "regeneration";
-        const needsValue = needsAttribute || effect.effect_type === "mana_regeneration" || effect.effect_type === "mana_used";
+        const needsValue = needsAttribute || effect.effect_type === "mana_regeneration" || effect.effect_type === "mana_used" || effect.effect_type === "damage_dealt";
         return (
           <div key={index} className="space-y-3 rounded-md border border-border bg-muted/20 p-3">
             <div className="flex items-center gap-2">
@@ -110,7 +111,7 @@ export function AbilityEffectsEditor({
                     <option value="fixed">Valor fixo</option><option value="percent">Porcentagem</option>
                   </select>
                   <label className="space-y-1 text-xs font-medium">
-                    Valor ({effect.value_mode === "percent" ? "%" : effect.effect_type === "mana_regeneration" || effect.effect_type === "mana_used" ? "Mana" : "pontos"})
+                    Valor ({effect.value_mode === "percent" ? "%" : effect.effect_type === "damage_dealt" ? "dano fixo" : effect.effect_type === "mana_regeneration" || effect.effect_type === "mana_used" ? "Mana" : "pontos"})
                     <Input type="number" min="0" value={effect.amount} onChange={(e) => patch(index, { amount: Math.max(0, Number(e.target.value) || 0) })} />
                   </label>
                 </>
@@ -125,6 +126,7 @@ export function AbilityEffectsEditor({
               {isMagicProhibition && <p className="self-end text-xs text-amber-500 sm:col-span-2">Debuff: impede a ativação de habilidades que consomem Mana enquanto durar. Não é possível mudar sua polaridade.</p>}
               {effect.effect_type === "mana_regeneration" && <p className="self-end text-xs text-muted-foreground">Afeta regeneração de Mana por turno e recuperação manual, mas não o preenchimento completo.</p>}
               {effect.effect_type === "mana_used" && <p className="self-end text-xs text-muted-foreground">Buff reduz Mana gasta; debuff aumenta o custo das habilidades.</p>}
+              {effect.effect_type === "damage_dealt" && <p className="self-end text-xs text-muted-foreground">Modifica o dano de cada golpe causado pelo personagem, antes das defesas do alvo.</p>}
             </div>
           </div>
         );
