@@ -15,7 +15,13 @@ export function PhysicalPointsDistribution({
   const qc = useQueryClient();
   const [alloc, setAlloc] = useState<Record<string, number>>({});
   const [busy, setBusy] = useState(false);
-  useEffect(() => setAlloc({}), [character.race_id, character.virtue_id, character.race_physical_points_granted, character.virtue_physical_points_granted]);
+  const [source, setSource] = useState<"race" | "virtue">("race");
+  useEffect(() => {
+    setAlloc({});
+    const raceLeft = Math.max(0, character.race_physical_points_granted - allocationTotal(character.race_physical_allocations));
+    const virtueLeft = Math.max(0, character.virtue_physical_points_granted - allocationTotal(character.virtue_physical_allocations));
+    setSource(raceLeft > 0 ? "race" : "virtue");
+  }, [character.race_id, character.virtue_id, character.race_physical_points_granted, character.virtue_physical_points_granted]);
   const { mods } = useCharacterTraitMods(character.race_id, character.virtue_id);
   const byKey = new Map(attrs.map((a) => [a.attribute_key, a]));
   const raceAlloc = numberAllocation(character.race_physical_allocations);
@@ -23,7 +29,8 @@ export function PhysicalPointsDistribution({
   const raceRemaining = Math.max(0, character.race_physical_points_granted - allocationTotal(raceAlloc));
   const virtueRemaining = Math.max(0, character.virtue_physical_points_granted - allocationTotal(virtueAlloc));
   const spentDraft = Object.values(alloc).reduce((sum, n) => sum + n, 0);
-  const remaining = raceRemaining + virtueRemaining - spentDraft;
+  const sourceRemaining = source === "race" ? raceRemaining : virtueRemaining;
+  const remaining = sourceRemaining - spentDraft;
   const pointDefs = defs.filter((d) => physicalKeys.has(d.key) && d.accepts_points);
 
   function change(key: string, delta: number) {
@@ -38,8 +45,9 @@ export function PhysicalPointsDistribution({
     const clean = Object.fromEntries(Object.entries(alloc).filter(([, value]) => value > 0));
     if (!Object.keys(clean).length) return;
     setBusy(true);
-    const { error } = await supabase.rpc("invest_physical_points", {
+    const { error } = await supabase.rpc("invest_physical_points_from_source", {
       _character_id: character.id,
+      _source: source,
       _allocations: clean,
     });
     if (error) {
@@ -63,9 +71,15 @@ export function PhysicalPointsDistribution({
           <h2 className="text-lg text-gold">Pontos Extras de Atributos Físicos</h2>
           <p className="mt-1 text-xs text-muted-foreground">Só podem ser distribuídos em Força, Defesa física, Velocidade e Velocidade de ataque. Estes pontos são separados dos pontos livres normais.</p>
         </div>
-        <div className="rounded-md border border-gold/50 px-4 py-2 text-center">
-          <div className="text-xs uppercase tracking-wider text-muted-foreground">Pontos físicos disponíveis</div>
-          <div className="tabular text-2xl font-bold text-gold">{remaining}</div>
+        <div className="w-full space-y-1 sm:max-w-xs">
+          <label className="text-xs font-medium">Origem dos pontos físicos</label>
+          <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+            value={source} disabled={busy}
+            onChange={(e) => { setSource(e.target.value as "race" | "virtue"); setAlloc({}); }}>
+            <option value="race">Raça ({raceRemaining} disponíveis)</option>
+            <option value="virtue">Virtude ({virtueRemaining} disponíveis)</option>
+          </select>
+          <div className="text-xs text-muted-foreground">Pontos físicos desta origem disponíveis: <span className="font-bold text-gold">{remaining}</span></div>
         </div>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
