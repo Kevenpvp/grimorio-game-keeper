@@ -135,7 +135,8 @@ CREATE OR REPLACE FUNCTION public.choose_character_race(_character_id uuid, _rac
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   _c public.characters; _bonus integer := 0; _physical integer := 0;
-  _spent integer := 0; _unused integer := 0; _key text; _n integer;
+  _spent integer := 0; _unused integer := 0; _other_spent integer := 0; _other_unused integer := 0;
+  _key text; _n integer;
   _master boolean := public.has_role(auth.uid(), 'master');
 BEGIN
   IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Não autenticado'; END IF;
@@ -152,7 +153,11 @@ BEGIN
     IF NOT FOUND THEN RAISE EXCEPTION 'Raça não encontrada'; END IF;
   END IF;
   SELECT COALESCE(SUM(value::integer), 0) INTO _spent FROM jsonb_each_text(COALESCE(_c.race_attribute_allocations, '{}'::jsonb));
-  _unused := GREATEST(0, COALESCE(_c.race_points_granted, 0) - _spent);
+  SELECT COALESCE(SUM(value::integer), 0) INTO _other_spent FROM jsonb_each_text(COALESCE(_c.virtue_attribute_allocations, '{}'::jsonb));
+  _other_unused := GREATEST(0, COALESCE(_c.virtue_points_granted, 0) - _other_spent);
+  -- Keep the other trait's remaining balance intact if legacy point history is incomplete.
+  _unused := LEAST(GREATEST(0, COALESCE(_c.race_points_granted, 0) - _spent),
+    GREATEST(0, COALESCE(_c.available_points, 0) - _other_unused));
   FOR _key, _n IN SELECT key, value::integer FROM jsonb_each_text(COALESCE(_c.race_attribute_allocations, '{}'::jsonb)) LOOP
     UPDATE public.character_attributes SET points = GREATEST(0, points - _n)
     WHERE character_id = _character_id AND attribute_key = _key;
@@ -173,7 +178,8 @@ CREATE OR REPLACE FUNCTION public.choose_character_virtue(_character_id uuid, _v
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   _c public.characters; _bonus integer := 0; _physical integer := 0;
-  _spent integer := 0; _unused integer := 0; _key text; _n integer;
+  _spent integer := 0; _unused integer := 0; _other_spent integer := 0; _other_unused integer := 0;
+  _key text; _n integer;
   _master boolean := public.has_role(auth.uid(), 'master');
 BEGIN
   IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Não autenticado'; END IF;
@@ -191,7 +197,11 @@ BEGIN
     IF NOT FOUND THEN RAISE EXCEPTION 'Virtude não encontrada'; END IF;
   END IF;
   SELECT COALESCE(SUM(value::integer), 0) INTO _spent FROM jsonb_each_text(COALESCE(_c.virtue_attribute_allocations, '{}'::jsonb));
-  _unused := GREATEST(0, COALESCE(_c.virtue_points_granted, 0) - _spent);
+  SELECT COALESCE(SUM(value::integer), 0) INTO _other_spent FROM jsonb_each_text(COALESCE(_c.race_attribute_allocations, '{}'::jsonb));
+  _other_unused := GREATEST(0, COALESCE(_c.race_points_granted, 0) - _other_spent);
+  -- Keep the other trait's remaining balance intact if legacy point history is incomplete.
+  _unused := LEAST(GREATEST(0, COALESCE(_c.virtue_points_granted, 0) - _spent),
+    GREATEST(0, COALESCE(_c.available_points, 0) - _other_unused));
   FOR _key, _n IN SELECT key, value::integer FROM jsonb_each_text(COALESCE(_c.virtue_attribute_allocations, '{}'::jsonb)) LOOP
     UPDATE public.character_attributes SET points = GREATEST(0, points - _n)
     WHERE character_id = _character_id AND attribute_key = _key;
