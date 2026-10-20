@@ -132,6 +132,7 @@ export function conditionAdjustedValue(
   } else {
     return value;
   }
+  if (condition === 100) return value;
   return Math.max(0, Math.floor(value * condition / 100));
 }
 
