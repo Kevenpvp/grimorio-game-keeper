@@ -25,9 +25,15 @@ function effectSummary(effect: AbilityEffectDefinition, defs: NonNullable<Return
     return `${effect.name}: ${polarity}${amount} de dano causado (${scope})`;
   }
   if (effect.effect_type === "damage_reduction") {
-    const scope = effect.damage_reduction_scope === "magical"
-      ? `mágico (${damageTypes.find((type) => type.id === effect.damage_reduction_type_id)?.name ?? "tipo não selecionado"}, grau ${effect.damage_reduction_magic_level ?? "baixa"})`
-      : "físico";
+    const selectedTypeIds = effect.damage_reduction_type_ids ?? (effect.damage_reduction_type_id ? [effect.damage_reduction_type_id] : []);
+    const selectedLevels = effect.damage_reduction_magic_levels ?? (effect.damage_reduction_magic_level ? [effect.damage_reduction_magic_level] : []);
+    const typeNames = selectedTypeIds.length === 0
+      ? "todos os tipos"
+      : selectedTypeIds.map((id) => damageTypes.find((type) => type.id === id)?.name ?? "tipo removido").join(", ");
+    const levelNames = selectedLevels.length === 0
+      ? "todos os graus"
+      : selectedLevels.map((level) => level === "baixa" ? "baixa" : level === "media" ? "média" : "alta").join(", ");
+    const scope = effect.damage_reduction_scope === "magical" ? `mágico (${typeNames}; grau(s) ${levelNames})` : "físico";
     const amountText = effect.value_mode === "percent" ? `${effect.amount}%` : `${effect.amount} fixos`;
     return `${effect.name}: mitiga dano recebido ${scope} em ${amountText}`;
   }
