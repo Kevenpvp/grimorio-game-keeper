@@ -127,6 +127,13 @@
       "when": 1792620000000,
       "tag": "0017_ability_passive_active_mana_modifiers",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1792623600000,
+      "tag": "0018_virtue_granted_abilities",
+      "breakpoints": true
     }
   ]
 }
