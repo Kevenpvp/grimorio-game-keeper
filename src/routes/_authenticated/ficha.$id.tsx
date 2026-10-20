@@ -64,11 +64,11 @@ function FichaPage() {
       <div className="space-y-6">
         <RacePicker character={data.character} isMaster={false} />
         <CharacterAbilitiesPanel characterId={data.character.id} characterName={data.character.name} mode="sheet" canUse />
+        <PhysicalPointsDistribution character={data.character} attrs={data.attrs} defs={defs} />
         <CharacterSheetView character={data.character} attrs={data.attrs} defs={defs} />
         {(data.character.available_points > 0 || data.character.race_points_granted > 0 || data.character.virtue_points_granted > 0) && (
           <PointsDistribution character={data.character} attrs={data.attrs} defs={defs} />
         )}
-        <PhysicalPointsDistribution character={data.character} attrs={data.attrs} defs={defs} />
       </div>
     );
   return <Editor character={data.character} attrs={data.attrs} defs={defs} />;
