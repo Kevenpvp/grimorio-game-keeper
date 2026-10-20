@@ -250,7 +250,13 @@ BEGIN
     'magic_level', _magic_level,
     'damage_source_character_id', _source_character_id,
     'damage_fixed_modifier', _damage_fixed_modifier,
-    'damage_percent_modifier', _damage_percent_modifier
+    'damage_percent_modifier', _damage_percent_modifier,
+    'damage_any_fixed_modifier', _damage_any_fixed,
+    'damage_any_percent_modifier', _damage_any_percent,
+    'damage_physical_fixed_modifier', _damage_physical_fixed,
+    'damage_physical_percent_modifier', _damage_physical_percent,
+    'damage_magical_fixed_modifier', _damage_magical_fixed,
+    'damage_magical_percent_modifier', _damage_magical_percent
   );
 END;
 $function$;
