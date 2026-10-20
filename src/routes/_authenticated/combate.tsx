@@ -14,7 +14,7 @@ import { StatBar } from "@/components/sheet/StatBar";
 import { cn } from "@/lib/utils";
 import { DamageApplier } from "@/components/combat/DamageApplier";
 import { CharacterAbilitiesPanel } from "@/components/abilities/CharacterAbilities";
-import { passiveEffectTypeActive, passiveRegenerationModifiers, passiveStatusModifiers, useBattleCharacterAbilities, useCharacterAbilities } from "@/lib/abilities";
+import { passiveEffectTypeActive, passiveRegenerationModifiers, passiveStatusModifiers, useBattleCharacterAbilities, useCharacterAbilities, useDamageTypes } from "@/lib/abilities";
 
 export const Route = createFileRoute("/_authenticated/combate")({
   head: () => ({
@@ -31,7 +31,7 @@ export const Route = createFileRoute("/_authenticated/combate")({
 });
 
 type Attr = { attribute_key: string; current_value: number; max_value: number; points: number; bonus: number };
-type BattleEffect = { id: string; battle_id: string | null; character_id: string; name: string; effect_type: 'status' | 'regeneration' | 'mana_used' | 'no_regen_hp' | 'no_regen_mana' | 'magic_prohibition' | 'no_mana' | 'stun' | 'damage_dealt'; attribute_key: string | null; polarity: 'buff' | 'debuff'; value_mode: 'percent' | 'fixed'; amount: number; duration: number; duration_scope: 'individual' | 'global'; damage_scope?: 'any' | 'physical' | 'magical'; source_character_ability_id?: string | null; effect_group_id?: string | null; is_end_effect?: boolean };
+type BattleEffect = { id: string; battle_id: string | null; character_id: string; name: string; effect_type: 'status' | 'regeneration' | 'mana_used' | 'no_regen_hp' | 'no_regen_mana' | 'magic_prohibition' | 'no_mana' | 'stun' | 'damage_dealt' | 'damage_reduction'; attribute_key: string | null; polarity: 'buff' | 'debuff'; value_mode: 'percent' | 'fixed'; amount: number; duration: number; duration_scope: 'individual' | 'global'; damage_scope?: 'any' | 'physical' | 'magical'; damage_reduction_scope?: 'physical' | 'magical'; damage_reduction_type_id?: string | null; damage_reduction_magic_level?: 'baixa' | 'media' | 'alta' | null; source_character_ability_id?: string | null; effect_group_id?: string | null; is_end_effect?: boolean };
 type Fighter = {
   id: string; name: string; player_name: string; photo_path: string | null; race_id: string | null; virtue_id: string | null; owner_id: string | null;
   race_physical_allocations: Json; virtue_physical_allocations: Json; race_physical_points_granted: number; virtue_physical_points_granted: number;
@@ -436,6 +436,10 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
   const [effectPolarity, setEffectPolarity] = useState<"buff" | "debuff">("buff");
   const [effectMode, setEffectMode] = useState<"percent" | "fixed">("fixed");
   const [effectDamageScope, setEffectDamageScope] = useState<"any" | "physical" | "magical">("any");
+  const [reductionScope, setReductionScope] = useState<"physical" | "magical">("physical");
+  const [reductionTypeId, setReductionTypeId] = useState("");
+  const [reductionMagicLevel, setReductionMagicLevel] = useState<"baixa" | "media" | "alta">("baixa");
+  const { data: damageTypes = [] } = useDamageTypes();
   const [effectAmount, setEffectAmount] = useState("10");
   const [effectDuration, setEffectDuration] = useState("2");
   const [expandedEffectId, setExpandedEffectId] = useState<string | null>(null);
