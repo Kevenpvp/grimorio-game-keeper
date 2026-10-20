@@ -705,6 +705,10 @@ export type Database = {
         Args: { _allocations: Json; _character_id: string }
         Returns: undefined
       }
+      invest_physical_points: {
+        Args: { _allocations: Json; _character_id: string }
+        Returns: undefined
+      }
       shares_battle: { Args: { _character_id: string }; Returns: boolean }
       sync_my_role: {
         Args: never
