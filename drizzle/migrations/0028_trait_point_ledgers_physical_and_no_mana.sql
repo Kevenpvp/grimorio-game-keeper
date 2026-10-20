@@ -291,7 +291,7 @@ RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
-AS $
+AS $$
 DECLARE
   _c public.characters;
   _race_alloc jsonb;
@@ -422,7 +422,7 @@ BEGIN
   FROM public.attribute_definitions ad
   WHERE ca.character_id = _character_id AND ad.key = ca.attribute_key AND ad.accepts_points;
 END;
-$;
+$$;
 REVOKE ALL ON FUNCTION public.invest_points_from_source(uuid, text, jsonb) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.invest_points_from_source(uuid, text, jsonb) TO authenticated;
 
@@ -472,7 +472,7 @@ RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
-AS $
+AS $$
 DECLARE
   _c public.characters;
   _current_alloc jsonb;
@@ -530,7 +530,7 @@ BEGIN
     UPDATE public.characters SET virtue_physical_allocations = _current_alloc WHERE id = _character_id;
   END IF;
 END;
-$;
+$$;
 REVOKE ALL ON FUNCTION public.invest_physical_points_from_source(uuid, text, jsonb) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.invest_physical_points_from_source(uuid, text, jsonb) TO authenticated;
 
