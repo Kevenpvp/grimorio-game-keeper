@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { computeValue, type AttributeDef, type Character, type CharacterAttr } from "@/lib/sheets";
+import { allocationTotal, computeValue, numberAllocation, type AttributeDef, type Character, type CharacterAttr } from "@/lib/sheets";
 import { AttrIcon } from "./icons";
 
 export function PointsDistribution({
@@ -13,24 +13,47 @@ export function PointsDistribution({
   const qc = useQueryClient();
   const [alloc, setAlloc] = useState<Record<string, number>>({});
   const [busy, setBusy] = useState(false);
-  useEffect(() => setAlloc({}), [character.race_id, character.virtue_id, character.race_points_granted, character.virtue_points_granted]);
+  const [source, setSource] = useState<"race" | "virtue" | "base">("base");
+  const raceAlloc = numberAllocation(character.race_attribute_allocations);
+  const virtueAlloc = numberAllocation(character.virtue_attribute_allocations);
+  const raceRemaining = Math.max(0, character.race_points_granted - allocationTotal(raceAlloc));
+  const virtueRemaining = Math.max(0, character.virtue_points_granted - allocationTotal(virtueAlloc));
+  const baseRemaining = Math.max(0, character.available_points - raceRemaining - virtueRemaining);
+  const sourceAvailable = source === "race" ? raceRemaining : source === "virtue" ? virtueRemaining : baseRemaining;
+  useEffect(() => {
+    setAlloc({});
+    const raceLeft = Math.max(0, character.race_points_granted - allocationTotal(character.race_attribute_allocations));
+    const virtueLeft = Math.max(0, character.virtue_points_granted - allocationTotal(character.virtue_attribute_allocations));
+    setSource(raceLeft > 0 ? "race" : virtueLeft > 0 ? "virtue" : "base");
+  }, [character.id, character.race_id, character.virtue_id, character.race_points_granted, character.virtue_points_granted]);
   const byKey = new Map(attrs.map((a) => [a.attribute_key, a]));
   const pointDefs = defs.filter((d) => d.accepts_points);
   const spent = Object.values(alloc).reduce((a, b) => a + b, 0);
-  const remaining = character.available_points - spent;
+  const remaining = sourceAvailable - spent;
 
   function change(key: string, delta: number) {
     const invested = byKey.get(key)?.points ?? 0;
+    const sourceInvested = source === "race"
+      ? raceAlloc[key] ?? 0
+      : source === "virtue"
+        ? virtueAlloc[key] ?? 0
+        : Math.max(0, invested - (raceAlloc[key] ?? 0) - (virtueAlloc[key] ?? 0));
     const next = (alloc[key] ?? 0) + delta;
     if (delta > 0 && remaining <= 0) return;
-    if (next < 0 && (!canRemove || invested + next < 0)) return;
+    if (next < 0 && (!canRemove || sourceInvested + next < 0)) return;
     setAlloc({ ...alloc, [key]: next });
   }
 
   async function confirm() {
     if (busy || remaining < 0) return;
+    const clean = Object.fromEntries(Object.entries(alloc).filter(([, value]) => value !== 0));
+    if (Object.keys(clean).length === 0) return;
     setBusy(true);
-    const { error } = await supabase.rpc("invest_points", { _character_id: character.id, _allocations: alloc });
+    const { error } = await supabase.rpc("invest_points_from_source", {
+      _character_id: character.id,
+      _source: source,
+      _allocations: clean,
+    });
     if (error) {
       toast.error(error.message);
     } else {
@@ -46,11 +69,24 @@ export function PointsDistribution({
   return (
     <section className="panel space-y-4 p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-lg text-gold">Distribuição de Pontos</h2>
+        <div>
+          <h2 className="text-lg text-gold">Distribuição de Pontos</h2>
+          <p className="mt-1 text-xs text-muted-foreground">Escolha a origem para que os pontos investidos sejam removidos junto com a raça ou virtude correspondente.</p>
+        </div>
         <div className="rounded-md border border-gold/50 px-4 py-2 text-center">
-          <div className="text-xs uppercase tracking-wider text-muted-foreground">Pontos disponíveis</div>
+          <div className="text-xs uppercase tracking-wider text-muted-foreground">Pontos desta origem</div>
           <div className="tabular text-3xl font-bold text-gold">{remaining}</div>
         </div>
+        <label className="w-full space-y-1 text-xs font-medium sm:max-w-xs">
+          <span>Origem dos pontos</span>
+          <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+            value={source} disabled={busy}
+            onChange={(e) => { setSource(e.target.value as "race" | "virtue" | "base"); setAlloc({}); }}>
+            <option value="race">Raça ({raceRemaining} disponíveis)</option>
+            <option value="virtue">Virtude ({virtueRemaining} disponíveis)</option>
+            <option value="base">Pontos livres ({baseRemaining} disponíveis)</option>
+          </select>
+        </label>
       </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {pointDefs.map((d) => {
@@ -71,7 +107,7 @@ export function PointsDistribution({
                 </div>
                 <div className="flex items-center gap-1">
                   <Button size="icon" variant="outline" className="h-8 w-8" aria-label={`Remover ponto de ${d.label}`}
-                    disabled={pending <= 0 && (!canRemove || total <= 0)} onClick={() => change(d.key, -1)}>
+                    disabled={pending <= 0 && (!canRemove || (source === "race" ? (raceAlloc[d.key] ?? 0) : source === "virtue" ? (virtueAlloc[d.key] ?? 0) : Math.max(0, invested - (raceAlloc[d.key] ?? 0) - (virtueAlloc[d.key] ?? 0))) + pending <= 0)} onClick={() => change(d.key, -1)}>
                     <Minus className="h-4 w-4" />
                   </Button>
                   <Button size="icon" variant="outline" className="h-8 w-8" aria-label={`Adicionar ponto em ${d.label}`}
