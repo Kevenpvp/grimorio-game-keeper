@@ -169,6 +169,13 @@
       "when": 1792641600000,
       "tag": "0023_scale_hp_mana_when_battle_ends",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1792645200000,
+      "tag": "0024_effects_expire_at_zero",
+      "breakpoints": true
     }
   ]
 }
