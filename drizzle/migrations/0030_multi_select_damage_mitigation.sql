@@ -263,7 +263,7 @@ BEGIN
           OR (r.damage_reduction_type_ids IS NULL AND r.damage_reduction_type_id = _damage_type_id))
         AND ((r.damage_reduction_magic_levels IS NOT NULL AND (cardinality(r.damage_reduction_magic_levels) = 0 OR _magic_level = ANY(r.damage_reduction_magic_levels)))
           OR (r.damage_reduction_magic_levels IS NULL AND r.damage_reduction_magic_level = _magic_level))
-    );
+    ));
 
   SELECT ca.current_value INTO _hp_before
   FROM public.character_attributes ca
