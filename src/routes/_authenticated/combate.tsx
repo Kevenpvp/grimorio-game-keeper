@@ -288,7 +288,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
       scheduleCombatRefresh(
         qc,
         ["battles"],
-        ["battle-effects", battle.id],
+        ["battle-effects"],
         ["character-active-effects"],
         ["character-abilities-battle"],
       );
