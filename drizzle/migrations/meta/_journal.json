@@ -183,6 +183,13 @@
       "when": 1792648800000,
       "tag": "0025_fix_effect_duration_check",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1792652400000,
+      "tag": "0026_damage_dealt_modifier",
+      "breakpoints": true
     }
   ]
 }
