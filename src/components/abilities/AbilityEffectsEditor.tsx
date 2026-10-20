@@ -1,3 +1,4 @@
+import { useId } from "react";
 import { Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,6 +40,7 @@ export function AbilityEffectsEditor({
 }) {
   const isPermanent = permanent ?? isPassive ?? false;
   const { data: damageTypes = [] } = useDamageTypes();
+  const effectEditorId = useId();
 
   function patch(index: number, values: Partial<AbilityEffectDefinition>) {
     onChange(effects.map((effect, i) => i === index ? { ...effect, ...values } : effect));
@@ -158,7 +160,7 @@ export function AbilityEffectsEditor({
                       <fieldset className="space-y-2 text-xs sm:col-span-2">
                         <legend className="font-medium">Tipo mágico</legend>
                         <label className="flex items-center gap-2 rounded-md border border-border px-2 py-2">
-                          <input type="radio" name={`mitigacao-tipos-${index}`} checked={selectedReductionTypeIds.length === 0}
+                          <input type="radio" name={`${effectEditorId}-mitigacao-tipos-${index}`} checked={selectedReductionTypeIds.length === 0}
                             onChange={() => patch(index, { damage_reduction_type_ids: [], damage_reduction_type_id: null, polarity: "buff" })} />
                           Todos os tipos
                         </label>
@@ -183,7 +185,7 @@ export function AbilityEffectsEditor({
                       <fieldset className="space-y-2 text-xs sm:col-span-2">
                         <legend className="font-medium">Grau da magia</legend>
                         <label className="flex items-center gap-2 rounded-md border border-border px-2 py-2">
-                          <input type="radio" name={`mitigacao-graus-${index}`} checked={selectedReductionMagicLevels.length === 0}
+                          <input type="radio" name={`${effectEditorId}-mitigacao-graus-${index}`} checked={selectedReductionMagicLevels.length === 0}
                             onChange={() => patch(index, { damage_reduction_magic_levels: [], damage_reduction_magic_level: null, polarity: "buff" })} />
                           Todos os graus
                         </label>
