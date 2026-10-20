@@ -282,6 +282,10 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
     if (!name.trim()) { toast.error("Informe o nome"); return; }
     if (!Number.isFinite(cost) || cost < 0) { toast.error("Custo de Mana inválido"); return; }
     if (canActivate && (!Number.isFinite(cooldownTurns) || cooldownTurns < 1)) { toast.error("Habilidade ativável precisa ter cooldown de pelo menos 1 turno"); return; }
+    if (canActivate && endEffects.length > 0 && effects.length === 0) {
+      toast.error("Configure pelo menos um efeito ao ativar para que o sistema detecte quando a habilidade acaba.");
+      return;
+    }
     setBusy(true);
     const { error } = await supabase.from("character_abilities").update({
       name: name.trim(),
