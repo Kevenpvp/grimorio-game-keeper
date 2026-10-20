@@ -21,7 +21,7 @@ export function PhysicalPointsDistribution({
     const raceLeft = Math.max(0, character.race_physical_points_granted - allocationTotal(character.race_physical_allocations));
     const virtueLeft = Math.max(0, character.virtue_physical_points_granted - allocationTotal(character.virtue_physical_allocations));
     setSource(raceLeft > 0 ? "race" : "virtue");
-  }, [character.race_id, character.virtue_id, character.race_physical_points_granted, character.virtue_physical_points_granted]);
+  }, [character.id, character.race_id, character.virtue_id, character.race_physical_points_granted, character.virtue_physical_points_granted, character.race_physical_allocations, character.virtue_physical_allocations]);
   const { mods } = useCharacterTraitMods(character.race_id, character.virtue_id);
   const byKey = new Map(attrs.map((a) => [a.attribute_key, a]));
   const raceAlloc = numberAllocation(character.race_physical_allocations);
