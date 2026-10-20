@@ -258,10 +258,11 @@ begin
       perform public.scale_character_resource_current(_character_id, _attribute_key, _old_max, _new_max);
     end if;
     return new;
+  end if;
 
   return null;
 end;
-$$;
+$;
 
 revoke all on function public.scale_resource_on_battle_effect_change() from public, anon, authenticated;
 grant execute on function public.scale_resource_on_battle_effect_change() to service_role;
