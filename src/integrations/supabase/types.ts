@@ -105,6 +105,7 @@ export type Database = {
           battle_id: string | null
           character_id: string
           created_at: string
+          damage_scope: string
           duration: number
           duration_scope: string
           effect_group_id: string | null
@@ -122,6 +123,7 @@ export type Database = {
           battle_id?: string | null
           character_id: string
           created_at?: string
+          damage_scope?: string
           duration: number
           duration_scope?: string
           effect_group_id?: string | null
@@ -139,6 +141,7 @@ export type Database = {
           battle_id?: string | null
           character_id?: string
           created_at?: string
+          damage_scope?: string
           duration?: number
           duration_scope?: string
           effect_group_id?: string | null
