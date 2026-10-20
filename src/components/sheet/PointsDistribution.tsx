@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Minus, Plus } from "lucide-react";
@@ -13,6 +13,7 @@ export function PointsDistribution({
   const qc = useQueryClient();
   const [alloc, setAlloc] = useState<Record<string, number>>({});
   const [busy, setBusy] = useState(false);
+  useEffect(() => setAlloc({}), [character.race_id, character.virtue_id, character.race_points_granted, character.virtue_points_granted]);
   const byKey = new Map(attrs.map((a) => [a.attribute_key, a]));
   const pointDefs = defs.filter((d) => d.accepts_points);
   const spent = Object.values(alloc).reduce((a, b) => a + b, 0);
