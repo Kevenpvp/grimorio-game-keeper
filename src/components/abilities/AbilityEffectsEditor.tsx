@@ -118,6 +118,51 @@ export function AbilityEffectsEditor({
                   </select>
                 </label>
               )}
+              {isDamageReduction && (
+                <>
+                  <label className="space-y-1 text-xs font-medium">
+                    Categoria de dano reduzido
+                    <select aria-label="Categoria de dano reduzido" className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                      value={effect.damage_reduction_scope ?? "physical"}
+                      onChange={(e) => {
+                        const scope = e.target.value as DamageReductionScope;
+                        patch(index, {
+                          damage_reduction_scope: scope,
+                          damage_reduction_type_id: scope === "magical" ? (effect.damage_reduction_type_id ?? damageTypes[0]?.id ?? null) : null,
+                          damage_reduction_magic_level: scope === "magical" ? (effect.damage_reduction_magic_level ?? "baixa") : null,
+                          polarity: "buff",
+                        });
+                      }}>
+                      <option value="physical">Físico</option>
+                      <option value="magical">Mágico</option>
+                    </select>
+                  </label>
+                  {effect.damage_reduction_scope === "magical" && (
+                    <>
+                      <label className="space-y-1 text-xs font-medium">
+                        Tipo mágico
+                        <select aria-label="Tipo mágico que será reduzido" className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                          value={effect.damage_reduction_type_id ?? ""}
+                          onChange={(e) => patch(index, { damage_reduction_type_id: e.target.value || null, polarity: "buff" })}>
+                          <option value="" disabled>{damageTypes.length ? "Selecione um tipo" : "Nenhum tipo mágico cadastrado"}</option>
+                          {damageTypes.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}
+                        </select>
+                      </label>
+                      <label className="space-y-1 text-xs font-medium">
+                        Grau da magia
+                        <select aria-label="Grau mágico que será reduzido" className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                          value={effect.damage_reduction_magic_level ?? "baixa"}
+                          onChange={(e) => patch(index, { damage_reduction_magic_level: e.target.value as DamageMagicLevel, polarity: "buff" })}>
+                          <option value="baixa">Baixa</option>
+                          <option value="media">Média</option>
+                          <option value="alta">Alta</option>
+                        </select>
+                      </label>
+                    </>
+                  )}
+                  <p className="self-end text-xs text-muted-foreground sm:col-span-2">Reduz o dano recebido depois da defesa correspondente. O valor fixo é aplicado primeiro e depois a porcentagem. Em dano híbrido, a redução atua apenas na metade compatível.</p>
+                </>
+              )}
               {needsAttribute && (
                 <select aria-label="Atributo afetado" className="h-9 min-w-0 rounded-md border border-input bg-background px-2 text-sm" value={effect.attribute_key ?? (effect.effect_type === "regeneration" ? "hp" : "strength")}
                   onChange={(e) => patch(index, { attribute_key: e.target.value })}>
