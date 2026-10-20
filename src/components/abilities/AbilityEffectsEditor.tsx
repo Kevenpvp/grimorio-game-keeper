@@ -3,7 +3,7 @@ import { Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { AttributeDef } from "@/lib/sheets";
-import { useDamageTypes, type AbilityEffectDefinition, type AbilityEffectType, type DamageScope, type DamageMagicLevel, type DamageReductionScope } from "@/lib/abilities";
+import { useDamageTypes, type AbilityEffectDefinition, type AbilityEffectType, type DamageScope, type DamageReductionScope } from "@/lib/abilities";
 
 const effectTypeLabels: Record<AbilityEffectType, string> = {
   status: "Buff/debuff de atributo",
