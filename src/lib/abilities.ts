@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Tables, TablesInsert } from "@/integrations/supabase/types";
+import type { Tables } from "@/integrations/supabase/types";
 import { supabase } from "@/integrations/supabase/client";
 
 export type AbilityEffectType = "status" | "regeneration" | "no_regen_hp" | "no_regen_mana" | "stun";
@@ -58,6 +58,21 @@ export function useCharacterAbilities(characterId: string | undefined) {
     queryFn: async () => {
       const { data, error } = await supabase.from("character_abilities").select("*")
         .eq("character_id", characterId!).order("created_at");
+      if (error) throw error;
+      return (data ?? []).map((row) => ({
+        ...row,
+        effects: parseAbilityEffects(row.effects),
+      })) as CharacterAbility[];
+    },
+  });
+}
+
+export function useBattleCharacterAbilities(battleId: string, characterIds: string[]) {
+  return useQuery({
+    queryKey: ["character-abilities-battle", battleId, characterIds],
+    enabled: characterIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("character_abilities").select("*").in("character_id", characterIds);
       if (error) throw error;
       return (data ?? []).map((row) => ({
         ...row,
