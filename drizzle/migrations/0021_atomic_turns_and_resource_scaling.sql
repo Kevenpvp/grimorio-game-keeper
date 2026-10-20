@@ -345,7 +345,7 @@ for each row execute function public.scale_resource_on_passive_ability_change();
 create or replace function public.advance_combat_turn(
   _battle_id uuid,
   _character_id uuid default null,
-  _base_mana_regeneration jsonb default '{}'::jsonb
+  _mana_regeneration_settings jsonb default '{}'::jsonb
 )
 returns integer
 language plpgsql
@@ -370,7 +370,7 @@ begin
   if auth.uid() is null or not public.has_role(auth.uid(), 'master') then
     raise exception 'Apenas o mestre pode avançar turnos';
   end if;
-  if jsonb_typeof(coalesce(_base_mana_regeneration, '{}'::jsonb)) <> 'object' then
+  if jsonb_typeof(coalesce(_mana_regeneration_settings, '{}'::jsonb)) <> 'object' then
     raise exception 'Configuração de regeneração de Mana inválida';
   end if;
 
@@ -400,12 +400,16 @@ begin
   end if;
 
   -- Apply the configured base regeneration using current database modifiers before ticking durations.
-  for _fighter in select key, value from jsonb_each(coalesce(_base_mana_regeneration, '{}'::jsonb))
+  for _fighter in select key, value from jsonb_each(coalesce(_mana_regeneration_settings, '{}'::jsonb))
   loop
     _fighter_id := _fighter.key::uuid;
-    _base_regen := nullif(_fighter.value #>> '{}', '')::numeric;
+    if jsonb_typeof(_fighter.value) <> 'object'
+       or coalesce(_fighter.value ->> 'mode', '') not in ('percent', 'fixed') then
+      raise exception 'Configuração de regeneração inválida para %', _fighter_id;
+    end if;
+    _base_regen := nullif(_fighter.value ->> 'amount', '')::numeric;
     if _base_regen is null or _base_regen < 0 then
-      raise exception 'Regeneração base inválida para %', _fighter_id;
+      raise exception 'Regeneração inválida para %', _fighter_id;
     end if;
     if (_character_id is not null and _fighter_id <> _character_id)
        or not exists (
@@ -421,6 +425,13 @@ begin
     where ca.character_id = _fighter_id and ca.attribute_key = 'mana'
     for update;
     if not found then raise exception 'Esta ficha não possui o atributo Mana'; end if;
+
+    _mana_max := public.calculate_character_resource_max(_fighter_id, 'mana');
+    if _fighter.value ->> 'mode' = 'percent' then
+      _base_regen := ceil(_mana_max * _base_regen / 100);
+    else
+      _base_regen := floor(_base_regen);
+    end if;
 
     select
       coalesce(sum(case when modifiers.polarity = 'buff' then modifiers.amount else -modifiers.amount end)
@@ -470,7 +481,6 @@ begin
 
     if not _regen_blocked then
       _adjusted_regen := greatest(0, floor(_base_regen * (1 + coalesce(_percent_regen, 0) / 100) + coalesce(_fixed_regen, 0)));
-      _mana_max := public.calculate_character_resource_max(_fighter_id, 'mana');
       update public.character_attributes
       set current_value = least(_mana_max, greatest(0, coalesce(current_value, 0) + _adjusted_regen)),
           updated_at = now()
