@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, type QueryClient, type QueryKey } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Crosshair, Dices, Plus, Swords, Trash2, Copy, Footprints, RotateCw, Minus, Brain, Activity } from "lucide-react";
 import { toast } from "sonner";
@@ -49,20 +49,52 @@ function totalOf(def: AttributeDef, a: Attr | undefined, mods: Record<string, nu
 const diceMod = (mine: number, theirs: number) => Math.max(0, Math.floor((mine - theirs) / 10));
 const dice = (m: number) => `1d20+${m}`;
 
+// Coalesce Realtime notifications and explicit post-action refreshes into one batch.
+// A single turn can update many effect rows, so invalidating on every row causes repeated refetches.
+type PendingCombatRefresh = {
+  timer?: ReturnType<typeof setTimeout>;
+  queryKeys: Map<string, QueryKey>;
+};
+
+const pendingCombatRefreshes = new WeakMap<QueryClient, PendingCombatRefresh>();
+
+function scheduleCombatRefresh(queryClient: QueryClient, ...queryKeys: QueryKey[]) {
+  const batch = pendingCombatRefreshes.get(queryClient) ?? { queryKeys: new Map<string, QueryKey>() };
+  pendingCombatRefreshes.set(queryClient, batch);
+
+  for (const queryKey of queryKeys) {
+    batch.queryKeys.set(JSON.stringify(queryKey), queryKey);
+  }
+
+  if (batch.timer) clearTimeout(batch.timer);
+  batch.timer = setTimeout(() => {
+    if (pendingCombatRefreshes.get(queryClient) !== batch) return;
+    pendingCombatRefreshes.delete(queryClient);
+    const keysToRefresh = [...batch.queryKeys.values()];
+    void Promise.all(keysToRefresh.map((queryKey) => queryClient.invalidateQueries({ queryKey })));
+  }, 150);
+}
+
 function useLiveBattles() {
   const qc = useQueryClient();
   useEffect(() => {
-    const refresh = () => qc.invalidateQueries({ queryKey: ["battles"] });
+    const refreshBattles = () => scheduleCombatRefresh(qc, ["battles"]);
     const ch = supabase
       .channel("battles-live")
-      .on("postgres_changes", { event: "*", schema: "public", table: "battles" }, refresh)
-      .on("postgres_changes", { event: "*", schema: "public", table: "battle_participants" }, refresh)
-      .on("postgres_changes", { event: "*", schema: "public", table: "character_attributes" }, refresh)
-      .on("postgres_changes", { event: "*", schema: "public", table: "battle_effects" }, () => { refresh(); qc.invalidateQueries({ queryKey: ["battle-effects"] }); qc.invalidateQueries({ queryKey: ["character-active-effects"] }); })
-      .on("postgres_changes", { event: "*", schema: "public", table: "character_abilities" }, () => { qc.invalidateQueries({ queryKey: ["character-abilities"] }); qc.invalidateQueries({ queryKey: ["character-abilities-battle"] }); })
-      .on("postgres_changes", { event: "*", schema: "public", table: "abilities" }, () => { qc.invalidateQueries({ queryKey: ["abilities"] }); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "battles" }, refreshBattles)
+      .on("postgres_changes", { event: "*", schema: "public", table: "battle_participants" }, refreshBattles)
+      .on("postgres_changes", { event: "*", schema: "public", table: "character_attributes" }, refreshBattles)
+      .on("postgres_changes", { event: "*", schema: "public", table: "battle_effects" }, () => {
+        scheduleCombatRefresh(qc, ["battles"], ["battle-effects"], ["character-active-effects"]);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "character_abilities" }, () => {
+        scheduleCombatRefresh(qc, ["character-abilities"], ["character-abilities-battle"]);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "abilities" }, () => {
+        scheduleCombatRefresh(qc, ["abilities"]);
+      })
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    return () => { void supabase.removeChannel(ch); };
   }, [qc]);
   return useQuery({
     queryKey: ["battles"],
@@ -118,7 +150,8 @@ function CombatPage() {
   );
 }
 
-type BattleRow = NonNullable<ReturnType<typeof useLiveBattles>["data"]>[number];
+type BattlesData = NonNullable<ReturnType<typeof useLiveBattles>["data"]>;
+type BattleRow = BattlesData[number];
 
 function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster: boolean; userId: string }) {
   const { data: defs } = useDefs();
@@ -181,8 +214,8 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
     return Math.max(0, Math.floor(base * (1 + percent / 100) + fixed));
   };
   async function advanceCombatTurn(characterId: string | null) {
-    // Each click is accepted. The database locks the battle row and serializes turns,
-    // so rapid clicks queue as separate atomic advances instead of overwriting counters.
+    // The database transaction remains authoritative; reconcile the cached counter from its
+    // returned value so the UI does not wait for a follow-up SELECT.
     if (!isMaster) return;
     turnAdvanceRef.current += 1;
     setTurnAdvancing(true);
@@ -216,6 +249,33 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
         return;
       }
 
+      const confirmedTurn = Number(nextTurn);
+      if (Number.isFinite(confirmedTurn)) {
+        qc.setQueryData<BattlesData>(["battles"], (current) => {
+          if (!current) return current;
+          return current.map((cachedBattle) => {
+            if (cachedBattle.id !== battle.id) return cachedBattle;
+            if (characterId === null) {
+              return {
+                ...cachedBattle,
+                turn_count: Math.max(Number(cachedBattle.turn_count ?? 0), confirmedTurn),
+              };
+            }
+            return {
+              ...cachedBattle,
+              battle_participants: cachedBattle.battle_participants.map((participant) => {
+                const participantCharacterId = (participant.characters as { id?: string } | null)?.id;
+                if (participantCharacterId !== characterId) return participant;
+                return {
+                  ...participant,
+                  turn_count: Math.max(Number(participant.turn_count ?? 0), confirmedTurn),
+                };
+              }),
+            };
+          });
+        });
+      }
+
       if (characterId) {
         const fighter = turnFighters[0];
         toast.success("Turno individual de " + fighter.name + " avançado para " + nextTurn + "; regeneração configurada aplicada.");
@@ -223,12 +283,15 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
         toast.success("Turno " + nextTurn + ": regeneração configurada aplicada.");
       }
 
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: ["battles"] }),
-        qc.invalidateQueries({ queryKey: ["battle-effects", battle.id] }),
-        qc.invalidateQueries({ queryKey: ["character-active-effects"] }),
-        qc.invalidateQueries({ queryKey: ["character-abilities-battle"] }),
-      ]);
+      // Share a debounced batch with Realtime. The local counter is instant; this background
+      // refresh reconciles effects, Mana, cooldowns, and any concurrent changes from other users.
+      scheduleCombatRefresh(
+        qc,
+        ["battles"],
+        ["battle-effects", battle.id],
+        ["character-active-effects"],
+        ["character-abilities-battle"],
+      );
     } finally {
       turnAdvanceRef.current = Math.max(0, turnAdvanceRef.current - 1);
       setTurnAdvancing(turnAdvanceRef.current > 0);
