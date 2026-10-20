@@ -77,6 +77,11 @@ export function useCharacterLive(id: string | undefined) {
           qc.invalidateQueries({ queryKey: ["character-abilities-battle"] });
         },
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "battle_effects", filter: `character_id=eq.${id}` },
+        () => qc.invalidateQueries({ queryKey: ["character-active-effects", id] }),
+      )
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
