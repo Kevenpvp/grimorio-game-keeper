@@ -76,7 +76,9 @@ export function PhysicalPointsDistribution({
           <h2 className="text-lg text-gold">Pontos Extras de Atributos Físicos</h2>
           <p className="mt-1 text-xs text-muted-foreground">Só podem ser distribuídos em Força, Defesa física, Velocidade e Velocidade de ataque. Estes pontos são separados dos pontos livres normais.</p>
           {physicalPointsGranted === 0 && (
-            <p className="mt-2 text-xs text-amber-500">Esta ficha ainda não recebeu pontos físicos extras. A quantidade disponível depende dos pontos físicos configurados na raça e na virtude escolhidas.</p>
+            <p className="mt-2 text-xs text-amber-500">
+              Nenhum ponto físico extra foi concedido a esta ficha. Os bônus como “+5 Força” são modificadores de atributo e não formam esse saldo distribuível. O mestre precisa configurar “Pontos extras de atributos físicos” na raça ou virtude.
+            </p>
           )}
         </div>
         <div className="w-full space-y-1 sm:max-w-xs">
