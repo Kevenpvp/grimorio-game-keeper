@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
-import { computeValue, traitMods, useDefs, useMe, useRaces, useVirtues, type AttributeDef } from "@/lib/sheets";
+import { computeValue, physicalAttributePoints, traitMods, useDefs, useMe, useRaces, useVirtues, type AttributeDef } from "@/lib/sheets";
 import { Portrait } from "@/components/sheet/CharacterSheetView";
 import { StatBar } from "@/components/sheet/StatBar";
 import { cn } from "@/lib/utils";
@@ -30,19 +30,20 @@ export const Route = createFileRoute("/_authenticated/combate")({
 });
 
 type Attr = { attribute_key: string; current_value: number; max_value: number; points: number; bonus: number };
-type BattleEffect = { id: string; battle_id: string | null; character_id: string; name: string; effect_type: 'status' | 'regeneration' | 'mana_used' | 'no_regen_hp' | 'no_regen_mana' | 'magic_prohibition' | 'stun' | 'damage_dealt'; attribute_key: string | null; polarity: 'buff' | 'debuff'; value_mode: 'percent' | 'fixed'; amount: number; duration: number; duration_scope: 'individual' | 'global'; damage_scope?: 'any' | 'physical' | 'magical'; source_character_ability_id?: string | null; effect_group_id?: string | null; is_end_effect?: boolean };
+type BattleEffect = { id: string; battle_id: string | null; character_id: string; name: string; effect_type: 'status' | 'regeneration' | 'mana_used' | 'no_regen_hp' | 'no_regen_mana' | 'magic_prohibition' | 'no_mana' | 'stun' | 'damage_dealt'; attribute_key: string | null; polarity: 'buff' | 'debuff'; value_mode: 'percent' | 'fixed'; amount: number; duration: number; duration_scope: 'individual' | 'global'; damage_scope?: 'any' | 'physical' | 'magical'; source_character_ability_id?: string | null; effect_group_id?: string | null; is_end_effect?: boolean };
 type Fighter = {
   id: string; name: string; player_name: string; photo_path: string | null; race_id: string | null; virtue_id: string | null; owner_id: string | null;
+  race_physical_allocations: unknown; virtue_physical_allocations: unknown; race_physical_points_granted: number; virtue_physical_points_granted: number;
   body: number; sanity: number; participant_turn_count?: number;
   character_attributes: Attr[];
 };
 
 /** Applied total of an attribute (points + race + buff/debuff). */
-function totalOf(def: AttributeDef, a: Attr | undefined, mods: Record<string, number>) {
+function totalOf(def: AttributeDef, a: Attr | undefined, mods: Record<string, number>, physicalPoints = 0) {
   const race = mods[def.key] ?? 0;
   const value = !def.accepts_points
     ? (a?.max_value ?? 0) + race + (a?.bonus ?? 0)
-    : computeValue(def, (a?.points ?? 0) + race) + (a?.bonus ?? 0);
+    : computeValue(def, (a?.points ?? 0) + race + physicalPoints) + (a?.bonus ?? 0);
   // A racial penalty must never make a character's maximum HP zero or negative.
   return def.key === "hp" ? Math.max(1, value) : value;
 }
@@ -101,7 +102,7 @@ function useLiveBattles() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("battles")
-        .select("*, battle_participants(sort_order,turn_count, characters(id,name,player_name,photo_path,race_id,virtue_id,owner_id,body,sanity,character_attributes(attribute_key,current_value,max_value,points,bonus)))")
+        .select("*, battle_participants(sort_order,turn_count, characters(id,name,player_name,photo_path,race_id,virtue_id,owner_id,race_physical_allocations,virtue_physical_allocations,race_physical_points_granted,virtue_physical_points_granted,body,sanity,character_attributes(attribute_key,current_value,max_value,points,bonus)))")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data;
@@ -194,13 +195,15 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
   };
   const val = (f: Fighter, key: string) => {
     const def = defs?.find((d) => d.key === key);
-    const base = def ? totalOf(def, f.character_attributes.find((a) => a.attribute_key === key), modsOf(f)) : 0;
+    const noMana = effects.some((e) => e.character_id === f.id && e.effect_type === "no_mana" && e.polarity === "debuff")
+      || passiveEffectTypeActive(abilitiesOf(f.id), "no_mana");
+    const base = def ? totalOf(def, f.character_attributes.find((a) => a.attribute_key === key), modsOf(f), physicalAttributePoints(f, key)) : 0;
     const active = effects.filter(e => e.character_id === f.id && e.effect_type === "status" && e.attribute_key === key);
     const passive = passiveStatusModifiers(abilitiesOf(f.id))[key] ?? { fixed: 0, percent: 0 };
     const fixed = passive.fixed + active.filter(e => e.value_mode === "fixed").reduce((n,e) => n + (e.polarity === "buff" ? 1 : -1) * Number(e.amount), 0);
     const percent = passive.percent + active.filter(e => e.value_mode === "percent").reduce((n,e) => n + (e.polarity === "buff" ? 1 : -1) * Number(e.amount), 0);
     const result = Math.floor((base + fixed) * (1 + percent / 100));
-    return key === "hp" ? Math.max(1, result) : Math.max(0, result);
+    return noMana && key === "mana" ? 0 : key === "hp" ? Math.max(1, result) : Math.max(0, result);
   };
   const blocked = (fighterId: string, type: "no_regen_hp" | "no_regen_mana") =>
     effects.some(e => e.character_id === fighterId && e.effect_type === type) ||
@@ -599,7 +602,7 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
               effect.effect_type === "status" ? `${effect.polarity === "buff" ? "Buff" : "Debuff"} de ${defs.find(d => d.key === effect.attribute_key)?.label ?? effect.attribute_key} (${effect.value_mode === "percent" ? `${effect.polarity === "debuff" ? "-" : "+"}${effect.amount}%` : `${effect.polarity === "debuff" ? "-" : "+"}${effect.amount} pontos`})` :
               effect.effect_type === "regeneration" ? `${effect.polarity === "buff" ? "Buff" : "Debuff"} de regeneração de ${effect.attribute_key === "hp" ? "HP" : "Mana"}: ${effect.value_mode === "percent" ? `${effect.polarity === "debuff" ? "-" : "+"}${effect.amount}%` : `${effect.polarity === "debuff" ? "-" : "+"}${effect.amount} fixos`}` :
               effect.effect_type === "no_regen_hp" ? "Impede regeneração de HP" :
-              effect.effect_type === "no_regen_mana" ? "Impede regeneração de Mana" : effect.effect_type === "mana_used" ? `Mana usada ${effect.polarity === "buff" ? "−" : "+"}${effect.value_mode === "percent" ? `${effect.amount}%` : `${effect.amount} Mana`}` : effect.effect_type === "damage_dealt" ? `${effect.polarity === "buff" ? "Buff" : "Debuff"} de dano ${effect.damage_scope === "physical" ? "físico" : effect.damage_scope === "magical" ? "mágico" : "qualquer dano"}: ${effect.polarity === "debuff" ? "-" : "+"}${effect.value_mode === "percent" ? `${effect.amount}%` : `${effect.amount} de dano`}` : effect.effect_type === "magic_prohibition" ? "Proibição de magia: não pode usar habilidades que consomem Mana" : "Stun (apenas visual)"
+              effect.effect_type === "no_regen_mana" ? "Impede regeneração de Mana" : effect.effect_type === "no_mana" ? "Sem Mana: Mana zerada e habilidades mágicas/que usam Mana bloqueadas" : effect.effect_type === "mana_used" ? `Mana usada ${effect.polarity === "buff" ? "−" : "+"}${effect.value_mode === "percent" ? `${effect.amount}%` : `${effect.amount} Mana`}` : effect.effect_type === "damage_dealt" ? `${effect.polarity === "buff" ? "Buff" : "Debuff"} de dano ${effect.damage_scope === "physical" ? "físico" : effect.damage_scope === "magical" ? "mágico" : "qualquer dano"}: ${effect.polarity === "debuff" ? "-" : "+"}${effect.value_mode === "percent" ? `${effect.amount}%` : `${effect.amount} de dano`}` : effect.effect_type === "magic_prohibition" ? "Proibição de magia: não pode usar habilidades que consomem Mana" : "Stun (apenas visual)"
             ];
             const expanded = expandedEffectId === effect.id;
             return <div key={effect.id} className="w-full rounded-md border border-border bg-muted/30 p-2">
@@ -620,8 +623,8 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
         </div>}
         <Input placeholder="Nome do efeito" value={effectName} onChange={e => setEffectName(e.target.value)} />
         <div className="grid grid-cols-2 gap-2">
-          <select className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={effectType} onChange={e => { const type = e.target.value as BattleEffect["effect_type"]; setEffectType(type); if(type === "regeneration") setEffectAttr("hp"); if(type === "magic_prohibition") setEffectPolarity("debuff"); }}>
-            <option value="status">Buff/debuff de status</option><option value="regeneration">Buff/debuff de regeneração</option><option value="no_regen_hp">Não regenera HP</option><option value="no_regen_mana">Não regenera Mana</option><option value="damage_dealt">Dano Causado</option><option value="magic_prohibition">Proibição de magia (debuff)</option><option value="stun">Stun (visual)</option>
+          <select className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={effectType} onChange={e => { const type = e.target.value as BattleEffect["effect_type"]; setEffectType(type); if(type === "regeneration") setEffectAttr("hp"); if(type === "magic_prohibition" || type === "no_mana") setEffectPolarity("debuff"); }}>
+            <option value="status">Buff/debuff de status</option><option value="regeneration">Buff/debuff de regeneração</option><option value="no_regen_hp">Não regenera HP</option><option value="no_regen_mana">Não regenera Mana</option><option value="no_mana">Sem Mana (debuff)</option><option value="damage_dealt">Dano Causado</option><option value="magic_prohibition">Proibição de magia (debuff)</option><option value="stun">Stun (visual)</option>
           </select>
           {(effectType === "status" || effectType === "regeneration") && <select className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={effectAttr} onChange={e => setEffectAttr(e.target.value)}>{(effectType === "regeneration" ? [{key:"hp",label:"HP"},{key:"mana",label:"Mana"}] : defs.map(d => ({key:d.key,label:d.key === "hp" ? "HP máximo" : d.key === "mana" ? "Mana máxima" : d.label}))).map(d => <option key={d.key} value={d.key}>{d.label}</option>)}</select>}
           {effectType === "damage_dealt" && <label className="col-span-2 space-y-1 text-xs font-medium"><span>Tipo de dano afetado</span><select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={effectDamageScope} onChange={e => setEffectDamageScope(e.target.value as "any" | "physical" | "magical")}><option value="physical">Físico</option><option value="magical">Mágico</option><option value="any">Qualquer dano</option></select></label>}
@@ -630,7 +633,7 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
           <label className="col-span-2 space-y-1 text-xs font-medium"><span>Duração (quantos turnos)</span><Input aria-label="Duração em turnos" type="number" min="1" value={effectDuration} onChange={e => setEffectDuration(e.target.value)} /></label>
           <p className="col-span-2 text-xs text-muted-foreground">Cada vez que qualquer turno for avançado, todos os efeitos ativos perdem 1 turno de duração.</p>
         </div>
-        <Button size="sm" onClick={() => { const duration = Math.floor(Number(effectDuration)), amount = Number(effectAmount); const needsAttribute = effectType === "status" || effectType === "regeneration"; const needsAmount = needsAttribute || effectType === "damage_dealt"; if (!effectName.trim() || duration < 1 || !Number.isFinite(duration) || (needsAmount && (!Number.isFinite(amount) || amount < 0))) { toast.error("Preencha o nome e uma duração válida; efeitos de status/regeneração também precisam de um valor válido"); return; } onAddEffect({name:effectName.trim(),effect_type:effectType,attribute_key:needsAttribute ? effectAttr : null,damage_scope:effectType === "damage_dealt" ? effectDamageScope : "any",polarity:effectType === "magic_prohibition" ? "debuff" : effectPolarity,value_mode:effectType === "magic_prohibition" ? "fixed" : effectMode,amount:needsAmount ? amount : 0,duration,duration_scope:"global"}); setEffectName(""); }}><Plus className="mr-1 h-3 w-3" /> Aplicar efeito</Button>
+        <Button size="sm" onClick={() => { const duration = Math.floor(Number(effectDuration)), amount = Number(effectAmount); const needsAttribute = effectType === "status" || effectType === "regeneration"; const needsAmount = needsAttribute || effectType === "damage_dealt"; if (!effectName.trim() || duration < 1 || !Number.isFinite(duration) || (needsAmount && (!Number.isFinite(amount) || amount < 0))) { toast.error("Preencha o nome e uma duração válida; efeitos de status/regeneração também precisam de um valor válido"); return; } onAddEffect({name:effectName.trim(),effect_type:effectType,attribute_key:needsAttribute ? effectAttr : null,damage_scope:effectType === "damage_dealt" ? effectDamageScope : "any",polarity:effectType === "magic_prohibition" || effectType === "no_mana" ? "debuff" : effectPolarity,value_mode:effectType === "magic_prohibition" || effectType === "no_mana" ? "fixed" : effectMode,amount:needsAmount ? amount : 0,duration,duration_scope:"global"}); setEffectName(""); }}><Plus className="mr-1 h-3 w-3" /> Aplicar efeito</Button>
         </div>
       </details>
     </div>
