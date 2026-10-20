@@ -50,7 +50,7 @@ function HabilidadesPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-2xl text-gold"><WandSparkles className="h-6 w-6" /> Habilidades</h1>
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">Crie habilidades ativas com cooldown e custo de Mana, ou passivas que permanecem aplicadas enquanto estiverem na ficha.</p>
+          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">Crie habilidades ativáveis com cooldown e custo de Mana e configure efeitos passivos separados, que permanecem aplicados enquanto a habilidade estiver na ficha.</p>
         </div>
         <Button onClick={() => void create()}><Plus className="mr-1 h-4 w-4" /> Nova habilidade</Button>
       </div>
@@ -87,7 +87,7 @@ function AbilityEditor({ ability, defs }: { ability: Ability; defs: NonNullable<
     if (!name.trim()) { toast.error("Informe o nome da habilidade"); return; }
     if (!Number.isFinite(mana) || mana < 0) { toast.error("O custo de Mana não pode ser negativo"); return; }
     if (canActivate && (!Number.isFinite(cool) || cool < 1)) {
-      toast.error("Uma habilidade ativa precisa ter cooldown de pelo menos 1 turno. Marque como passiva se não puder ser ativada.");
+      toast.error("Uma habilidade ativável precisa ter cooldown de pelo menos 1 turno. Marque como não ativável se não puder ser usada.");
       return;
     }
     const allConfiguredEffects = [...effects, ...passiveEffects];
