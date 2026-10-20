@@ -107,7 +107,7 @@ export function AbilityEffectsEditor({
                     <option value="fixed">Valor fixo</option><option value="percent">Porcentagem</option>
                   </select>
                   <label className="space-y-1 text-xs font-medium">
-                    Valor ({effect.value_mode === "percent" ? "%" : "pontos"})
+                    Valor ({effect.value_mode === "percent" ? "%" : effect.effect_type === "mana_regeneration" || effect.effect_type === "mana_used" ? "Mana" : "pontos"})
                     <Input type="number" min="0" value={effect.amount} onChange={(e) => patch(index, { amount: Math.max(0, Number(e.target.value) || 0) })} />
                   </label>
                 </>
