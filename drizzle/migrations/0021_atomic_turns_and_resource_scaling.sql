@@ -277,7 +277,6 @@ security definer
 set search_path = public
 as $$
 declare
-  _character_id uuid;
   _attribute_key text;
   _old_max numeric;
   _new_max numeric;
@@ -285,28 +284,28 @@ begin
   if tg_op = 'INSERT' then
     for _attribute_key in select unnest(array['hp','mana'])
     loop
-      _old_max := public.calculate_character_resource_max(new.character_id, _attribute_key);
-      _new_max := public.calculate_character_resource_max(
-        new.character_id, _attribute_key, null, new.id, '[]'::jsonb, coalesce(new.passive_effects, '[]'::jsonb)
-      );
+      _old_max := public.calculate_character_resource_max(new.character_id, _attribute_key, null, new.id);
+      _new_max := public.calculate_character_resource_max(new.character_id, _attribute_key);
       perform public.scale_character_resource_current(new.character_id, _attribute_key, _old_max, _new_max);
     end loop;
     return new;
   elsif tg_op = 'DELETE' then
     for _attribute_key in select unnest(array['hp','mana'])
     loop
-      _old_max := public.calculate_character_resource_max(old.character_id, _attribute_key);
-      _new_max := public.calculate_character_resource_max(old.character_id, _attribute_key, null, old.id);
+      _old_max := public.calculate_character_resource_max(
+        old.character_id, _attribute_key, null, old.id, '[]'::jsonb, coalesce(old.passive_effects, '[]'::jsonb)
+      );
+      _new_max := public.calculate_character_resource_max(old.character_id, _attribute_key);
       perform public.scale_character_resource_current(old.character_id, _attribute_key, _old_max, _new_max);
     end loop;
     return old;
   elsif tg_op = 'UPDATE' then
     for _attribute_key in select unnest(array['hp','mana'])
     loop
-      _old_max := public.calculate_character_resource_max(old.character_id, _attribute_key);
-      _new_max := public.calculate_character_resource_max(
-        new.character_id, _attribute_key, null, old.id, '[]'::jsonb, coalesce(new.passive_effects, '[]'::jsonb)
+      _old_max := public.calculate_character_resource_max(
+        old.character_id, _attribute_key, null, new.id, '[]'::jsonb, coalesce(old.passive_effects, '[]'::jsonb)
       );
+      _new_max := public.calculate_character_resource_max(new.character_id, _attribute_key);
       perform public.scale_character_resource_current(new.character_id, _attribute_key, _old_max, _new_max);
     end loop;
     return new;
@@ -319,16 +318,53 @@ revoke all on function public.scale_resource_on_passive_ability_change() from pu
 grant execute on function public.scale_resource_on_passive_ability_change() to service_role;
 
 create trigger character_abilities_scale_resource_insert
-before insert on public.character_abilities
+after insert on public.character_abilities
 for each row execute function public.scale_resource_on_passive_ability_change();
 
 create trigger character_abilities_scale_resource_delete
-before delete on public.character_abilities
+after delete on public.character_abilities
 for each row execute function public.scale_resource_on_passive_ability_change();
 
 create trigger character_abilities_scale_resource_update
-before update of passive_effects on public.character_abilities
+after update of passive_effects on public.character_abilities
 for each row execute function public.scale_resource_on_passive_ability_change();
+
+-- Use the effective maximum for HP/Mana while a temporary or passive status modifier is active.
+-- The resource scaler triggers run AFTER the modifier row changes, so this calculation sees
+-- the real new state before validating the new current HP/Mana.
+create or replace function public.validate_attribute()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  _capped boolean;
+  _effective_max numeric;
+begin
+  if new.current_value < 0 then raise exception 'O valor atual não pode ser negativo'; end if;
+  if new.max_value < 0 then raise exception 'O valor máximo não pode ser negativo'; end if;
+
+  select ad.cap_current into _capped
+  from public.attribute_definitions ad
+  where ad.key = new.attribute_key;
+
+  if _capped then
+    if new.attribute_key in ('hp','mana') then
+      _effective_max := public.calculate_character_resource_max(new.character_id, new.attribute_key);
+    else
+      _effective_max := new.max_value;
+    end if;
+
+    if new.current_value > coalesce(_effective_max, new.max_value) then
+      raise exception 'O valor atual não pode ultrapassar o máximo efetivo';
+    end if;
+  end if;
+
+  new.updated_at := now();
+  return new;
+end;
+$$;
 
 -- One transaction per turn advance. Locking the battle row serializes concurrent advances so
 -- counters, cooldowns, regeneration, end effects, and each duration decrement cannot overwrite
