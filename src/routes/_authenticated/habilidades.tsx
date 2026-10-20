@@ -43,6 +43,7 @@ function HabilidadesPage() {
       name: "Nova habilidade", description: "", is_passive: false, can_activate: true, is_magical: true, self_target_only: false, cooldown_turns: 1, mana_cost: 0, effects: [], passive_effects: [], end_effects: [],
     }).select("id").single();
     if (error) { toast.error(error.message); return; }
+    setSearch("");
     setPendingSaveIds((current) => [data.id, ...current.filter((id) => id !== data.id)]);
     toast.success("Nova habilidade criada. Ela ficará no topo até você salvar.");
     await qc.invalidateQueries({ queryKey: ["abilities"] });
