@@ -170,13 +170,13 @@ export function CharacterAbilitiesPanel({
                 {ability.passive_effects.length > 0 && (
                   <div className="mt-2 space-y-1 border-t border-border pt-2 text-xs text-muted-foreground">
                     <div className="font-semibold text-gold">Efeitos passivos · permanentes</div>
-                    {ability.passive_effects.map((effect, index) => <div key={index}>{effectSummary(effect, defs ?? [])}</div>)}
+                    {ability.passive_effects.map((effect, index) => <div key={index}>{effectSummary(effect, defs ?? [], damageTypes)}</div>)}
                   </div>
                 )}
                 {ability.end_effects.length > 0 && ability.can_activate && (
                   <div className="mt-2 space-y-1 border-t border-border pt-2 text-xs text-muted-foreground">
                     <div className="font-semibold text-gold">Efeitos quando a habilidade acaba</div>
-                    {ability.end_effects.map((effect, index) => <div key={index}>{effectSummary(effect, defs ?? [])} · {effect.duration} turno(s)</div>)}
+                    {ability.end_effects.map((effect, index) => <div key={index}>{effectSummary(effect, defs ?? [], damageTypes)} · {effect.duration} turno(s)</div>)}
                   </div>
                 )}
               </article>
