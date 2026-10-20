@@ -211,6 +211,13 @@
       "when": 1792663200000,
       "tag": "0029_incoming_damage_mitigation",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1792666800000,
+      "tag": "0030_multi_select_damage_mitigation",
+      "breakpoints": true
     }
   ]
 }
