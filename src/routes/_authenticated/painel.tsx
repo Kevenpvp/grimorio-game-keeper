@@ -10,6 +10,7 @@ import { useCharacter, useCharacterLive, useDefs, useMe } from "@/lib/sheets";
 import { CharacterSheetView, Portrait } from "@/components/sheet/CharacterSheetView";
 import { StatBar } from "@/components/sheet/StatBar";
 import { PointsDistribution } from "@/components/sheet/PointsDistribution";
+import { PhysicalPointsDistribution } from "@/components/sheet/PhysicalPointsDistribution";
 import { RacePicker } from "@/components/sheet/RacePicker";
 import { CharacterAbilitiesPanel } from "@/components/abilities/CharacterAbilities";
 
@@ -63,6 +64,7 @@ function PlayerSheet({ id }: { id: string }) {
       <RacePicker character={data.character} isMaster={false} />
       <CharacterAbilitiesPanel characterId={data.character.id} characterName={data.character.name} mode="sheet" canUse />
       <CharacterSheetView character={data.character} attrs={data.attrs} defs={defs} />
+      <PhysicalPointsDistribution character={data.character} attrs={data.attrs} defs={defs} />
       {data.character.available_points > 0 && (
         <PointsDistribution character={data.character} attrs={data.attrs} defs={defs} />
       )}
