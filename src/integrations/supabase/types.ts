@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       abilities: {
         Row: {
+          can_activate: boolean
           cooldown_turns: number
           created_at: string
           description: string | null
@@ -24,8 +25,10 @@ export type Database = {
           is_passive: boolean
           mana_cost: number
           name: string
+          passive_effects: Json
         }
         Insert: {
+          can_activate?: boolean
           cooldown_turns?: number
           created_at?: string
           description?: string | null
@@ -34,8 +37,10 @@ export type Database = {
           is_passive?: boolean
           mana_cost?: number
           name: string
+          passive_effects?: Json
         }
         Update: {
+          can_activate?: boolean
           cooldown_turns?: number
           created_at?: string
           description?: string | null
@@ -44,6 +49,7 @@ export type Database = {
           is_passive?: boolean
           mana_cost?: number
           name?: string
+          passive_effects?: Json
         }
         Relationships: []
       }
@@ -237,6 +243,7 @@ export type Database = {
       character_abilities: {
         Row: {
           ability_id: string
+          can_activate: boolean
           character_id: string
           cooldown_remaining: number
           cooldown_turns: number
@@ -247,9 +254,11 @@ export type Database = {
           is_passive: boolean
           mana_cost: number
           name: string
+          passive_effects: Json
         }
         Insert: {
           ability_id: string
+          can_activate?: boolean
           character_id: string
           cooldown_remaining?: number
           cooldown_turns?: number
@@ -260,9 +269,11 @@ export type Database = {
           is_passive?: boolean
           mana_cost?: number
           name: string
+          passive_effects?: Json
         }
         Update: {
           ability_id?: string
+          can_activate?: boolean
           character_id?: string
           cooldown_remaining?: number
           cooldown_turns?: number
@@ -273,6 +284,7 @@ export type Database = {
           is_passive?: boolean
           mana_cost?: number
           name?: string
+          passive_effects?: Json
         }
         Relationships: [
           {
@@ -549,7 +561,7 @@ export type Database = {
           _character_ability_id: string
           _target_character_id: string
         }
-        Returns: undefined
+        Returns: number
       }
       apply_battle_damage: {
         Args: {
