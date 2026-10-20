@@ -618,7 +618,7 @@ export type Database = {
     Functions: {
       advance_combat_turn: {
         Args: {
-          _base_mana_regeneration?: Json
+          _mana_regeneration_settings?: Json
           _battle_id: string
           _character_id?: string | null
         }
