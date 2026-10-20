@@ -250,6 +250,8 @@ export type Database = {
           player_name: string
           race_id: string | null
           race_points_granted: number
+          virtue_id: string | null
+          virtue_points_granted: number
           sanity: number
           updated_at: string
         }
@@ -266,6 +268,8 @@ export type Database = {
           player_name?: string
           race_id?: string | null
           race_points_granted?: number
+          virtue_id?: string | null
+          virtue_points_granted?: number
           sanity?: number
           updated_at?: string
         }
@@ -282,6 +286,8 @@ export type Database = {
           player_name?: string
           race_id?: string | null
           race_points_granted?: number
+          virtue_id?: string | null
+          virtue_points_granted?: number
           sanity?: number
           updated_at?: string
         }
@@ -298,6 +304,13 @@ export type Database = {
             columns: ["race_id"]
             isOneToOne: false
             referencedRelation: "races"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "characters_virtue_id_fkey"
+            columns: ["virtue_id"]
+            isOneToOne: false
+            referencedRelation: "virtues"
             referencedColumns: ["id"]
           },
         ]
@@ -380,6 +393,33 @@ export type Database = {
         }
         Relationships: []
       }
+      virtues: {
+        Row: {
+          bonus_points: number
+          created_at: string
+          description: string | null
+          id: string
+          modifiers: Json
+          name: string
+        }
+        Insert: {
+          bonus_points?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          modifiers?: Json
+          name: string
+        }
+        Update: {
+          bonus_points?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          modifiers?: Json
+          name?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           id: string
@@ -416,6 +456,10 @@ export type Database = {
       }
       choose_race: {
         Args: { _character_id: string; _race_id: string }
+        Returns: undefined
+      }
+      choose_character_traits: {
+        Args: { _character_id: string; _race_id: string; _virtue_id: string }
         Returns: undefined
       }
       has_role: {
