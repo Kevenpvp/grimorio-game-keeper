@@ -621,6 +621,14 @@ export type Database = {
         Args: { _character_id: string; _race_id: string; _virtue_id: string }
         Returns: undefined
       }
+      choose_character_race: {
+        Args: { _character_id: string; _race_id: string | null }
+        Returns: undefined
+      }
+      choose_character_virtue: {
+        Args: { _character_id: string; _virtue_id: string | null }
+        Returns: undefined
+      }
       choose_race: {
         Args: { _character_id: string; _race_id: string }
         Returns: undefined
