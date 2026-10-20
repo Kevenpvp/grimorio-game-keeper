@@ -115,6 +115,26 @@ export function computeValue(def: AttributeDef, points: number) {
   return Math.round((Number(def.base_value) + points * Number(def.points_multiplier)) * 100) / 100;
 }
 
+/**
+ * Apply Body/Sanity penalties to effective attributes without mutating invested points:
+ * Body scales physical defense, speed and attack speed; Sanity scales IQ and mental strength.
+ */
+export function conditionAdjustedValue(
+  character: Pick<Character, "body" | "sanity">,
+  key: string,
+  value: number,
+) {
+  let condition = 100;
+  if (key === "phys_def" || key === "speed" || key === "atk_speed") {
+    condition = clampPct(character.body);
+  } else if (key === "iq" || key === "mental") {
+    condition = clampPct(character.sanity);
+  } else {
+    return value;
+  }
+  return Math.max(0, Math.floor(value * condition / 100));
+}
+
 export type Race = Tables<"races">;
 export type Virtue = Tables<"virtues">;
 export type RaceMods = Record<string, number>;
