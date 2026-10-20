@@ -169,66 +169,64 @@ declare
   _old_max numeric;
   _new_max numeric;
   _extra jsonb := '[]'::jsonb;
+  _old_effect_is_active boolean;
+  _new_effect_is_active boolean;
 begin
   if tg_op = 'INSERT' then
     if new.effect_type <> 'status' or new.attribute_key not in ('hp', 'mana') then return new; end if;
-    if new.battle_id is not null and not exists (
+    _new_effect_is_active := new.battle_id is null or exists (
       select 1 from public.battles b where b.id = new.battle_id and b.active
-    ) then return new; end if;
+    );
+    if not _new_effect_is_active then return new; end if;
 
     _character_id := new.character_id;
     _attribute_key := new.attribute_key;
-    _old_max := public.calculate_character_resource_max(_character_id, _attribute_key);
-    _extra := jsonb_build_array(jsonb_build_object(
-      'effect_type', new.effect_type,
-      'attribute_key', new.attribute_key,
-      'polarity', new.polarity,
-      'value_mode', new.value_mode,
-      'amount', new.amount
-    ));
-    _new_max := public.calculate_character_resource_max(
-      _character_id, _attribute_key, null, null, _extra, '[]'::jsonb
-    );
+    _old_max := public.calculate_character_resource_max(_character_id, _attribute_key, new.id);
+    _new_max := public.calculate_character_resource_max(_character_id, _attribute_key);
     perform public.scale_character_resource_current(_character_id, _attribute_key, _old_max, _new_max);
     return new;
+
   elsif tg_op = 'DELETE' then
     if old.effect_type <> 'status' or old.attribute_key not in ('hp', 'mana') then return old; end if;
-    if old.battle_id is not null and not exists (
+    _old_effect_is_active := old.battle_id is null or exists (
       select 1 from public.battles b where b.id = old.battle_id and b.active
-    ) then return old; end if;
+    );
+    if not _old_effect_is_active then return old; end if;
 
     _character_id := old.character_id;
     _attribute_key := old.attribute_key;
-    _old_max := public.calculate_character_resource_max(_character_id, _attribute_key);
-    _new_max := public.calculate_character_resource_max(
-      _character_id, _attribute_key, old.id
+    _extra := jsonb_build_array(jsonb_build_object(
+      'effect_type', old.effect_type,
+      'attribute_key', old.attribute_key,
+      'polarity', old.polarity,
+      'value_mode', old.value_mode,
+      'amount', old.amount
+    ));
+    _old_max := public.calculate_character_resource_max(
+      _character_id, _attribute_key, old.id, null, _extra, '[]'::jsonb
     );
+    _new_max := public.calculate_character_resource_max(_character_id, _attribute_key);
     perform public.scale_character_resource_current(_character_id, _attribute_key, _old_max, _new_max);
     return old;
+
   elsif tg_op = 'UPDATE' then
     if old.effect_type = 'status' and old.attribute_key in ('hp', 'mana') then
       _character_id := old.character_id;
       _attribute_key := old.attribute_key;
-      _old_max := public.calculate_character_resource_max(_character_id, _attribute_key);
-      if new.effect_type = 'status'
-         and new.character_id = old.character_id
-         and new.attribute_key = old.attribute_key
-         and (new.battle_id is null or exists (
-           select 1 from public.battles b where b.id = new.battle_id and b.active
-         )) then
-        _extra := jsonb_build_array(jsonb_build_object(
-          'effect_type', new.effect_type,
-          'attribute_key', new.attribute_key,
-          'polarity', new.polarity,
-          'value_mode', new.value_mode,
-          'amount', new.amount
-        ));
-        _new_max := public.calculate_character_resource_max(
-          _character_id, _attribute_key, old.id, null, _extra, '[]'::jsonb
-        );
-      else
-        _new_max := public.calculate_character_resource_max(_character_id, _attribute_key, old.id);
-      end if;
+      _old_effect_is_active := old.battle_id is null or exists (
+        select 1 from public.battles b where b.id = old.battle_id and b.active
+      );
+      _extra := case when _old_effect_is_active then jsonb_build_array(jsonb_build_object(
+        'effect_type', old.effect_type,
+        'attribute_key', old.attribute_key,
+        'polarity', old.polarity,
+        'value_mode', old.value_mode,
+        'amount', old.amount
+      )) else '[]'::jsonb end;
+      _old_max := public.calculate_character_resource_max(
+        _character_id, _attribute_key, new.id, null, _extra, '[]'::jsonb
+      );
+      _new_max := public.calculate_character_resource_max(_character_id, _attribute_key);
       perform public.scale_character_resource_current(_character_id, _attribute_key, _old_max, _new_max);
     end if;
 
@@ -238,20 +236,12 @@ begin
          or old.character_id is distinct from new.character_id) then
       _character_id := new.character_id;
       _attribute_key := new.attribute_key;
-      _old_max := public.calculate_character_resource_max(_character_id, _attribute_key, old.id);
-      if new.battle_id is null or exists (
+      _old_max := public.calculate_character_resource_max(_character_id, _attribute_key, new.id);
+      _new_effect_is_active := new.battle_id is null or exists (
         select 1 from public.battles b where b.id = new.battle_id and b.active
-      ) then
-        _extra := jsonb_build_array(jsonb_build_object(
-          'effect_type', new.effect_type,
-          'attribute_key', new.attribute_key,
-          'polarity', new.polarity,
-          'value_mode', new.value_mode,
-          'amount', new.amount
-        ));
-        _new_max := public.calculate_character_resource_max(
-          _character_id, _attribute_key, old.id, null, _extra, '[]'::jsonb
-        );
+      );
+      if _new_effect_is_active then
+        _new_max := public.calculate_character_resource_max(_character_id, _attribute_key);
       else
         _new_max := _old_max;
       end if;
@@ -268,15 +258,16 @@ revoke all on function public.scale_resource_on_battle_effect_change() from publ
 grant execute on function public.scale_resource_on_battle_effect_change() to service_role;
 
 create trigger battle_effects_scale_resource_insert
-before insert on public.battle_effects
+after insert on public.battle_effects
 for each row execute function public.scale_resource_on_battle_effect_change();
 
-create trigger battle_effects_scale_resource_delete
-before delete on public.battle_effects
+-- Run before the ability-end trigger (alphabetical order for AFTER DELETE triggers).
+create trigger battle_effects_a_resource_scale_delete
+after delete on public.battle_effects
 for each row execute function public.scale_resource_on_battle_effect_change();
 
 create trigger battle_effects_scale_resource_update
-before update of effect_type, attribute_key, polarity, value_mode, amount on public.battle_effects
+after update of effect_type, attribute_key, polarity, value_mode, amount on public.battle_effects
 for each row execute function public.scale_resource_on_battle_effect_change();
 
 create or replace function public.scale_resource_on_passive_ability_change()
