@@ -350,7 +350,7 @@ begin
   where ad.key = new.attribute_key;
 
   if _capped then
-    if new.attribute_key in ('hp','mana') then
+    if tg_op = 'UPDATE' and new.attribute_key in ('hp','mana') then
       _effective_max := public.calculate_character_resource_max(new.character_id, new.attribute_key);
     else
       _effective_max := new.max_value;
