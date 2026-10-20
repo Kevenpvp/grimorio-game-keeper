@@ -11,6 +11,7 @@ import { CharacterSheetView, Portrait } from "@/components/sheet/CharacterSheetV
 import { StatBar } from "@/components/sheet/StatBar";
 import { PointsDistribution } from "@/components/sheet/PointsDistribution";
 import { RacePicker } from "@/components/sheet/RacePicker";
+import { CharacterAbilitiesPanel } from "@/components/abilities/CharacterAbilities";
 
 export const Route = createFileRoute("/_authenticated/painel")({
   head: () => ({
@@ -60,6 +61,7 @@ function PlayerSheet({ id }: { id: string }) {
   return (
     <div className="space-y-6">
       <RacePicker character={data.character} isMaster={false} />
+      <CharacterAbilitiesPanel characterId={data.character.id} characterName={data.character.name} mode="sheet" canUse />
       <CharacterSheetView character={data.character} attrs={data.attrs} defs={defs} />
       {data.character.available_points > 0 && (
         <PointsDistribution character={data.character} attrs={data.attrs} defs={defs} />
