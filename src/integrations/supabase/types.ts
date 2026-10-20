@@ -250,6 +250,7 @@ export type Database = {
           created_at: string
           description: string | null
           effects: Json
+          granted_by_virtue_id: string | null
           id: string
           is_passive: boolean
           mana_cost: number
@@ -265,6 +266,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           effects?: Json
+          granted_by_virtue_id?: string | null
           id?: string
           is_passive?: boolean
           mana_cost?: number
@@ -280,6 +282,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           effects?: Json
+          granted_by_virtue_id?: string | null
           id?: string
           is_passive?: boolean
           mana_cost?: number
@@ -299,6 +302,13 @@ export type Database = {
             columns: ["character_id"]
             isOneToOne: false
             referencedRelation: "characters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "character_abilities_granted_by_virtue_id_fkey"
+            columns: ["granted_by_virtue_id"]
+            isOneToOne: false
+            referencedRelation: "virtues"
             referencedColumns: ["id"]
           },
         ]
@@ -522,6 +532,39 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      virtue_abilities: {
+        Row: {
+          ability_id: string
+          created_at: string
+          virtue_id: string
+        }
+        Insert: {
+          ability_id: string
+          created_at?: string
+          virtue_id: string
+        }
+        Update: {
+          ability_id?: string
+          created_at?: string
+          virtue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "virtue_abilities_ability_id_fkey"
+            columns: ["ability_id"]
+            isOneToOne: false
+            referencedRelation: "abilities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "virtue_abilities_virtue_id_fkey"
+            columns: ["virtue_id"]
+            isOneToOne: false
+            referencedRelation: "virtues"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       virtues: {
         Row: {
