@@ -398,23 +398,38 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
   return (
     <div className="space-y-2 rounded-md border border-border p-2">
       <div className="text-xs font-semibold text-muted-foreground">Recursos do personagem (mestre)</div>
-      <div className="space-y-2 border-b border-border pb-2">
-        <div className="text-xs font-medium">Regeneração de mana desta ficha</div>
-        <div className="grid grid-cols-2 gap-2">
-          <select aria-label="Modo de regeneração de mana" className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={manaRegenMode} onChange={(e) => onManaRegenModeChange(e.target.value as "percent" | "fixed")}>
-            <option value="percent">% da mana máxima</option><option value="fixed">Valor fixo</option>
-          </select>
-          <Input aria-label="Valor de regeneração de mana" type="number" min="0" value={manaRegenAmount} onChange={(e) => onManaRegenAmountChange(e.target.value)} />
-        </div>
-        <div className="text-xs font-medium">Regenerar HP desta ficha</div>
-        <div className="grid grid-cols-2 gap-2">
-          <select aria-label="Modo de regeneração de HP" className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={hpRegenMode} onChange={(e) => setHpRegenMode(e.target.value as "percent" | "fixed")}>
-            <option value="percent">% do HP máximo</option><option value="fixed">Valor fixo</option>
-          </select>
-          <Input aria-label="Valor de regeneração de HP" type="number" min="0" value={hpRegenAmount} onChange={(e) => setHpRegenAmount(e.target.value)} />
-        </div>
-        <Button size="sm" disabled={busy || hpRegenBlocked} onClick={() => void regenerateHp()}><Plus className="mr-1 h-3 w-3" /> Regenerar HP</Button>
+      <div className="space-y-2">
+        <details className="rounded-md border border-border">
+          <summary className="cursor-pointer select-none px-3 py-3 text-sm font-semibold hover:text-gold">Regeneração de mana</summary>
+          <div className="space-y-2 border-t border-border p-3">
+            <div className="text-xs font-medium">Regeneração de mana desta ficha</div>
+            <div className="grid grid-cols-2 gap-2">
+              <select aria-label="Modo de regeneração de mana" className="h-9 min-w-0 rounded-md border border-input bg-background px-2 text-sm" value={manaRegenMode} onChange={(e) => onManaRegenModeChange(e.target.value as "percent" | "fixed")}>
+                <option value="percent">% da mana máxima</option><option value="fixed">Valor fixo</option>
+              </select>
+              <Input aria-label="Valor de regeneração de mana" type="number" min="0" value={manaRegenAmount} onChange={(e) => onManaRegenAmountChange(e.target.value)} />
+            </div>
+            {manaRegenBlocked && <div className="text-xs text-destructive">Regeneração de Mana bloqueada.</div>}
+          </div>
+        </details>
+        <details className="rounded-md border border-border">
+          <summary className="cursor-pointer select-none px-3 py-3 text-sm font-semibold hover:text-gold">Regeneração de HP</summary>
+          <div className="space-y-2 border-t border-border p-3">
+            <div className="text-xs font-medium">Regenerar HP desta ficha</div>
+            <div className="grid grid-cols-2 gap-2">
+              <select aria-label="Modo de regeneração de HP" className="h-9 min-w-0 rounded-md border border-input bg-background px-2 text-sm" value={hpRegenMode} onChange={(e) => setHpRegenMode(e.target.value as "percent" | "fixed")}>
+                <option value="percent">% do HP máximo</option><option value="fixed">Valor fixo</option>
+              </select>
+              <Input aria-label="Valor de regeneração de HP" type="number" min="0" value={hpRegenAmount} onChange={(e) => setHpRegenAmount(e.target.value)} />
+            </div>
+            <Button size="sm" disabled={busy || hpRegenBlocked} onClick={() => void regenerateHp()}><Plus className="mr-1 h-3 w-3" /> Regenerar HP</Button>
+            {hpRegenBlocked && <div className="text-xs text-destructive">Regeneração de HP bloqueada.</div>}
+          </div>
+        </details>
       </div>
+      <details className="rounded-md border border-border">
+        <summary className="cursor-pointer select-none px-3 py-3 text-sm font-semibold hover:text-gold">Alterar Mana, Sanidade e Corpo</summary>
+        <div className="border-t border-border p-3">
       <div className="grid grid-cols-[1fr_auto] gap-2">
         <Input aria-label="Quantidade de mana a reduzir" type="number" min="1" value={manaDelta} onChange={(e) => setManaDelta(e.target.value)} />
         <Button size="sm" variant="outline" disabled={busy} onClick={() => void changeMana()}><Minus className="mr-1 h-3 w-3" /> − Mana</Button>
@@ -429,8 +444,12 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
           <Button size="sm" variant="outline" disabled={busy} onClick={() => void changePercent("body", bodyDelta, 1)}><Plus className="mr-1 h-3 w-3" /> Corpo</Button>
         </div>
       </div>
-      <div className="space-y-2 border-t border-border pt-2">
-        <div className="text-xs font-semibold text-muted-foreground">Efeitos ativos — toque/clique ou passe o mouse para ver detalhes</div>
+        </div>
+      </details>
+      <details className="rounded-md border border-border">
+        <summary className="cursor-pointer select-none px-3 py-3 text-sm font-semibold hover:text-gold">Efeitos ativos e aplicar efeito ({effects.length})</summary>
+        <div className="space-y-2 border-t border-border p-3">
+        <div className="text-xs font-semibold text-muted-foreground">Efeitos ativos — toque/clique em um efeito para ver os detalhes</div>
         {effects.length === 0 ? <p className="text-xs text-muted-foreground">Nenhum efeito ativo.</p> : <div className="flex flex-wrap gap-2">
           {effects.map(effect => {
             const details = [
@@ -468,8 +487,8 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
           <p className="col-span-2 text-xs text-muted-foreground">Cada vez que qualquer turno for avançado, todos os efeitos ativos perdem 1 turno de duração.</p>
         </div>
         <Button size="sm" onClick={() => { const duration = Math.floor(Number(effectDuration)), amount = Number(effectAmount); const needsAmount = effectType === "status" || effectType === "regeneration"; if (!effectName.trim() || duration < 1 || !Number.isFinite(duration) || (needsAmount && (!Number.isFinite(amount) || amount < 0))) { toast.error("Preencha o nome e uma duração válida; efeitos de status/regeneração também precisam de um valor válido"); return; } onAddEffect({name:effectName.trim(),effect_type:effectType,attribute_key:needsAmount ? effectAttr : null,polarity:effectPolarity,value_mode:effectMode,amount:needsAmount ? amount : 0,duration,duration_scope:"global"}); setEffectName(""); }}><Plus className="mr-1 h-3 w-3" /> Aplicar efeito</Button>
-        {hpRegenBlocked && <div className="text-xs text-destructive">Regeneração de HP bloqueada.</div>}{manaRegenBlocked && <div className="text-xs text-destructive">Regeneração de Mana bloqueada.</div>}
-      </div>
+        </div>
+      </details>
     </div>
   );
 }
