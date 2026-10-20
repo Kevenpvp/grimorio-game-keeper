@@ -156,6 +156,12 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
     const { error: turnError } = await supabase.from("battles").update({ turn_count: nextTurn }).eq("id", battle.id);
     if (turnError) { toast.error(turnError.message); return; }
     for (const fighter of fighters) {
+      const participant = battle.battle_participants.find((p) => p.characters?.id === fighter.id);
+      if (participant) {
+        const participantTurns = ((participant as typeof participant & { turn_count?: number }).turn_count ?? 0) + 1;
+        const { error: participantTurnError } = await supabase.from("battle_participants").update({ turn_count: participantTurns }).eq("battle_id", battle.id).eq("character_id", fighter.id);
+        if (participantTurnError) toast.error("Falha ao atualizar o contador individual de " + fighter.name);
+      }
       const manaAttr = fighter.character_attributes.find((a) => a.attribute_key === "mana");
       if (!manaAttr) continue;
       const nextMana = Math.min(val(fighter, "mana"), (manaAttr.current_value ?? 0) + Math.ceil(val(fighter, "mana") * 0.05));
