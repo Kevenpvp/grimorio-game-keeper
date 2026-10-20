@@ -51,10 +51,64 @@ export type Database = {
         Relationships: []
       }
       battle_effects: {
-        Row: { id: string; battle_id: string; character_id: string; name: string; effect_type: string; attribute_key: string | null; polarity: string; value_mode: string; amount: number; duration: number; duration_scope: string; created_at: string }
-        Insert: { id?: string; battle_id: string; character_id: string; name: string; effect_type: string; attribute_key?: string | null; polarity?: string; value_mode?: string; amount?: number; duration: number; duration_scope?: string; created_at?: string }
-        Update: { id?: string; battle_id?: string; character_id?: string; name?: string; effect_type?: string; attribute_key?: string | null; polarity?: string; value_mode?: string; amount?: number; duration?: number; duration_scope?: string; created_at?: string }
-        Relationships: []
+        Row: {
+          amount: number
+          attribute_key: string | null
+          battle_id: string
+          character_id: string
+          created_at: string
+          duration: number
+          duration_scope: string
+          effect_type: string
+          id: string
+          name: string
+          polarity: string
+          value_mode: string
+        }
+        Insert: {
+          amount?: number
+          attribute_key?: string | null
+          battle_id: string
+          character_id: string
+          created_at?: string
+          duration: number
+          duration_scope?: string
+          effect_type: string
+          id?: string
+          name: string
+          polarity?: string
+          value_mode?: string
+        }
+        Update: {
+          amount?: number
+          attribute_key?: string | null
+          battle_id?: string
+          character_id?: string
+          created_at?: string
+          duration?: number
+          duration_scope?: string
+          effect_type?: string
+          id?: string
+          name?: string
+          polarity?: string
+          value_mode?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "battle_effects_battle_id_fkey"
+            columns: ["battle_id"]
+            isOneToOne: false
+            referencedRelation: "battles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "battle_effects_character_id_fkey"
+            columns: ["character_id"]
+            isOneToOne: false
+            referencedRelation: "characters"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       battle_participants: {
         Row: {
@@ -92,51 +146,33 @@ export type Database = {
           },
         ]
       }
-      damage_types: {
-        Row: {
-          created_at: string
-          id: string
-          name: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          name: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          name?: string
-        }
-        Relationships: []
-      }
       battles: {
         Row: {
           active: boolean
           created_at: string
-          turn_count: number
           current_character_id: string | null
           id: string
           name: string
           target_character_id: string | null
+          turn_count: number
         }
         Insert: {
           active?: boolean
           created_at?: string
-          turn_count?: number
           current_character_id?: string | null
           id?: string
           name?: string
           target_character_id?: string | null
+          turn_count?: number
         }
         Update: {
           active?: boolean
           created_at?: string
-          turn_count?: number
           current_character_id?: string | null
           id?: string
           name?: string
           target_character_id?: string | null
+          turn_count?: number
         }
         Relationships: [
           {
@@ -240,8 +276,6 @@ export type Database = {
           description?: string | null
           id?: string
           kills?: number
-          mana_regen_mode?: string
-          mana_regen_amount?: number
           name?: string
           owner_id?: string | null
           photo_path?: string | null
@@ -267,6 +301,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      damage_types: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
       }
       master_emails: {
         Row: {
@@ -353,12 +405,12 @@ export type Database = {
     Functions: {
       apply_battle_damage: {
         Args: {
-          _battle_id: string | null
+          _battle_id: string
           _character_id: string
           _damage_kind: string
-          _damage_type_id: string | null
+          _damage_type_id: string
           _damage_values: Json
-          _magic_level: string | null
+          _magic_level: string
         }
         Returns: Json
       }
