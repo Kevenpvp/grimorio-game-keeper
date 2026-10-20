@@ -38,6 +38,7 @@ export function AbilityEffectsEditor({
   defs: AttributeDef[];
 }) {
   const isPermanent = permanent ?? isPassive ?? false;
+  const { data: damageTypes = [] } = useDamageTypes();
 
   function patch(index: number, values: Partial<AbilityEffectDefinition>) {
     onChange(effects.map((effect, i) => i === index ? { ...effect, ...values } : effect));
