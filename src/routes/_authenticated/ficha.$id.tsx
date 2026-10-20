@@ -26,6 +26,7 @@ import { RacePicker } from "@/components/sheet/RacePicker";
 import { AttrIcon, barTone } from "@/components/sheet/icons";
 import { StatBar } from "@/components/sheet/StatBar";
 import { DamageApplier } from "@/components/combat/DamageApplier";
+import { CharacterAbilitiesManager, CharacterAbilitiesPanel } from "@/components/abilities/CharacterAbilities";
 
 export const Route = createFileRoute("/_authenticated/ficha/$id")({
   head: () => ({
@@ -60,6 +61,7 @@ function FichaPage() {
     return (
       <div className="space-y-6">
         <RacePicker character={data.character} isMaster={false} />
+        <CharacterAbilitiesPanel characterId={data.character.id} characterName={data.character.name} mode="sheet" canUse />
         <CharacterSheetView character={data.character} attrs={data.attrs} defs={defs} />
         {data.character.available_points > 0 && (
           <PointsDistribution character={data.character} attrs={data.attrs} defs={defs} />
@@ -177,6 +179,7 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
       </div>
 
       {preview ? (
+        <CharacterAbilitiesPanel characterId={character.id} characterName={character.name} mode="sheet" canUse />
         <CharacterSheetView character={character} attrs={attrs} defs={defs} />
       ) : (
         <>
@@ -228,6 +231,7 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
           </section>
 
           <RacePicker character={character} isMaster />
+          <CharacterAbilitiesManager characterId={character.id} />
 
           <DamageApplier target={{ id: character.id, name: character.name }} />
 
