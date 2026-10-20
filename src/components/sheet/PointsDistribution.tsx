@@ -24,7 +24,13 @@ export function PointsDistribution({
     setAlloc({});
     const raceLeft = Math.max(0, character.race_points_granted - allocationTotal(character.race_attribute_allocations));
     const virtueLeft = Math.max(0, character.virtue_points_granted - allocationTotal(character.virtue_attribute_allocations));
-    setSource(raceLeft > 0 ? "race" : virtueLeft > 0 ? "virtue" : "base");
+    const baseLeft = Math.max(0, character.available_points - raceLeft - virtueLeft);
+    setSource((current) => {
+      if (current === "race" && raceLeft > 0) return "race";
+      if (current === "virtue" && virtueLeft > 0) return "virtue";
+      if (current === "base" && baseLeft > 0) return "base";
+      return raceLeft > 0 ? "race" : virtueLeft > 0 ? "virtue" : "base";
+    });
   }, [character.id, character.race_id, character.virtue_id, character.race_points_granted, character.virtue_points_granted, character.race_attribute_allocations, character.virtue_attribute_allocations]);
   const byKey = new Map(attrs.map((a) => [a.attribute_key, a]));
   const pointDefs = defs.filter((d) => d.accepts_points);
