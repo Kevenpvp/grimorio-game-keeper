@@ -1,6 +1,6 @@
 -- Make turn advancement serializable, update resource currents proportionally when HP/Mana maxima change.
--- The UI sends the configured base Mana regeneration; all effect modifiers, cooldowns,
--- counters, and durations are read/updated atomically in this function.
+-- The UI sends the Mana regeneration mode and amount; the RPC computes the actual amount
+-- from the locked, current maximum. Counters, cooldowns, and durations change atomically.
 
 create or replace function public.calculate_character_resource_max(
   _character_id uuid,
