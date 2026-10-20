@@ -556,7 +556,7 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
               effect.effect_type === "status" ? `${effect.polarity === "buff" ? "Buff" : "Debuff"} de ${defs.find(d => d.key === effect.attribute_key)?.label ?? effect.attribute_key} (${effect.value_mode === "percent" ? `${effect.polarity === "debuff" ? "-" : "+"}${effect.amount}%` : `${effect.polarity === "debuff" ? "-" : "+"}${effect.amount} pontos`})` :
               effect.effect_type === "regeneration" ? `${effect.polarity === "buff" ? "Buff" : "Debuff"} de regeneração de ${effect.attribute_key === "hp" ? "HP" : "Mana"}: ${effect.value_mode === "percent" ? `${effect.polarity === "debuff" ? "-" : "+"}${effect.amount}%` : `${effect.polarity === "debuff" ? "-" : "+"}${effect.amount} fixos`}` :
               effect.effect_type === "no_regen_hp" ? "Impede regeneração de HP" :
-              effect.effect_type === "no_regen_mana" ? "Impede regeneração de Mana" : "Stun (apenas visual)"
+              effect.effect_type === "no_regen_mana" ? "Impede regeneração de Mana" : effect.effect_type === "mana_used" ? `Mana usada ${effect.polarity === "buff" ? "−" : "+"}${effect.value_mode === "percent" ? `${effect.amount}%` : `${effect.amount} pontos`}` : "Stun (apenas visual)"
             ];
             const expanded = expandedEffectId === effect.id;
             return <div key={effect.id} className="w-full rounded-md border border-border bg-muted/30 p-2">
