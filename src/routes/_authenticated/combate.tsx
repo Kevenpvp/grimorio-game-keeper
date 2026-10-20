@@ -144,7 +144,8 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
     const percent = active.filter(e => e.value_mode === "percent").reduce((n,e) => n + (e.polarity === "buff" ? 1 : -1) * Number(e.amount), 0);
     return Math.max(0, Math.floor(base * (1 + percent / 100) + fixed));
   };
-  // Qualquer avanço de turno (individual ou geral) consome 1 turno de TODOS os efeitos da batalha.
+  // Regra única de duração: tanto turno individual quanto turno geral chamam esta função.
+  // Cada avanço reduz em 1 a duração de TODOS os efeitos ativos desta batalha.
   async function tickEffects() {
     const { data: rows, error } = await supabase.from("battle_effects").select("*").eq("battle_id", battle.id);
     if (error) { toast.error(error.message); return; }
@@ -437,15 +438,20 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
               effect.effect_type === "regeneration" ? `${effect.polarity === "buff" ? "Buff" : "Debuff"} de regeneração de ${effect.attribute_key === "hp" ? "HP" : "Mana"}: ${effect.value_mode === "percent" ? `${effect.polarity === "debuff" ? "-" : "+"}${effect.amount}%` : `${effect.polarity === "debuff" ? "-" : "+"}${effect.amount} fixos`}` :
               effect.effect_type === "no_regen_hp" ? "Impede regeneração de HP" :
               effect.effect_type === "no_regen_mana" ? "Impede regeneração de Mana" : "Stun (apenas visual)";
-            return <div key={effect.id} className="group relative">
-              <button type="button" title={`${details} · Restam ${effect.duration} turno(s)`} onClick={() => setExpandedEffectId(expandedEffectId === effect.id ? null : effect.id)} className="rounded-md border border-border bg-muted/40 px-3 py-1.5 pr-7 text-left text-xs hover:border-gold">
-                <span className="font-medium">{effect.name}</span><span className="ml-1 text-muted-foreground">({effect.duration})</span>
-              </button>
-              <button type="button" aria-label={`Remover efeito ${effect.name}`} title="Remover efeito" onClick={() => onRemoveEffect(effect.id)} className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:bg-destructive/15 hover:text-destructive"><span className="text-sm leading-none">×</span></button>
-              <div className={cn("pointer-events-none absolute bottom-full left-0 z-20 mb-2 hidden min-w-44 max-w-64 rounded-md border border-border bg-popover p-3 text-xs shadow-lg group-hover:block", expandedEffectId === effect.id && "pointer-events-auto block")}>
-                <div className="font-semibold">{effect.name}</div><div className="mt-1">{details}</div><div className="mt-1 text-muted-foreground">Duração restante: {effect.duration} turno(s)</div>
-                <button type="button" className="pointer-events-auto mt-2 text-gold underline" onClick={() => setExpandedEffectId(null)}>Fechar</button>
+            const expanded = expandedEffectId === effect.id;
+            return <div key={effect.id} className="w-full rounded-md border border-border bg-muted/30 p-2">
+              <div className="flex items-start gap-2">
+                <button type="button" aria-expanded={expanded} onClick={() => setExpandedEffectId(expanded ? null : effect.id)} className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded px-1 py-1 text-left text-xs hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold">
+                  <span className="min-w-0"><span className="font-medium">{effect.name}</span><span className="ml-2 text-muted-foreground">({effect.duration} turno(s))</span></span>
+                  <span aria-hidden="true" className="shrink-0 text-muted-foreground">{expanded ? "−" : "+"}</span>
+                </button>
+                <button type="button" aria-label={`Remover efeito ${effect.name}`} title="Remover efeito" onClick={() => onRemoveEffect(effect.id)} className="rounded px-2 py-1 text-muted-foreground hover:bg-destructive/15 hover:text-destructive"><span className="text-sm leading-none">×</span></button>
               </div>
+              {expanded && <div className="mt-2 border-t border-border pt-2 text-xs" role="status">
+                <div className="font-semibold">{effect.name}</div>
+                <div className="mt-1">{details}</div>
+                <div className="mt-1 text-muted-foreground">Duração restante: {effect.duration} turno(s). A duração diminui em qualquer avanço de turno, individual ou geral.</div>
+              </div>}
             </div>;
           })}
         </div>}
