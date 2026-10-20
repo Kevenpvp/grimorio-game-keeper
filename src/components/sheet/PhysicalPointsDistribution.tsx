@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { allocationTotal, computeValue, numberAllocation, physicalAttributePoints, useCharacterTraitMods, type AttributeDef, type Character, type CharacterAttr } from "@/lib/sheets";
+import { allocationTotal, computeValue, conditionAdjustedValue, numberAllocation, physicalAttributePoints, useCharacterTraitMods, type AttributeDef, type Character, type CharacterAttr } from "@/lib/sheets";
 import { AttrIcon } from "./icons";
 
 const physicalKeys = new Set(["strength", "phys_def", "speed", "atk_speed"]);
@@ -107,7 +107,7 @@ export function PhysicalPointsDistribution({
               </div>
               <div className="mt-2 flex items-center justify-between gap-2">
                 <div>
-                  <div className="tabular text-xl font-bold">{computeValue(def, totalPoints)}</div>
+                  <div className="tabular text-xl font-bold">{conditionAdjustedValue(character, def.key, computeValue(def, totalPoints))}</div>
                   <div className="tabular text-xs text-muted-foreground">
                     {totalPoints} pts
                     {(fromRace > 0 || fromVirtue > 0 || pending > 0) && <span className="text-gold"> · físicos {fromRace + fromVirtue + pending}{pending > 0 ? ` (+${pending})` : ""}</span>}
