@@ -275,6 +275,15 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1"><Label>Nome nesta ficha</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
+        <label className="flex min-h-10 items-center gap-2 rounded-md border border-border px-3 py-2 text-sm sm:col-span-2">
+          <input type="checkbox" checked={!canActivate} onChange={(e) => {
+            const notActivatable = e.target.checked;
+            setCanActivate(!notActivatable);
+            setCooldown(notActivatable ? "0" : (Number(cooldown) > 0 ? cooldown : "1"));
+            if (notActivatable) setManaCost("0");
+          }} />
+          Habilidade não ativável nesta ficha
+        </label>
         {canActivate && <div className="space-y-1"><Label>Custo base de Mana</Label><Input type="number" min="0" value={manaCost} onChange={(e) => setManaCost(e.target.value)} /></div>}
         {!canActivate && <p className="text-xs text-muted-foreground">Não ativável: não gasta Mana nem possui cooldown; seus efeitos passivos continuam funcionando.</p>}
         {canActivate && <div className="space-y-1"><Label>Cooldown máximo (turnos)</Label><Input type="number" min="1" value={cooldown} onChange={(e) => setCooldown(e.target.value)} /></div>}
