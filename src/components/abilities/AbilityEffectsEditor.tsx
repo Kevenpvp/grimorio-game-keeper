@@ -172,16 +172,18 @@ export function AbilityEffectsEditor({
               )}
               {needsValue && (
                 <>
-                  <select aria-label="Buff ou debuff" className="h-9 min-w-0 rounded-md border border-input bg-background px-2 text-sm" value={effect.polarity}
+                  {!isDamageReduction && (
+                    <select aria-label="Buff ou debuff" className="h-9 min-w-0 rounded-md border border-input bg-background px-2 text-sm" value={effect.polarity}
                     onChange={(e) => patch(index, { polarity: e.target.value as "buff" | "debuff" })}>
                     <option value="buff">Buff</option><option value="debuff">Debuff</option>
-                  </select>
+                    </select>
+                  )}
                   <select aria-label="Modo do valor" className="h-9 min-w-0 rounded-md border border-input bg-background px-2 text-sm" value={effect.value_mode}
                     onChange={(e) => patch(index, { value_mode: e.target.value as "percent" | "fixed" })}>
                     <option value="fixed">Valor fixo</option><option value="percent">Porcentagem</option>
                   </select>
                   <label className="space-y-1 text-xs font-medium">
-                    Valor ({effect.value_mode === "percent" ? "%" : effect.effect_type === "damage_dealt" ? "dano fixo" : effect.effect_type === "mana_regeneration" || effect.effect_type === "mana_used" ? "Mana" : "pontos"})
+                    Valor ({effect.value_mode === "percent" ? "%" : effect.effect_type === "damage_dealt" ? "dano fixo" : effect.effect_type === "mana_regeneration" || effect.effect_type === "mana_used" ? "Mana" : effect.effect_type === "damage_reduction" ? "dano reduzido" : "pontos"})
                     <Input type="number" min="0" value={effect.amount} onChange={(e) => patch(index, { amount: Math.max(0, Number(e.target.value) || 0) })} />
                   </label>
                 </>
