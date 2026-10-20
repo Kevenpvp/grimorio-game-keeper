@@ -27,14 +27,15 @@ ALTER TABLE public.battle_effects ADD CONSTRAINT battle_effects_check CHECK (
         (damage_reduction_type_ids IS NULL
           AND damage_reduction_magic_levels IS NULL
           AND damage_reduction_type_id IS NOT NULL
+          AND damage_reduction_magic_level IS NOT NULL
           AND damage_reduction_magic_level IN ('baixa','media','alta'))
         OR
         (damage_reduction_type_ids IS NOT NULL
           AND damage_reduction_magic_levels IS NOT NULL
           AND damage_reduction_type_id IS NULL
           AND damage_reduction_magic_level IS NULL
-          AND array_position(damage_reduction_type_ids, NULL) IS NULL
-          AND array_position(damage_reduction_magic_levels, NULL) IS NULL
+          AND array_position(damage_reduction_type_ids, NULL::uuid) IS NULL
+          AND array_position(damage_reduction_magic_levels, NULL::text) IS NULL
           AND (cardinality(damage_reduction_magic_levels) = 0
             OR damage_reduction_magic_levels <@ ARRAY['baixa','media','alta']::text[]))
       ))
@@ -531,7 +532,7 @@ begin
             raise exception 'A mitigação contém um tipo mágico inválido';
           end if;
           if cardinality(_damage_reduction_magic_levels) > 0 and (
-            array_position(_damage_reduction_magic_levels, null) is not null
+            array_position(_damage_reduction_magic_levels, null::text) is not null
             or not (_damage_reduction_magic_levels <@ ARRAY['baixa','media','alta']::text[])
           ) then
             raise exception 'A mitigação contém um grau mágico inválido';
@@ -822,7 +823,7 @@ begin
             raise exception 'A mitigação contém um tipo mágico inválido';
           end if;
           if cardinality(_damage_reduction_magic_levels) > 0 and (
-            array_position(_damage_reduction_magic_levels, null) is not null
+            array_position(_damage_reduction_magic_levels, null::text) is not null
             or not (_damage_reduction_magic_levels <@ ARRAY['baixa','media','alta']::text[])
           ) then
             raise exception 'A mitigação contém um grau mágico inválido';
