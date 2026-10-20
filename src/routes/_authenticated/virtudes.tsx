@@ -96,6 +96,7 @@ function VirtueEditor({ virtue, defs, isNew, onSaved }: { virtue: Virtue; defs: 
   const [name, setName] = useState(virtue.name);
   const [description, setDescription] = useState(virtue.description ?? "");
   const [bonus, setBonus] = useState(virtue.bonus_points);
+  const [physicalBonus, setPhysicalBonus] = useState(virtue.physical_bonus_points);
   const [mods, setMods] = useState(traitMods(virtue));
 
   async function toggleAbility(abilityId: string, checked: boolean) {
@@ -121,6 +122,7 @@ function VirtueEditor({ virtue, defs, isNew, onSaved }: { virtue: Virtue; defs: 
       name: name.trim(),
       description: description.trim() || null,
       bonus_points: Math.max(0, Math.round(bonus) || 0),
+      physical_bonus_points: Math.max(0, Math.round(physicalBonus) || 0),
       modifiers: clean,
     }).eq("id", virtue.id);
     if (error) { toast.error(error.message); return; }
@@ -147,6 +149,10 @@ function VirtueEditor({ virtue, defs, isNew, onSaved }: { virtue: Virtue; defs: 
         <div className="space-y-1.5">
           <Label>Pontos livres extras</Label>
           <Input type="number" min={0} value={bonus} onChange={(e) => setBonus(Number(e.target.value))} />
+        </div>
+        <div className="space-y-1.5">
+          <Label>Pontos extras de atributos físicos</Label>
+          <Input type="number" min={0} value={physicalBonus} onChange={(e) => setPhysicalBonus(Number(e.target.value))} />
         </div>
         <div className="space-y-1.5 sm:col-span-2">
           <Label>Descrição</Label>
