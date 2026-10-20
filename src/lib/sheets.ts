@@ -103,7 +103,9 @@ export function computeValue(def: AttributeDef, points: number) {
 }
 
 export type Race = Tables<"races">;
+export type Virtue = Tables<"virtues">;
 export type RaceMods = Record<string, number>;
+export type Trait = Race | Virtue;
 
 export function useRaces() {
   return useQuery({
@@ -116,15 +118,49 @@ export function useRaces() {
   });
 }
 
-export function raceMods(race: Race | null | undefined): RaceMods {
-  const m = race?.modifiers;
+export function useVirtues() {
+  return useQuery({
+    queryKey: ["virtues"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("virtues").select("*").order("name");
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function traitMods(trait: Trait | null | undefined): RaceMods {
+  const m = trait?.modifiers;
   if (!m || typeof m !== "object" || Array.isArray(m)) return {};
   const out: RaceMods = {};
-  for (const [k, v] of Object.entries(m)) { const n = Number(v); if (Number.isFinite(n) && n !== 0) out[k] = n; }
+  for (const [k, v] of Object.entries(m)) {
+    const n = Number(v);
+    if (Number.isFinite(n) && n !== 0) out[k] = n;
+  }
   return out;
 }
 
-/** Racial points per attribute key for a character. */
+export function raceMods(race: Race | null | undefined): RaceMods {
+  return traitMods(race);
+}
+
+/** Both selected traits contribute to the character's attribute modifiers. */
+export function useCharacterTraitMods(raceId: string | null | undefined, virtueId: string | null | undefined) {
+  const { data: races } = useRaces();
+  const { data: virtues } = useVirtues();
+  const race = races?.find((r) => r.id === raceId) ?? null;
+  const virtue = virtues?.find((v) => v.id === virtueId) ?? null;
+  const raceModifiers = traitMods(race);
+  const virtueModifiers = traitMods(virtue);
+  const mods: RaceMods = { ...raceModifiers };
+  for (const [key, value] of Object.entries(virtueModifiers)) {
+    mods[key] = (mods[key] ?? 0) + value;
+    if (mods[key] === 0) delete mods[key];
+  }
+  return { race, virtue, raceModifiers, virtueModifiers, mods, races: races ?? [], virtues: virtues ?? [] };
+}
+
+/** Legacy race-only helper retained for components that specifically need the race. */
 export function useRaceMods(raceId: string | null | undefined) {
   const { data: races } = useRaces();
   const race = races?.find((r) => r.id === raceId) ?? null;
