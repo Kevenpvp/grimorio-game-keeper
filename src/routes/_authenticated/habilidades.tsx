@@ -124,7 +124,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
     }
     const allConfiguredEffects = [...effects, ...passiveEffects, ...endEffects];
     if (allConfiguredEffects.some((effect) => !effect.name.trim() || (
-      ["status", "regeneration", "mana_regeneration", "mana_used"].includes(effect.effect_type) &&
+      ["status", "regeneration", "mana_regeneration", "mana_used", "damage_dealt"].includes(effect.effect_type) &&
       (!Number.isFinite(effect.amount) || effect.amount < 0)
     ))) {
       toast.error("Revise os nomes e valores dos efeitos ativos e passivos");
