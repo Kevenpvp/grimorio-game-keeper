@@ -15,6 +15,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedCombateRouteImport } from './routes/_authenticated/combate'
 import { Route as AuthenticatedPainelRouteImport } from './routes/_authenticated/painel'
 import { Route as AuthenticatedRacasRouteImport } from './routes/_authenticated/racas'
+import { Route as AuthenticatedVirtudesRouteImport } from './routes/_authenticated/virtudes'
 import { Route as AuthenticatedTiposDanoRouteImport } from './routes/_authenticated/tipos-dano'
 import { Route as AuthenticatedFichaIdRouteImport } from './routes/_authenticated/ficha.$id'
 
@@ -47,6 +48,11 @@ const AuthenticatedRacasRoute = AuthenticatedRacasRouteImport.update({
   path: '/racas',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedVirtudesRoute = AuthenticatedVirtudesRouteImport.update({
+  id: '/virtudes',
+  path: '/virtudes',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedTiposDanoRoute = AuthenticatedTiposDanoRouteImport.update({
   id: '/tipos-dano',
   path: '/tipos-dano',
@@ -64,6 +70,7 @@ export interface FileRoutesByFullPath {
   '/combate': typeof AuthenticatedCombateRoute
   '/painel': typeof AuthenticatedPainelRoute
   '/racas': typeof AuthenticatedRacasRoute
+  '/virtudes': typeof AuthenticatedVirtudesRoute
   '/tipos-dano': typeof AuthenticatedTiposDanoRoute
   '/ficha/$id': typeof AuthenticatedFichaIdRoute
 }
@@ -73,6 +80,7 @@ export interface FileRoutesByTo {
   '/combate': typeof AuthenticatedCombateRoute
   '/painel': typeof AuthenticatedPainelRoute
   '/racas': typeof AuthenticatedRacasRoute
+  '/virtudes': typeof AuthenticatedVirtudesRoute
   '/ficha/$id': typeof AuthenticatedFichaIdRoute
 }
 export interface FileRoutesById {
@@ -83,14 +91,15 @@ export interface FileRoutesById {
   '/_authenticated/combate': typeof AuthenticatedCombateRoute
   '/_authenticated/painel': typeof AuthenticatedPainelRoute
   '/_authenticated/racas': typeof AuthenticatedRacasRoute
+  '/_authenticated/virtudes': typeof AuthenticatedVirtudesRoute
   '/_authenticated/tipos-dano': typeof AuthenticatedTiposDanoRoute
   '/_authenticated/ficha/$id': typeof AuthenticatedFichaIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/combate' | '/painel' | '/racas' | '/tipos-dano' | '/ficha/$id'
+  fullPaths: '/' | '/auth' | '/combate' | '/painel' | '/racas' | '/virtudes' | '/tipos-dano' | '/ficha/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/combate' | '/painel' | '/racas' | '/tipos-dano' | '/ficha/$id'
+  to: '/' | '/auth' | '/combate' | '/painel' | '/racas' | '/virtudes' | '/tipos-dano' | '/ficha/$id'
   id:
     | '__root__'
     | '/'
@@ -99,6 +108,7 @@ export interface FileRouteTypes {
     | '/_authenticated/combate'
     | '/_authenticated/painel'
     | '/_authenticated/racas'
+    | '/_authenticated/virtudes'
     | '/_authenticated/ficha/$id'
   fileRoutesById: FileRoutesById
 }
@@ -152,6 +162,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRacasRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/virtudes': {
+      id: '/_authenticated/virtudes'
+      path: '/virtudes'
+      fullPath: '/virtudes'
+      preLoaderRoute: typeof AuthenticatedVirtudesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/tipos-dano': {
       id: '/_authenticated/tipos-dano'
       path: '/tipos-dano'
@@ -173,6 +190,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedCombateRoute: typeof AuthenticatedCombateRoute
   AuthenticatedPainelRoute: typeof AuthenticatedPainelRoute
   AuthenticatedRacasRoute: typeof AuthenticatedRacasRoute
+  AuthenticatedVirtudesRoute: typeof AuthenticatedVirtudesRoute
   AuthenticatedTiposDanoRoute: typeof AuthenticatedTiposDanoRoute
   AuthenticatedFichaIdRoute: typeof AuthenticatedFichaIdRoute
 }
@@ -181,6 +199,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedCombateRoute: AuthenticatedCombateRoute,
   AuthenticatedPainelRoute: AuthenticatedPainelRoute,
   AuthenticatedRacasRoute: AuthenticatedRacasRoute,
+  AuthenticatedVirtudesRoute: AuthenticatedVirtudesRoute,
   AuthenticatedTiposDanoRoute: AuthenticatedTiposDanoRoute,
   AuthenticatedFichaIdRoute: AuthenticatedFichaIdRoute,
 }
