@@ -364,7 +364,115 @@ begin
   new.updated_at := now();
   return new;
 end;
-$$;
+$;
+
+-- Process virtue-driven character ability changes row-by-row so each resource adjustment
+-- sees one well-defined old/new maximum instead of scaling multiple times from a bulk statement.
+create or replace function public.sync_virtue_ability_assignments(_virtue_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $
+declare
+  _old_assignment record;
+  _new_assignment record;
+begin
+  for _old_assignment in
+    select ca.id
+    from public.character_abilities ca
+    where ca.granted_by_virtue_id = _virtue_id
+      and not exists (
+        select 1
+        from public.virtue_abilities va
+        where va.virtue_id = _virtue_id and va.ability_id = ca.ability_id
+      )
+    order by ca.created_at, ca.id
+    for update
+  loop
+    delete from public.character_abilities ca where ca.id = _old_assignment.id;
+  end loop;
+
+  for _new_assignment in
+    select
+      c.id as character_id,
+      a.id as ability_id,
+      a.name,
+      a.description,
+      a.can_activate,
+      a.cooldown_turns,
+      a.mana_cost,
+      a.effects,
+      a.passive_effects,
+      a.self_target_only,
+      a.end_effects
+    from public.characters c
+    join public.virtue_abilities va on va.virtue_id = c.virtue_id
+    join public.abilities a on a.id = va.ability_id
+    where c.virtue_id = _virtue_id
+      and not exists (
+        select 1 from public.character_abilities ca
+        where ca.character_id = c.id and ca.ability_id = a.id
+      )
+    order by c.id, a.id
+  loop
+    insert into public.character_abilities (
+      character_id, ability_id, name, description, can_activate, is_passive,
+      cooldown_turns, cooldown_remaining, mana_cost, effects, passive_effects,
+      self_target_only, end_effects, granted_by_virtue_id
+    ) values (
+      _new_assignment.character_id,
+      _new_assignment.ability_id,
+      _new_assignment.name,
+      _new_assignment.description,
+      _new_assignment.can_activate,
+      not _new_assignment.can_activate,
+      case when _new_assignment.can_activate then greatest(_new_assignment.cooldown_turns, 1) else 0 end,
+      0,
+      case when _new_assignment.can_activate then _new_assignment.mana_cost else 0 end,
+      _new_assignment.effects,
+      _new_assignment.passive_effects,
+      _new_assignment.self_target_only,
+      _new_assignment.end_effects,
+      _virtue_id
+    )
+    on conflict (character_id, ability_id) do nothing;
+  end loop;
+end;
+$;
+
+revoke all on function public.sync_virtue_ability_assignments(uuid) from public, anon, authenticated;
+grant execute on function public.sync_virtue_ability_assignments(uuid) to service_role;
+
+create or replace function public.sync_character_virtue_abilities()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $
+declare
+  _old_assignment record;
+begin
+  if tg_op = 'UPDATE' then
+    for _old_assignment in
+      select ca.id
+      from public.character_abilities ca
+      where ca.character_id = new.id
+        and ca.granted_by_virtue_id is not null
+        and ca.granted_by_virtue_id is distinct from new.virtue_id
+      order by ca.created_at, ca.id
+      for update
+    loop
+      delete from public.character_abilities ca where ca.id = _old_assignment.id;
+    end loop;
+  end if;
+
+  if new.virtue_id is not null then
+    perform public.sync_virtue_ability_assignments(new.virtue_id);
+  end if;
+  return new;
+end;
+$;
 
 -- One transaction per turn advance. Locking the battle row serializes concurrent advances so
 -- counters, cooldowns, regeneration, end effects, and each duration decrement cannot overwrite
