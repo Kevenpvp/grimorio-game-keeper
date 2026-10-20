@@ -204,17 +204,18 @@ BEGIN
       )::integer;
       _dealt := GREATEST(0, _rounded_raw - _magical_defense)::integer;
     ELSIF _damage_kind = 'hybrid' THEN
-      -- Split the base hit first, then apply modifiers specific to each half plus "any".
-      -- Odd damage assigns its extra point to the magical half, preserving prior behavior.
-      _rounded_raw := round(_raw)::integer;
+      -- Apply the universal flat bonus once to the full hit before splitting it.
+      -- Then apply type-specific flat bonuses to their own half, with universal and
+      -- matching type-specific percentages. Odd damage assigns its extra point to magic.
+      _rounded_raw := round(GREATEST(0, _raw + _damage_any_fixed))::integer;
       _physical_part := floor(_rounded_raw / 2.0)::integer;
       _magical_part := _rounded_raw - _physical_part;
       _physical_part := round(
-        GREATEST(0, _physical_part + _damage_any_fixed + _damage_physical_fixed)
+        GREATEST(0, _physical_part + _damage_physical_fixed)
         * GREATEST(0, 1 + (_damage_any_percent + _damage_physical_percent) / 100)
       )::integer;
       _magical_part := round(
-        GREATEST(0, _magical_part + _damage_any_fixed + _damage_magical_fixed)
+        GREATEST(0, _magical_part + _damage_magical_fixed)
         * GREATEST(0, 1 + (_damage_any_percent + _damage_magical_percent) / 100)
       )::integer;
       _dealt := (
