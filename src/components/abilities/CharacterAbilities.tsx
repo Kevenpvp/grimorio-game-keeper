@@ -127,6 +127,9 @@ export function CharacterAbilitiesPanel({
                       {ability.granted_by_virtue_id && (
                         <span className="rounded bg-gold/10 px-2 py-1 text-gold">Concedida por virtude</span>
                       )}
+                      <span className={`rounded px-2 py-1 ${ability.is_magical ? "bg-violet-500/10 text-violet-300" : "bg-muted text-muted-foreground"}`}>
+                        {ability.is_magical ? "Habilidade Mágica" : "Não mágica"}
+                      </span>
                       {ability.can_activate && ability.self_target_only && <span className="rounded bg-muted px-2 py-1">Só em si mesmo</span>}
                   {!ability.can_activate ? (
                         <span className="rounded bg-gold/10 px-2 py-1 text-gold"><Sparkles className="mr-1 inline h-3 w-3" /> Não ativável</span>
@@ -189,6 +192,7 @@ export function CharacterAbilitiesManager({ characterId }: { characterId: string
       description: ability.description,
       can_activate: ability.can_activate,
       self_target_only: ability.self_target_only,
+      is_magical: ability.is_magical,
       is_passive: !ability.can_activate,
       cooldown_turns: ability.can_activate ? ability.cooldown_turns : 0,
       cooldown_remaining: 0,
@@ -255,6 +259,7 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
   const [name, setName] = useState(ability.name);
   const [description, setDescription] = useState(ability.description ?? "");
   const [canActivate, setCanActivate] = useState(ability.can_activate);
+  const [isMagical, setIsMagical] = useState(ability.is_magical);
   const [selfTargetOnly, setSelfTargetOnly] = useState(ability.self_target_only);
   const [cooldown, setCooldown] = useState(String(ability.cooldown_turns));
   const [manaCost, setManaCost] = useState(String(ability.mana_cost));
@@ -268,6 +273,7 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
     setName(ability.name);
     setDescription(ability.description ?? "");
     setCanActivate(ability.can_activate);
+    setIsMagical(ability.is_magical);
     setSelfTargetOnly(ability.self_target_only);
     setCooldown(String(ability.cooldown_turns));
     setManaCost(String(ability.mana_cost));
@@ -291,6 +297,7 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
       name: name.trim(),
       description: description.trim() || null,
       can_activate: canActivate,
+      is_magical: isMagical,
       self_target_only: canActivate && selfTargetOnly,
       is_passive: !canActivate,
       cooldown_turns: cooldownTurns,
@@ -332,7 +339,7 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="font-semibold">{ability.name}</div>
-          <div className="text-xs text-muted-foreground">{ability.granted_by_virtue_id ? "Concedida por virtude · " : ""}{ability.can_activate ? `Cooldown atual: ${ability.cooldown_remaining}/${ability.cooldown_turns}` : "Não ativável · efeitos passivos permanentes"}</div>
+          <div className="text-xs text-muted-foreground">{ability.is_magical ? "Habilidade Mágica · " : "Não mágica · "}{ability.granted_by_virtue_id ? "Concedida por virtude · " : ""}{ability.can_activate ? `Cooldown atual: ${ability.cooldown_remaining}/${ability.cooldown_turns}` : "Não ativável · efeitos passivos permanentes"}</div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <Button
@@ -360,6 +367,10 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
             if (notActivatable) setManaCost("0");
           }} />
           Habilidade não ativável nesta ficha
+        </label>
+        <label className="flex min-h-10 items-center gap-2 rounded-md border border-border px-3 py-2 text-sm sm:col-span-2">
+          <input type="checkbox" checked={isMagical} onChange={(e) => setIsMagical(e.target.checked)} />
+          Habilidade Mágica
         </label>
         {canActivate && (
           <label className="flex min-h-10 items-center gap-2 rounded-md border border-border px-3 py-2 text-sm sm:col-span-2">
