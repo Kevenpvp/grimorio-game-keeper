@@ -94,6 +94,10 @@ function AbilityEditor({ ability, defs }: { ability: Ability; defs: NonNullable<
       toast.error("Uma habilidade ativável precisa ter cooldown de pelo menos 1 turno. Marque como não ativável se não puder ser usada.");
       return;
     }
+    if (canActivate && endEffects.length > 0 && effects.length === 0) {
+      toast.error("Configure pelo menos um efeito ao ativar para que o sistema detecte quando a habilidade acaba.");
+      return;
+    }
     const allConfiguredEffects = [...effects, ...passiveEffects, ...endEffects];
     if (allConfiguredEffects.some((effect) => !effect.name.trim() || (
       ["status", "regeneration", "mana_regeneration", "mana_used"].includes(effect.effect_type) &&
