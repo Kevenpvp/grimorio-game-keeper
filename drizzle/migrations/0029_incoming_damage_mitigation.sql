@@ -33,6 +33,7 @@ ALTER TABLE public.battle_effects ADD CONSTRAINT battle_effects_check CHECK (
       OR
       (damage_reduction_scope = 'magical'
         AND damage_reduction_type_id IS NOT NULL
+        AND damage_reduction_magic_level IS NOT NULL
         AND damage_reduction_magic_level IN ('baixa','media','alta'))
     )
   )
@@ -475,7 +476,7 @@ begin
         ) then
           raise exception 'Selecione um tipo mágico válido para a mitigação';
         end if;
-        if _damage_reduction_magic_level not in ('baixa','media','alta') then
+        if _damage_reduction_magic_level is null or _damage_reduction_magic_level not in ('baixa','media','alta') then
           raise exception 'Selecione um grau mágico válido para a mitigação';
         end if;
       else
