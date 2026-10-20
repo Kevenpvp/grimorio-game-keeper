@@ -25,6 +25,7 @@ export type Database = {
           self_target_only: boolean
           id: string
           is_passive: boolean
+          is_magical: boolean
           mana_cost: number
           name: string
           passive_effects: Json
@@ -39,6 +40,7 @@ export type Database = {
           self_target_only?: boolean
           id?: string
           is_passive?: boolean
+          is_magical?: boolean
           mana_cost?: number
           name: string
           passive_effects?: Json
@@ -267,6 +269,7 @@ export type Database = {
           granted_by_virtue_id: string | null
           id: string
           is_passive: boolean
+          is_magical: boolean
           mana_cost: number
           name: string
           passive_effects: Json
@@ -285,6 +288,7 @@ export type Database = {
           granted_by_virtue_id?: string | null
           id?: string
           is_passive?: boolean
+          is_magical?: boolean
           mana_cost?: number
           name: string
           passive_effects?: Json
