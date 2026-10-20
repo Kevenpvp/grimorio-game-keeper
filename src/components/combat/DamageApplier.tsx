@@ -96,7 +96,7 @@ export function DamageApplier({ target, battleId = null, sources = [] }: {
         hp_after: number;
         damage_fixed_modifier?: number;
         damage_percent_modifier?: number;
-        source_character_id?: string | null;
+        damage_source_character_id?: string | null;
       };
       let defenseText: string;
       if (damageKind === "true") defenseText = "defesas ignoradas";
