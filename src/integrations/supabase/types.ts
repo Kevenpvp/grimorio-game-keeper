@@ -108,6 +108,8 @@ export type Database = {
           damage_reduction_magic_level: string | null
           damage_reduction_scope: string
           damage_reduction_type_id: string | null
+          damage_reduction_magic_levels: string[] | null
+          damage_reduction_type_ids: string[] | null
           damage_scope: string
           duration: number
           duration_scope: string
@@ -129,6 +131,8 @@ export type Database = {
           damage_reduction_magic_level?: string | null
           damage_reduction_scope?: string
           damage_reduction_type_id?: string | null
+          damage_reduction_magic_levels?: string[] | null
+          damage_reduction_type_ids?: string[] | null
           damage_scope?: string
           duration: number
           duration_scope?: string
@@ -150,6 +154,8 @@ export type Database = {
           damage_reduction_magic_level?: string | null
           damage_reduction_scope?: string
           damage_reduction_type_id?: string | null
+          damage_reduction_magic_levels?: string[] | null
+          damage_reduction_type_ids?: string[] | null
           damage_scope?: string
           duration?: number
           duration_scope?: string
