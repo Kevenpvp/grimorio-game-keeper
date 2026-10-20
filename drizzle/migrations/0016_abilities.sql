@@ -185,7 +185,7 @@ begin
         raise exception 'Buff/debuff de status precisa de um atributo válido';
       end if;
     elsif _effect_type = 'regeneration' then
-      if _attribute_key not in ('hp','mana') then raise exception 'Regeneração só pode afetar HP ou Mana'; end if;
+      if _attribute_key is null or _attribute_key not in ('hp','mana') then raise exception 'Regeneração só pode afetar HP ou Mana'; end if;
     else
       _attribute_key := null;
       _amount := 0;
