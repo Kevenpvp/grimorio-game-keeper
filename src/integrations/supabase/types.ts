@@ -616,6 +616,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      advance_combat_turn: {
+        Args: {
+          _base_mana_regeneration?: Json
+          _battle_id: string
+          _character_id?: string | null
+        }
+        Returns: number
+      }
       activate_character_ability: {
         Args: {
           _battle_id?: string | null
