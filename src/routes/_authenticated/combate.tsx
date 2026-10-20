@@ -298,7 +298,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
       <div className="panel space-y-3 p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div><div className="text-sm text-muted-foreground">Turnos transcorridos</div><div className="font-display text-2xl text-gold">{battle.turn_count ?? 0}</div></div>
-          {isMaster && <Button onClick={() => void advanceTurn()}><RotateCw className="mr-2 h-4 w-4" /> Avançar turno geral</Button>}
+          {isMaster && <Button disabled={!battle.active} onClick={() => void advanceTurn()}><RotateCw className="mr-2 h-4 w-4" /> Avançar turno geral</Button>}
         </div>
 
       </div>
@@ -328,7 +328,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
               })}
               <Bar label="Mana" cur={mana?.current_value ?? 0} max={val(f, "mana")} tone="bg-arcane" />
               <CharacterAbilitiesPanel characterId={f.id} characterName={f.name} mode="combat"
-                canUse={isMaster || f.owner_id === userId} battleId={battle.id}
+                canUse={battle.active && (isMaster || f.owner_id === userId)} battleId={battle.id}
                 targets={fighters.map((target) => ({ id: target.id, name: target.name }))} />
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div className="rounded border border-border p-2"><span className="text-muted-foreground">Corpo</span><div className="font-semibold">{f.body}%</div></div>
@@ -342,7 +342,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
               {isMaster && <CombatResourceEditor fighter={f} val={val} effects={effects.filter(e => e.character_id === f.id)} defs={defs} onAddEffect={(effect) => void addEffect(f.id, effect)} onRemoveEffect={async (id) => { const { error } = await supabase.from("battle_effects").delete().eq("id", id); if (error) toast.error(error.message); await qc.invalidateQueries({ queryKey: ["battle-effects", battle.id] }); }} hpRegenBlocked={blocked(f.id, "no_regen_hp")} manaRegenBlocked={blocked(f.id, "no_regen_mana")} manaRegenMode={manaRegenSettings[f.id]?.mode ?? "percent"} manaRegenAmount={manaRegenSettings[f.id]?.amount ?? "0"} onManaRegenModeChange={(mode) => setManaRegen(f.id, { mode })} onManaRegenAmountChange={(amount) => setManaRegen(f.id, { amount })} /> }
               <div className="flex flex-wrap items-center justify-between gap-2 rounded border border-border p-2">
                 <span className="text-xs text-muted-foreground">Turnos individuais: {f.participant_turn_count ?? 0}</span>
-                {isMaster && <Button size="sm" variant="outline" onClick={() => void advanceFighterTurn(f)}><RotateCw className="mr-1 h-3.5 w-3.5" /> Avançar turno</Button>}
+                {isMaster && <Button size="sm" variant="outline" disabled={!battle.active} onClick={() => void advanceFighterTurn(f)}><RotateCw className="mr-1 h-3.5 w-3.5" /> Avançar turno</Button>}
               </div>
               {isMaster && (
                 <div className="flex gap-2 pt-1">
