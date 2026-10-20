@@ -15,6 +15,7 @@ const effectTypeLabels: Record<AbilityEffectType, string> = {
   stun: "Stun (visual)",
   damage_dealt: "Dano Causado",
   no_mana: "Sem Mana",
+  damage_reduction: "Mitigação de Dano",
 };
 
 export function AbilityEffectsEditor({
