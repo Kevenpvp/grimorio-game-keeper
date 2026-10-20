@@ -107,6 +107,9 @@ export function CharacterAbilitiesPanel({
                 <div className="font-semibold">{ability.name}</div>
                 {ability.description && <p className="mt-1 text-xs text-muted-foreground">{ability.description}</p>}
                 <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
+                  {ability.granted_by_virtue_id && (
+                    <span className="rounded bg-gold/10 px-2 py-1 text-gold">Concedida por virtude</span>
+                  )}
                   {!ability.can_activate ? (
                     <span className="rounded bg-gold/10 px-2 py-1 text-gold"><Sparkles className="mr-1 inline h-3 w-3" /> Não ativável</span>
                   ) : (
@@ -270,7 +273,7 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
   return (
     <article className="space-y-3 rounded-lg border border-border p-3">
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0"><div className="font-semibold">{ability.name}</div><div className="text-xs text-muted-foreground">{ability.can_activate ? `Cooldown atual: ${ability.cooldown_remaining}/${ability.cooldown_turns}` : "Não ativável · efeitos passivos permanentes"}</div></div>
+        <div className="min-w-0"><div className="font-semibold">{ability.name}</div><div className="text-xs text-muted-foreground">{ability.granted_by_virtue_id ? "Concedida por virtude · " : ""}{ability.can_activate ? `Cooldown atual: ${ability.cooldown_remaining}/${ability.cooldown_turns}` : "Não ativável · efeitos passivos permanentes"}</div></div>
         <Button size="icon" variant="ghost" aria-label="Remover habilidade desta ficha" onClick={() => void remove()}><Trash2 className="h-4 w-4" /></Button>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
