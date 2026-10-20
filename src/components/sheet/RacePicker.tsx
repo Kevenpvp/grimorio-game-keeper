@@ -44,7 +44,7 @@ export function RacePicker({ character, isMaster }: { character: Character; isMa
   if (!isMaster && character.race_id && character.virtue_id) return null;
 
   async function confirmChoice() {
-    if (!pendingRaceId || !pendingVirtueId) {
+    if (!isMaster && (!pendingRaceId || !pendingVirtueId)) {
       toast.error("Selecione uma raça e uma virtude antes de confirmar");
       return;
     }
@@ -84,7 +84,7 @@ export function RacePicker({ character, isMaster }: { character: Character; isMa
       </div>
 
       <div className="space-y-3">
-        <h3 className="text-sm font-semibold">1. Raça</h3>
+        <div className="flex items-center justify-between gap-2"><h3 className="text-sm font-semibold">1. Raça</h3>{isMaster && pendingRaceId && <Button size="sm" variant="ghost" disabled={busy} onClick={() => setPendingRaceId(null)}>Nenhuma</Button>}</div>
         {raceOptions ? <p className="text-sm text-muted-foreground">Nenhuma raça cadastrada ainda.</p> : (
           <div className="grid gap-3 sm:grid-cols-2">
             {races.map((race) => {
@@ -110,7 +110,7 @@ export function RacePicker({ character, isMaster }: { character: Character; isMa
       </div>
 
       <div className="space-y-3">
-        <h3 className="flex items-center gap-2 text-sm font-semibold"><Sparkles className="h-4 w-4 text-gold" /> 2. Virtude</h3>
+        <div className="flex items-center justify-between gap-2"><h3 className="flex items-center gap-2 text-sm font-semibold"><Sparkles className="h-4 w-4 text-gold" /> 2. Virtude</h3>{isMaster && pendingVirtueId && <Button size="sm" variant="ghost" disabled={busy} onClick={() => setPendingVirtueId(null)}>Nenhuma</Button>}</div>
         {virtueOptions ? <p className="text-sm text-muted-foreground">Nenhuma virtude cadastrada ainda. Peça ao mestre para cadastrar uma.</p> : (
           <div className="grid gap-3 sm:grid-cols-2">
             {virtues.map((virtue) => {
@@ -139,7 +139,7 @@ export function RacePicker({ character, isMaster }: { character: Character; isMa
         <p className="text-xs text-muted-foreground">
           Selecionado: {races.find((r) => r.id === pendingRaceId)?.name ?? "nenhuma raça"} · {virtues.find((v) => v.id === pendingVirtueId)?.name ?? "nenhuma virtude"}
         </p>
-        <Button disabled={busy || !pendingRaceId || !pendingVirtueId || (raceOptions || virtueOptions)} onClick={() => void confirmChoice()}>
+        <Button disabled={busy || (!isMaster && (!pendingRaceId || !pendingVirtueId || raceOptions || virtueOptions))} onClick={() => void confirmChoice()}>
           <Check className="mr-1 h-4 w-4" /> {busy ? "Confirmando..." : "Confirmar escolha"}
         </Button>
       </div>
