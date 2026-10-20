@@ -117,7 +117,8 @@ export function useCharacterActiveEffects(characterId: string | undefined) {
         if (error) throw error;
         battleEffects = (data ?? []) as ActiveCharacterEffect[];
       }
-      return [...(standaloneResult.data ?? []) as ActiveCharacterEffect[], ...battleEffects];
+      const standaloneEffects = (standaloneResult.data ?? []) as ActiveCharacterEffect[];
+      return [...standaloneEffects, ...battleEffects];
     },
   });
 }
