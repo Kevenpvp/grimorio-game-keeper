@@ -250,6 +250,7 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
   const [effects, setEffects] = useState<AbilityEffectDefinition[]>(ability.effects);
   const [passiveEffects, setPassiveEffects] = useState<AbilityEffectDefinition[]>(ability.passive_effects);
   const [busy, setBusy] = useState(false);
+  const [expanded, setExpanded] = useState(true);
 
   useEffect(() => {
     setName(ability.name);
@@ -309,10 +310,27 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
   return (
     <article className="space-y-3 rounded-lg border border-border p-3">
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0"><div className="font-semibold">{ability.name}</div><div className="text-xs text-muted-foreground">{ability.granted_by_virtue_id ? "Concedida por virtude · " : ""}{ability.can_activate ? `Cooldown atual: ${ability.cooldown_remaining}/${ability.cooldown_turns}` : "Não ativável · efeitos passivos permanentes"}</div></div>
-        <Button size="icon" variant="ghost" aria-label="Remover habilidade desta ficha" onClick={() => void remove()}><Trash2 className="h-4 w-4" /></Button>
+        <div className="min-w-0">
+          <div className="font-semibold">{ability.name}</div>
+          <div className="text-xs text-muted-foreground">{ability.granted_by_virtue_id ? "Concedida por virtude · " : ""}{ability.can_activate ? `Cooldown atual: ${ability.cooldown_remaining}/${ability.cooldown_turns}` : "Não ativável · efeitos passivos permanentes"}</div>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          <Button
+            size="sm"
+            variant="ghost"
+            aria-expanded={expanded}
+            aria-label={expanded ? `Minimizar ${ability.name}` : `Maximizar ${ability.name}`}
+            onClick={() => setExpanded((value) => !value)}
+          >
+            {expanded ? <ChevronUp className="mr-1 h-4 w-4" /> : <ChevronDown className="mr-1 h-4 w-4" />}
+            {expanded ? "Minimizar" : "Maximizar"}
+          </Button>
+          <Button size="icon" variant="ghost" aria-label="Remover habilidade desta ficha" onClick={() => void remove()}><Trash2 className="h-4 w-4" /></Button>
+        </div>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2">
+      {expanded && (
+        <div className="space-y-3">
+          <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1"><Label>Nome nesta ficha</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
         <label className="flex min-h-10 items-center gap-2 rounded-md border border-border px-3 py-2 text-sm sm:col-span-2">
           <input type="checkbox" checked={!canActivate} onChange={(e) => {
@@ -344,11 +362,13 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
         description="Aplicados continuamente enquanto a habilidade estiver atribuída a esta ficha."
         defs={defs}
       />
-      <div className="flex flex-wrap gap-2">
-        <Button size="sm" disabled={busy} onClick={() => void save()}>{busy ? "Salvando..." : "Salvar valores desta ficha"}</Button>
-        {ability.can_activate && ability.cooldown_remaining > 0 && <Button size="sm" variant="outline" onClick={() => void setCooldownRemaining(Math.max(0, ability.cooldown_remaining - 1))}><Minus className="mr-1 h-3.5 w-3.5" /> Reduzir cooldown</Button>}
-        {ability.can_activate && ability.cooldown_remaining > 0 && <Button size="sm" variant="outline" onClick={() => void setCooldownRemaining(0)}><Check className="mr-1 h-3.5 w-3.5" /> Zerar cooldown</Button>}
-      </div>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" disabled={busy} onClick={() => void save()}>{busy ? "Salvando..." : "Salvar valores desta ficha"}</Button>
+            {ability.can_activate && ability.cooldown_remaining > 0 && <Button size="sm" variant="outline" onClick={() => void setCooldownRemaining(Math.max(0, ability.cooldown_remaining - 1))}><Minus className="mr-1 h-3.5 w-3.5" /> Reduzir cooldown</Button>}
+            {ability.can_activate && ability.cooldown_remaining > 0 && <Button size="sm" variant="outline" onClick={() => void setCooldownRemaining(0)}><Check className="mr-1 h-3.5 w-3.5" /> Zerar cooldown</Button>}
+          </div>
+        </div>
+      )}
     </article>
   );
 }
