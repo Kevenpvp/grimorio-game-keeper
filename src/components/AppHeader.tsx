@@ -36,7 +36,7 @@ export function AppHeader() {
           </Link>
 
           {/* Desktop navigation keeps its single-row layout only when there is room. */}
-          <nav aria-label="Navegação principal" className="hidden min-w-0 items-center gap-3 text-sm md:flex">
+          <nav aria-label="Navegação principal" className="hidden min-w-0 items-center gap-3 text-sm lg:flex">
             {me && <Link to="/combate" className="whitespace-nowrap text-muted-foreground hover:text-gold">Combate</Link>}
             {me?.isMaster && (
               <>
@@ -63,7 +63,7 @@ export function AppHeader() {
             type="button"
             variant="outline"
             size="icon"
-            className="h-9 w-9 shrink-0 md:hidden"
+            className="h-9 w-9 shrink-0 lg:hidden"
             aria-label={mobileOpen ? "Fechar menu" : "Abrir menu"}
             aria-expanded={mobileOpen}
             onClick={() => setMobileOpen((open) => !open)}
@@ -73,7 +73,7 @@ export function AppHeader() {
         </div>
 
         {mobileOpen && (
-          <nav aria-label="Navegação móvel" className="mt-3 grid gap-1 border-t border-border/60 pt-3 md:hidden">
+          <nav aria-label="Navegação móvel" className="mt-3 grid gap-1 border-t border-border/60 pt-3 lg:hidden">
             {me && (
               <Link to="/combate" className={navClass} onClick={() => setMobileOpen(false)}>
                 Combate
