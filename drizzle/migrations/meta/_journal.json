@@ -204,6 +204,13 @@
       "when": 1792659600000,
       "tag": "0028_trait_point_ledgers_physical_and_no_mana",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1792663200000,
+      "tag": "0029_incoming_damage_mitigation",
+      "breakpoints": true
     }
   ]
 }
