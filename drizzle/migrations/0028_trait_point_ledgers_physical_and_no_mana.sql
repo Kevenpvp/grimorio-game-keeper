@@ -339,6 +339,8 @@ CREATE TRIGGER virtues_cleanup_character_allocations BEFORE DELETE ON public.vir
 
 -- Ability effects: persist and enforce Sem Mana.
 
+-- Ability effects: preserve damage-scope metadata and persist/enforce Sem Mana.
+
 create or replace function public.apply_character_ability_end_effects()
 returns trigger
 language plpgsql
@@ -356,6 +358,7 @@ declare
   _amount numeric;
   _duration integer;
   _effect_name text;
+  _damage_scope text;
 begin
   if old.is_end_effect or old.effect_group_id is null or old.source_character_ability_id is null then
     return old;
@@ -394,6 +397,10 @@ begin
     _amount := coalesce(nullif(_effect->>'amount', '')::numeric, 0);
     _duration := greatest(1, coalesce(nullif(_effect->>'duration', '')::integer, 1));
     _effect_name := coalesce(nullif(_effect->>'name', ''), _ability_name);
+    _damage_scope := coalesce(nullif(_effect->>'damage_scope', ''), 'any');
+    IF _damage_scope NOT IN ('any', 'physical', 'magical') THEN
+      RAISE EXCEPTION 'Escopo de Dano Causado inválido';
+    END IF;
 
     if _effect_type is null or _effect_type not in (
       'status','regeneration','mana_regeneration','mana_used',
@@ -426,6 +433,7 @@ begin
       _attribute_key := null;
       _amount := 0;
       _value_mode := 'fixed';
+      _damage_scope := 'any';
     elsif _effect_type = 'magic_prohibition' then
       if _polarity <> 'debuff' then raise exception 'Proibição de magia só pode ser um debuff'; end if;
       _attribute_key := null;
@@ -441,11 +449,11 @@ begin
     insert into public.battle_effects (
       battle_id, character_id, name, effect_type, attribute_key, polarity,
       value_mode, amount, duration, duration_scope, source_character_ability_id,
-      effect_group_id, is_end_effect
+      effect_group_id, is_end_effect, damage_scope
     ) values (
       old.battle_id, old.character_id, _ability_name || ': ' || _effect_name,
       _effect_type, _attribute_key, _polarity, _value_mode, _amount, _duration,
-      old.duration_scope, old.source_character_ability_id, old.effect_group_id, true
+      old.duration_scope, old.source_character_ability_id, old.effect_group_id, true, _damage_scope
     );
   end loop;
 
@@ -476,6 +484,7 @@ declare
   _amount numeric;
   _duration integer;
   _effect_name text;
+  _damage_scope text;
   _mana_fixed_modifier numeric := 0;
   _mana_percent_modifier numeric := 0;
   _effective_mana_cost integer := 0;
@@ -618,6 +627,10 @@ begin
     _amount := coalesce(nullif(_effect->>'amount', '')::numeric, 0);
     _duration := coalesce(nullif(_effect->>'duration', '')::integer, 1);
     _effect_name := coalesce(nullif(_effect->>'name', ''), _assignment.name);
+    _damage_scope := coalesce(nullif(_effect->>'damage_scope', ''), 'any');
+    IF _damage_scope NOT IN ('any', 'physical', 'magical') THEN
+      RAISE EXCEPTION 'Escopo de Dano Causado inválido';
+    END IF;
 
     if _effect_type is null or _effect_type not in (
       'status','regeneration','mana_regeneration','mana_used',
@@ -646,6 +659,7 @@ begin
       _attribute_key := null;
       _amount := 0;
       _value_mode := 'fixed';
+      _damage_scope := 'any';
     elsif _effect_type = 'magic_prohibition' then
       if _polarity <> 'debuff' then raise exception 'Proibição de magia só pode ser um debuff'; end if;
       _attribute_key := null;
@@ -661,11 +675,11 @@ begin
     insert into public.battle_effects (
       battle_id, character_id, name, effect_type, attribute_key, polarity,
       value_mode, amount, duration, duration_scope, source_character_ability_id,
-      effect_group_id, is_end_effect
+      effect_group_id, is_end_effect, damage_scope
     ) values (
       _effective_battle_id, _target_character_id, _assignment.name || ': ' || _effect_name,
       _effect_type, _attribute_key, _polarity, _value_mode, _amount,
-      _duration, 'global', _assignment.id, _effect_group_id, false
+      _duration, 'global', _assignment.id, _effect_group_id, false, _damage_scope
     );
   end loop;
 
