@@ -206,11 +206,11 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
     const result = Math.floor((base + fixed) * (1 + percent / 100));
     return noMana && key === "mana" ? 0 : key === "hp" ? Math.max(1, result) : Math.max(0, result);
   };
-  const blocked = (fighterId: string, type: "no_regen_hp" | "no_regen_mana") =>
+  const blocked = (fighterId: string, type: "no_regen_hp" | "no_regen_mana" | "no_mana") =>
     effects.some(e => e.character_id === fighterId && e.effect_type === type) ||
     passiveEffectTypeActive(abilitiesOf(fighterId), type);
   const regenValue = (fighterId: string, key: "hp" | "mana", base: number) => {
-    if (blocked(fighterId, key === "hp" ? "no_regen_hp" : "no_regen_mana")) return 0;
+    if (blocked(fighterId, key === "hp" ? "no_regen_hp" : "no_regen_mana") || (key === "mana" && blocked(fighterId, "no_mana"))) return 0;
     const active = effects.filter(e => e.character_id === fighterId && e.effect_type === "regeneration" && e.attribute_key === key);
     const passive = passiveRegenerationModifiers(abilitiesOf(fighterId), key);
     const fixed = passive.fixed + active.filter(e => e.value_mode === "fixed").reduce((n,e) => n + (e.polarity === "buff" ? 1 : -1) * Number(e.amount), 0);
