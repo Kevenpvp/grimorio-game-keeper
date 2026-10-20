@@ -99,6 +99,9 @@ export function PointsDistribution({
           const invested = byKey.get(d.key)?.points ?? 0;
           const pending = alloc[d.key] ?? 0;
           const total = invested + pending;
+          const fromRace = Math.max(0, (raceAlloc[d.key] ?? 0) + (source === "race" ? pending : 0));
+          const fromVirtue = Math.max(0, (virtueAlloc[d.key] ?? 0) + (source === "virtue" ? pending : 0));
+          const fromBase = Math.max(0, invested - (raceAlloc[d.key] ?? 0) - (virtueAlloc[d.key] ?? 0) + (source === "base" ? pending : 0));
           return (
             <div key={d.key} className="rounded-md border border-border bg-muted/40 p-3">
               <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
@@ -110,6 +113,14 @@ export function PointsDistribution({
                   <div className="tabular text-xs text-muted-foreground">
                     {total} pts {pending !== 0 && <span className="text-gold">({pending > 0 ? "+" : ""}{pending})</span>}
                   </div>
+                  {(fromRace > 0 || fromVirtue > 0) && (
+                    <div className="mt-1 text-[11px] text-muted-foreground">
+                      Origem: {fromRace > 0 && <span>{fromRace} raça</span>}
+                      {fromRace > 0 && fromVirtue > 0 && " · "}
+                      {fromVirtue > 0 && <span>{fromVirtue} virtude</span>}
+                      {fromBase > 0 && <> · {fromBase} livres</>}
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center gap-1">
                   <Button size="icon" variant="outline" className="h-8 w-8" aria-label={`Remover ponto de ${d.label}`}
