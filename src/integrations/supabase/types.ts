@@ -105,6 +105,9 @@ export type Database = {
           battle_id: string | null
           character_id: string
           created_at: string
+          damage_reduction_magic_level: string | null
+          damage_reduction_scope: string
+          damage_reduction_type_id: string | null
           damage_scope: string
           duration: number
           duration_scope: string
@@ -123,6 +126,9 @@ export type Database = {
           battle_id?: string | null
           character_id: string
           created_at?: string
+          damage_reduction_magic_level?: string | null
+          damage_reduction_scope?: string
+          damage_reduction_type_id?: string | null
           damage_scope?: string
           duration: number
           duration_scope?: string
@@ -141,6 +147,9 @@ export type Database = {
           battle_id?: string | null
           character_id?: string
           created_at?: string
+          damage_reduction_magic_level?: string | null
+          damage_reduction_scope?: string
+          damage_reduction_type_id?: string | null
           damage_scope?: string
           duration?: number
           duration_scope?: string
@@ -173,6 +182,13 @@ export type Database = {
             columns: ["source_character_ability_id"]
             isOneToOne: false
             referencedRelation: "character_abilities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "battle_effects_damage_reduction_type_id_fkey"
+            columns: ["damage_reduction_type_id"]
+            isOneToOne: false
+            referencedRelation: "damage_types"
             referencedColumns: ["id"]
           },
         ]
