@@ -345,7 +345,7 @@ function PercentEditor({ label, icon, tone, value, onSave }: {
   );
 }
 
-function AttrEditor({ def, characterId, attr, racePts, virtuePts, statusModifier, onSaved }: {
+function AttrEditor({ def, characterId, attr, racePts, virtuePts, physicalPts, noMana, statusModifier, onSaved }: {
   def: AttributeDef; characterId: string; attr: CharacterAttr | undefined; racePts: number; virtuePts: number; physicalPts: number; noMana: boolean; statusModifier: { fixed: number; percent: number }; onSaved: () => void;
 }) {
   const cur0 = attr?.current_value ?? 0;
