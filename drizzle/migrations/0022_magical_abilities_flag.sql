@@ -211,7 +211,7 @@ begin
         and (e.battle_id is null or e.battle_id = _effective_battle_id)
     )
   ) then
-    raise exception 'Proibição de magia: não é possível usar habilidades que consomem Mana enquanto o efeito durar';
+    raise exception 'Proibição de magia: habilidades mágicas ou que consomem Mana não podem ser usadas enquanto o efeito durar';
   end if;
 
   if _effective_mana_cost > 0 then
