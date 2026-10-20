@@ -196,18 +196,26 @@ BEGIN
     COALESCE(SUM(CASE WHEN r.damage_reduction_scope = 'magical'
       AND _damage_kind IN ('magical','hybrid')
       AND _damage_type_id IS NOT NULL AND _magic_level IS NOT NULL
-      AND ((r.damage_reduction_type_ids IS NOT NULL AND (cardinality(r.damage_reduction_type_ids) = 0 OR _damage_type_id = ANY(r.damage_reduction_type_ids)))
-        OR (r.damage_reduction_type_ids IS NULL AND r.damage_reduction_type_id = _damage_type_id))
-      AND ((r.damage_reduction_magic_levels IS NOT NULL AND (cardinality(r.damage_reduction_magic_levels) = 0 OR _magic_level = ANY(r.damage_reduction_magic_levels)))
-        OR (r.damage_reduction_magic_levels IS NULL AND r.damage_reduction_magic_level = _magic_level))
+      AND COALESCE(
+        cardinality(r.damage_reduction_type_ids) = 0 OR _damage_type_id = ANY(r.damage_reduction_type_ids),
+        r.damage_reduction_type_id = _damage_type_id
+      )
+      AND COALESCE(
+        cardinality(r.damage_reduction_magic_levels) = 0 OR _magic_level = ANY(r.damage_reduction_magic_levels),
+        r.damage_reduction_magic_level = _magic_level
+      )
       AND r.value_mode = 'fixed' THEN r.amount ELSE 0 END), 0),
     COALESCE(SUM(CASE WHEN r.damage_reduction_scope = 'magical'
       AND _damage_kind IN ('magical','hybrid')
       AND _damage_type_id IS NOT NULL AND _magic_level IS NOT NULL
-      AND ((r.damage_reduction_type_ids IS NOT NULL AND (cardinality(r.damage_reduction_type_ids) = 0 OR _damage_type_id = ANY(r.damage_reduction_type_ids)))
-        OR (r.damage_reduction_type_ids IS NULL AND r.damage_reduction_type_id = _damage_type_id))
-      AND ((r.damage_reduction_magic_levels IS NOT NULL AND (cardinality(r.damage_reduction_magic_levels) = 0 OR _magic_level = ANY(r.damage_reduction_magic_levels)))
-        OR (r.damage_reduction_magic_levels IS NULL AND r.damage_reduction_magic_level = _magic_level))
+      AND COALESCE(
+        cardinality(r.damage_reduction_type_ids) = 0 OR _damage_type_id = ANY(r.damage_reduction_type_ids),
+        r.damage_reduction_type_id = _damage_type_id
+      )
+      AND COALESCE(
+        cardinality(r.damage_reduction_magic_levels) = 0 OR _magic_level = ANY(r.damage_reduction_magic_levels),
+        r.damage_reduction_magic_level = _magic_level
+      )
       AND r.value_mode = 'percent' THEN r.amount ELSE 0 END), 0)
   INTO _physical_reduction_fixed, _physical_reduction_percent,
        _magical_reduction_fixed, _magical_reduction_percent
@@ -255,15 +263,21 @@ BEGIN
   WHERE r.polarity = 'buff'
     AND (
       (r.damage_reduction_scope = 'physical' AND _damage_kind IN ('physical','hybrid'))
-      OR
-      (r.damage_reduction_scope = 'magical'
+      OR (
+        r.damage_reduction_scope = 'magical'
         AND _damage_kind IN ('magical','hybrid')
-        AND _damage_type_id IS NOT NULL AND _magic_level IS NOT NULL
-        AND ((r.damage_reduction_type_ids IS NOT NULL AND (cardinality(r.damage_reduction_type_ids) = 0 OR _damage_type_id = ANY(r.damage_reduction_type_ids)))
-          OR (r.damage_reduction_type_ids IS NULL AND r.damage_reduction_type_id = _damage_type_id))
-        AND ((r.damage_reduction_magic_levels IS NOT NULL AND (cardinality(r.damage_reduction_magic_levels) = 0 OR _magic_level = ANY(r.damage_reduction_magic_levels)))
-          OR (r.damage_reduction_magic_levels IS NULL AND r.damage_reduction_magic_level = _magic_level))
-    ));
+        AND _damage_type_id IS NOT NULL
+        AND _magic_level IS NOT NULL
+        AND COALESCE(
+          cardinality(r.damage_reduction_type_ids) = 0 OR _damage_type_id = ANY(r.damage_reduction_type_ids),
+          r.damage_reduction_type_id = _damage_type_id
+        )
+        AND COALESCE(
+          cardinality(r.damage_reduction_magic_levels) = 0 OR _magic_level = ANY(r.damage_reduction_magic_levels),
+          r.damage_reduction_magic_level = _magic_level
+        )
+      )
+    );
 
   SELECT ca.current_value INTO _hp_before
   FROM public.character_attributes ca
