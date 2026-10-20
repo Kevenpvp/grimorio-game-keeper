@@ -176,6 +176,13 @@
       "when": 1792645200000,
       "tag": "0024_effects_expire_at_zero",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1792648800000,
+      "tag": "0025_fix_effect_duration_check",
+      "breakpoints": true
     }
   ]
 }
