@@ -459,7 +459,7 @@ export type Database = {
         Returns: undefined
       }
       choose_character_traits: {
-        Args: { _character_id: string; _race_id: string; _virtue_id: string }
+        Args: { _character_id: string; _race_id: string | null; _virtue_id: string | null }
         Returns: undefined
       }
       has_role: {
