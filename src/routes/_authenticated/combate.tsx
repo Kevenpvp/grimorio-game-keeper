@@ -186,15 +186,15 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
   async function advanceFighterTurn(fighter: Fighter) {
     const participant = battle.battle_participants.find((p) => p.characters?.id === fighter.id);
     if (!participant) { toast.error("Personagem não encontrado nesta batalha"); return; }
+    const manaAttr = fighter.character_attributes.find((a) => a.attribute_key === "mana");
+    const baseRegen = manaAttr ? manaRegenFor(fighter) : 0;
+    if (baseRegen === null) { toast.error("Informe uma regeneração de mana válida"); return; }
     const nextTurn = ((participant as typeof participant & { turn_count?: number }).turn_count ?? 0) + 1;
     const { error: turnError } = await supabase.from("battle_participants").update({ turn_count: nextTurn }).eq("battle_id", battle.id).eq("character_id", fighter.id);
     if (turnError) { toast.error(turnError.message); return; }
-    const manaAttr = fighter.character_attributes.find((a) => a.attribute_key === "mana");
     if (manaAttr) {
       const maximum = val(fighter, "mana");
-      const baseRegen = manaRegenFor(fighter);
-      const regen = baseRegen === null ? null : regenValue(fighter.id, "mana", baseRegen);
-      if (regen === null) { toast.error("Informe uma regeneração de mana válida"); return; }
+      const regen = regenValue(fighter.id, "mana", baseRegen);
       const nextMana = Math.min(maximum, (manaAttr.current_value ?? 0) + regen);
       const { error } = await supabase.from("character_attributes").update({ current_value: nextMana, updated_at: new Date().toISOString() }).eq("character_id", fighter.id).eq("attribute_key", "mana");
       if (error) { toast.error("Turno avançado, mas falhou a regeneração de mana: " + error.message); }
@@ -205,6 +205,13 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
   }
 
   async function advanceTurn() {
+    // Validar todas as configurações antes de alterar qualquer contador de turno.
+    for (const fighter of fighters) {
+      if (fighter.character_attributes.some((a) => a.attribute_key === "mana") && manaRegenFor(fighter) === null) {
+        toast.error("Informe uma regeneração de mana válida para " + fighter.name);
+        return;
+      }
+    }
     const nextTurn = (battle.turn_count ?? 0) + 1;
     const { error: turnError } = await supabase.from("battles").update({ turn_count: nextTurn }).eq("id", battle.id);
     if (turnError) { toast.error(turnError.message); return; }
@@ -217,9 +224,8 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
       }
       const manaAttr = fighter.character_attributes.find((a) => a.attribute_key === "mana");
       if (!manaAttr) continue;
-      const baseRegen = manaRegenFor(fighter);
-      const regen = baseRegen === null ? null : regenValue(fighter.id, "mana", baseRegen);
-      if (regen === null) { toast.error("Informe uma regeneração de mana válida"); return; }
+      const baseRegen = manaRegenFor(fighter)!; // Já validado antes de avançar o turno.
+      const regen = regenValue(fighter.id, "mana", baseRegen);
       const nextMana = Math.min(val(fighter, "mana"), (manaAttr.current_value ?? 0) + regen);
       const { error } = await supabase.from("character_attributes").update({ current_value: nextMana, updated_at: new Date().toISOString() }).eq("character_id", fighter.id).eq("attribute_key", "mana");
       if (error) toast.error("Falha ao regenerar mana de " + fighter.name + ": " + error.message);
