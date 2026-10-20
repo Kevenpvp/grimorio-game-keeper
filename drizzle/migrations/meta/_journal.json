@@ -197,6 +197,13 @@
       "when": 1792656000000,
       "tag": "0027_damage_dealt_scope",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1792659600000,
+      "tag": "0028_trait_point_ledgers_physical_and_no_mana",
+      "breakpoints": true
     }
   ]
 }
