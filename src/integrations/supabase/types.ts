@@ -399,10 +399,16 @@ export type Database = {
           player_name: string
           race_id: string | null
           race_points_granted: number
+          race_attribute_allocations: Json
+          race_physical_points_granted: number
+          race_physical_allocations: Json
           sanity: number
           updated_at: string
           virtue_id: string | null
           virtue_points_granted: number
+          virtue_attribute_allocations: Json
+          virtue_physical_points_granted: number
+          virtue_physical_allocations: Json
         }
         Insert: {
           available_points?: number
@@ -417,10 +423,16 @@ export type Database = {
           player_name?: string
           race_id?: string | null
           race_points_granted?: number
+          race_attribute_allocations?: Json
+          race_physical_points_granted?: number
+          race_physical_allocations?: Json
           sanity?: number
           updated_at?: string
           virtue_id?: string | null
           virtue_points_granted?: number
+          virtue_attribute_allocations?: Json
+          virtue_physical_points_granted?: number
+          virtue_physical_allocations?: Json
         }
         Update: {
           available_points?: number
@@ -435,10 +447,16 @@ export type Database = {
           player_name?: string
           race_id?: string | null
           race_points_granted?: number
+          race_attribute_allocations?: Json
+          race_physical_points_granted?: number
+          race_physical_allocations?: Json
           sanity?: number
           updated_at?: string
           virtue_id?: string | null
           virtue_points_granted?: number
+          virtue_attribute_allocations?: Json
+          virtue_physical_points_granted?: number
+          virtue_physical_allocations?: Json
         }
         Relationships: [
           {
@@ -518,6 +536,7 @@ export type Database = {
       races: {
         Row: {
           bonus_points: number
+          physical_bonus_points: number
           created_at: string
           description: string | null
           id: string
@@ -526,6 +545,7 @@ export type Database = {
         }
         Insert: {
           bonus_points?: number
+          physical_bonus_points?: number
           created_at?: string
           description?: string | null
           id?: string
@@ -534,6 +554,7 @@ export type Database = {
         }
         Update: {
           bonus_points?: number
+          physical_bonus_points?: number
           created_at?: string
           description?: string | null
           id?: string
@@ -596,6 +617,7 @@ export type Database = {
       virtues: {
         Row: {
           bonus_points: number
+          physical_bonus_points: number
           created_at: string
           description: string | null
           id: string
@@ -604,6 +626,7 @@ export type Database = {
         }
         Insert: {
           bonus_points?: number
+          physical_bonus_points?: number
           created_at?: string
           description?: string | null
           id?: string
@@ -612,6 +635,7 @@ export type Database = {
         }
         Update: {
           bonus_points?: number
+          physical_bonus_points?: number
           created_at?: string
           description?: string | null
           id?: string
