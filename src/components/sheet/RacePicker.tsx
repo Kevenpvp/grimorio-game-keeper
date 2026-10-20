@@ -30,7 +30,7 @@ export function RacePicker({ character, isMaster }: { character: Character; isMa
   const { data: races } = useRaces();
   const { data: virtues } = useVirtues();
   const { data: defs } = useDefs();
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<"race" | "virtue" | null>(null);
   const [pendingRaceId, setPendingRaceId] = useState<string | null>(character.race_id);
   const [pendingVirtueId, setPendingVirtueId] = useState<string | null>(character.virtue_id);
 
@@ -43,29 +43,60 @@ export function RacePicker({ character, isMaster }: { character: Character; isMa
   // Once a player has both traits, the GM is the only one allowed to change them.
   if (!isMaster && character.race_id && character.virtue_id) return null;
 
-  async function confirmChoice() {
-    if (!isMaster && (!pendingRaceId || !pendingVirtueId)) {
-      toast.error("Selecione uma raça e uma virtude antes de confirmar");
-      return;
-    }
-    setBusy(true);
-    const { error } = await supabase.rpc("choose_character_traits", {
-      _character_id: character.id,
-      _race_id: pendingRaceId,
-      _virtue_id: pendingVirtueId,
-    });
-    if (error) {
-      toast.error(error.message);
-      setBusy(false);
-      return;
-    }
-    toast.success("Raça e virtude confirmadas!");
+  async function refreshAfterConfirmation(message: string) {
+    toast.success(message);
     await Promise.all([
       qc.invalidateQueries({ queryKey: ["character", character.id] }),
       qc.invalidateQueries({ queryKey: ["characters"] }),
       qc.invalidateQueries({ queryKey: ["my-character"] }),
+      qc.invalidateQueries({ queryKey: ["character-abilities", character.id] }),
+      qc.invalidateQueries({ queryKey: ["character-abilities-battle"] }),
     ]);
-    setBusy(false);
+    setBusy(null);
+  }
+
+  async function confirmRace() {
+    if (!isMaster && !pendingRaceId) {
+      toast.error("Selecione uma raça antes de confirmar");
+      return;
+    }
+    if (pendingRaceId === character.race_id) return;
+
+    setBusy("race");
+    const { error } = await supabase.rpc("choose_character_race", {
+      _character_id: character.id,
+      _race_id: pendingRaceId,
+    });
+    if (error) {
+      toast.error(error.message);
+      setBusy(null);
+      return;
+    }
+    await refreshAfterConfirmation("Raça confirmada!");
+  }
+
+  async function confirmVirtue() {
+    if (!isMaster && !character.race_id) {
+      toast.error("Confirme sua raça antes de escolher a virtude");
+      return;
+    }
+    if (!isMaster && !pendingVirtueId) {
+      toast.error("Selecione uma virtude antes de confirmar");
+      return;
+    }
+    if (pendingVirtueId === character.virtue_id) return;
+
+    setBusy("virtue");
+    const { error } = await supabase.rpc("choose_character_virtue", {
+      _character_id: character.id,
+      _virtue_id: pendingVirtueId,
+    });
+    if (error) {
+      toast.error(error.message);
+      setBusy(null);
+      return;
+    }
+    await refreshAfterConfirmation("Virtude confirmada!");
   }
 
   const raceOptions = races.length === 0;
@@ -84,7 +115,15 @@ export function RacePicker({ character, isMaster }: { character: Character; isMa
       </div>
 
       <div className="space-y-3">
-        <div className="flex items-center justify-between gap-2"><h3 className="text-sm font-semibold">1. Raça</h3>{isMaster && pendingRaceId && <Button size="sm" variant="ghost" disabled={busy} onClick={() => setPendingRaceId(null)}>Nenhuma</Button>}</div>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold">1. Raça</h3>
+          <div className="flex items-center gap-2">
+            {isMaster && pendingRaceId && <Button size="sm" variant="ghost" disabled={busy !== null} onClick={() => setPendingRaceId(null)}>Nenhuma</Button>}
+            <Button size="sm" disabled={busy !== null || pendingRaceId === character.race_id || (!isMaster && !pendingRaceId) || (raceOptions && !pendingRaceId)} onClick={() => void confirmRace()}>
+              <Check className="mr-1 h-3.5 w-3.5" /> {busy === "race" ? "Confirmando..." : "Confirmar raça"}
+            </Button>
+          </div>
+        </div>
         {raceOptions ? <p className="text-sm text-muted-foreground">Nenhuma raça cadastrada ainda.</p> : (
           <div className="grid gap-3 sm:grid-cols-2">
             {races.map((race) => {
@@ -97,7 +136,7 @@ export function RacePicker({ character, isMaster }: { character: Character; isMa
                       <div className="font-semibold">{race.name}</div>
                       {race.description && <p className="mt-1 text-xs text-muted-foreground">{race.description}</p>}
                     </div>
-                    <Button size="sm" variant={selected ? "default" : "outline"} className="shrink-0" disabled={busy || lockedForPlayer} onClick={() => setPendingRaceId(race.id)}>
+                    <Button size="sm" variant={selected ? "default" : "outline"} className="shrink-0" disabled={busy !== null || lockedForPlayer} onClick={() => setPendingRaceId(race.id)}>
                       {selected ? <><Check className="mr-1 h-3.5 w-3.5" /> Selecionada</> : "Selecionar"}
                     </Button>
                   </div>
@@ -110,7 +149,15 @@ export function RacePicker({ character, isMaster }: { character: Character; isMa
       </div>
 
       <div className="space-y-3">
-        <div className="flex items-center justify-between gap-2"><h3 className="flex items-center gap-2 text-sm font-semibold"><Sparkles className="h-4 w-4 text-gold" /> 2. Virtude</h3>{isMaster && pendingVirtueId && <Button size="sm" variant="ghost" disabled={busy} onClick={() => setPendingVirtueId(null)}>Nenhuma</Button>}</div>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="flex items-center gap-2 text-sm font-semibold"><Sparkles className="h-4 w-4 text-gold" /> 2. Virtude</h3>
+          <div className="flex items-center gap-2">
+            {isMaster && pendingVirtueId && <Button size="sm" variant="ghost" disabled={busy !== null} onClick={() => setPendingVirtueId(null)}>Nenhuma</Button>}
+            <Button size="sm" disabled={busy !== null || pendingVirtueId === character.virtue_id || (!isMaster && (!pendingVirtueId || !character.race_id)) || (virtueOptions && !pendingVirtueId)} onClick={() => void confirmVirtue()}>
+              <Check className="mr-1 h-3.5 w-3.5" /> {busy === "virtue" ? "Confirmando..." : "Confirmar virtude"}
+            </Button>
+          </div>
+        </div>
         {virtueOptions ? <p className="text-sm text-muted-foreground">Nenhuma virtude cadastrada ainda. Peça ao mestre para cadastrar uma.</p> : (
           <div className="grid gap-3 sm:grid-cols-2">
             {virtues.map((virtue) => {
@@ -135,13 +182,8 @@ export function RacePicker({ character, isMaster }: { character: Character; isMa
         )}
       </div>
 
-      <div className="flex flex-col gap-2 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-xs text-muted-foreground">
-          Selecionado: {races.find((r) => r.id === pendingRaceId)?.name ?? "nenhuma raça"} · {virtues.find((v) => v.id === pendingVirtueId)?.name ?? "nenhuma virtude"}
-        </p>
-        <Button disabled={busy || (!isMaster && (!pendingRaceId || !pendingVirtueId || raceOptions || virtueOptions))} onClick={() => void confirmChoice()}>
-          <Check className="mr-1 h-4 w-4" /> {busy ? "Confirmando..." : "Confirmar escolha"}
-        </Button>
+      <div className="border-t border-border pt-4 text-xs text-muted-foreground">
+        Selecione e confirme a Raça no bloco acima e confirme a Virtude separadamente. Confirmar a Virtude não altera os pontos concedidos pela Raça.
       </div>
     </section>
   );
