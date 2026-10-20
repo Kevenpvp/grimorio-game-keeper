@@ -39,6 +39,7 @@ function VirtudesPage() {
   async function create() {
     const { data, error } = await supabase.from("virtues").insert({ name: "Nova virtude" }).select("id").single();
     if (error) { toast.error(error.message); return; }
+    setSearch("");
     setPendingSaveIds((current) => [data.id, ...current.filter((id) => id !== data.id)]);
     toast.success("Nova virtude criada. Ela ficará no topo até você salvar.");
     await qc.invalidateQueries({ queryKey: ["virtues"] });
