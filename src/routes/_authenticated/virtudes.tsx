@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,16 +30,32 @@ function VirtudesPage() {
   const { data: virtues } = useVirtues();
   const { data: defs } = useDefs();
   const qc = useQueryClient();
+  const [search, setSearch] = useState("");
+  const [pendingSaveIds, setPendingSaveIds] = useState<string[]>([]);
 
   if (!me || !virtues || !defs) return <p className="text-muted-foreground">Carregando…</p>;
   if (!me.isMaster) return <p className="text-muted-foreground">Apenas o mestre gerencia virtudes.</p>;
 
   async function create() {
-    const { error } = await supabase.from("virtues").insert({ name: "Nova virtude" });
+    const { data, error } = await supabase.from("virtues").insert({ name: "Nova virtude" }).select("id").single();
     if (error) { toast.error(error.message); return; }
-    toast.success("Virtude criada");
+    setPendingSaveIds((current) => [data.id, ...current.filter((id) => id !== data.id)]);
+    toast.success("Nova virtude criada. Ela ficará no topo até você salvar.");
     await qc.invalidateQueries({ queryKey: ["virtues"] });
   }
+
+  const normalizedSearch = search.trim().toLocaleLowerCase("pt-BR");
+  const visibleVirtues = virtues
+    .filter((virtue) => virtue.name.toLocaleLowerCase("pt-BR").includes(normalizedSearch))
+    .slice()
+    .sort((a, b) => {
+      const aPending = pendingSaveIds.indexOf(a.id);
+      const bPending = pendingSaveIds.indexOf(b.id);
+      if (aPending >= 0 && bPending >= 0) return aPending - bPending;
+      if (aPending >= 0) return -1;
+      if (bPending >= 0) return 1;
+      return 0;
+    });
 
   return (
     <div className="space-y-6">
@@ -50,13 +66,18 @@ function VirtudesPage() {
         </div>
         <Button onClick={() => void create()}><Plus className="mr-1 h-4 w-4" /> Nova virtude</Button>
       </div>
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input className="pl-9" aria-label="Pesquisar virtudes pelo nome" placeholder="Pesquisar virtude pelo nome..." value={search} onChange={(e) => setSearch(e.target.value)} />
+      </div>
       {!virtues.length && <p className="text-muted-foreground">Nenhuma virtude ainda.</p>}
-      {virtues.map((virtue) => <VirtueEditor key={virtue.id} virtue={virtue} defs={defs} />)}
+      {virtues.length > 0 && visibleVirtues.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma virtude encontrada para “{search}”.</p>}
+      {visibleVirtues.map((virtue) => <VirtueEditor key={virtue.id} virtue={virtue} defs={defs} isNew={pendingSaveIds.includes(virtue.id)} onSaved={() => setPendingSaveIds((current) => current.filter((id) => id !== virtue.id))} />)}
     </div>
   );
 }
 
-function VirtueEditor({ virtue, defs }: { virtue: Virtue; defs: AttributeDef[] }) {
+function VirtueEditor({ virtue, defs, isNew, onSaved }: { virtue: Virtue; defs: AttributeDef[]; isNew: boolean; onSaved: () => void }) {
   const qc = useQueryClient();
   const { data: allAbilities = [], isLoading: catalogLoading } = useAbilities();
   const { data: virtueAbilityRows = [], isLoading: virtueAbilitiesLoading } = useQuery({
@@ -104,6 +125,7 @@ function VirtueEditor({ virtue, defs }: { virtue: Virtue; defs: AttributeDef[] }
     if (error) { toast.error(error.message); return; }
     toast.success("Virtude salva");
     await qc.invalidateQueries({ queryKey: ["virtues"] });
+    onSaved();
   }
 
   async function remove() {
@@ -118,6 +140,7 @@ function VirtueEditor({ virtue, defs }: { virtue: Virtue; defs: AttributeDef[] }
 
   return (
     <section className="panel space-y-4 p-5">
+      {isNew && <p className="text-xs font-semibold text-amber-500">Nova virtude — salve para confirmar as alterações.</p>}
       <div className="grid gap-4 sm:grid-cols-[1fr_180px]">
         <div className="space-y-1.5"><Label>Nome</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
         <div className="space-y-1.5">
@@ -177,7 +200,7 @@ function VirtueEditor({ virtue, defs }: { virtue: Virtue; defs: AttributeDef[] }
         )}
       </div>
       <div className="flex gap-2">
-        <Button onClick={() => void save()}>Salvar</Button>
+        <Button onClick={() => void save()}>{isNew ? "Salvar nova virtude" : "Salvar"}</Button>
         <Button variant="destructive" onClick={() => void remove()}><Trash2 className="mr-1 h-4 w-4" /> Excluir</Button>
       </div>
     </section>
