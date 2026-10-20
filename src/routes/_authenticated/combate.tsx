@@ -11,6 +11,8 @@ import { Portrait } from "@/components/sheet/CharacterSheetView";
 import { StatBar } from "@/components/sheet/StatBar";
 import { cn } from "@/lib/utils";
 import { DamageApplier } from "@/components/combat/DamageApplier";
+import { CharacterAbilitiesPanel } from "@/components/abilities/CharacterAbilities";
+import { passiveEffectTypeActive, passiveRegenerationModifiers, passiveStatusModifiers, useBattleCharacterAbilities } from "@/lib/abilities";
 
 export const Route = createFileRoute("/_authenticated/combate")({
   head: () => ({
@@ -27,9 +29,9 @@ export const Route = createFileRoute("/_authenticated/combate")({
 });
 
 type Attr = { attribute_key: string; current_value: number; max_value: number; points: number; bonus: number };
-type BattleEffect = { id: string; battle_id: string; character_id: string; name: string; effect_type: 'status' | 'regeneration' | 'no_regen_hp' | 'no_regen_mana' | 'stun'; attribute_key: string | null; polarity: 'buff' | 'debuff'; value_mode: 'percent' | 'fixed'; amount: number; duration: number; duration_scope: 'individual' | 'global' };
+type BattleEffect = { id: string; battle_id: string | null; character_id: string; name: string; effect_type: 'status' | 'regeneration' | 'no_regen_hp' | 'no_regen_mana' | 'stun'; attribute_key: string | null; polarity: 'buff' | 'debuff'; value_mode: 'percent' | 'fixed'; amount: number; duration: number; duration_scope: 'individual' | 'global'; source_character_ability_id?: string | null };
 type Fighter = {
-  id: string; name: string; player_name: string; photo_path: string | null; race_id: string | null; virtue_id: string | null;
+  id: string; name: string; player_name: string; photo_path: string | null; race_id: string | null; virtue_id: string | null; owner_id: string | null;
   body: number; sanity: number; participant_turn_count?: number;
   character_attributes: Attr[];
 };
@@ -55,7 +57,9 @@ function useLiveBattles() {
       .on("postgres_changes", { event: "*", schema: "public", table: "battles" }, refresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "battle_participants" }, refresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "character_attributes" }, refresh)
-      .on("postgres_changes", { event: "*", schema: "public", table: "battle_effects" }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "battle_effects" }, () => { refresh(); qc.invalidateQueries({ queryKey: ["battle-effects"] }); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "character_abilities" }, () => { qc.invalidateQueries({ queryKey: ["character-abilities"] }); qc.invalidateQueries({ queryKey: ["character-abilities-battle"] }); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "abilities" }, () => { qc.invalidateQueries({ queryKey: ["abilities"] }); })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [qc]);
@@ -64,7 +68,7 @@ function useLiveBattles() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("battles")
-        .select("*, battle_participants(sort_order,turn_count, characters(id,name,player_name,photo_path,race_id,virtue_id,body,sanity,character_attributes(attribute_key,current_value,max_value,points,bonus)))")
+        .select("*, battle_participants(sort_order,turn_count, characters(id,name,player_name,photo_path,race_id,virtue_id,owner_id,body,sanity,character_attributes(attribute_key,current_value,max_value,points,bonus)))")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data;
@@ -106,7 +110,7 @@ function CombatPage() {
               ))}
             </div>
           )}
-          {battle && <BattleView key={battle.id} battle={battle} isMaster={isMaster} />}
+          {battle && <BattleView key={battle.id} battle={battle} isMaster={isMaster} userId={me.user.id} />}
         </>
       )}
     </div>
@@ -115,18 +119,35 @@ function CombatPage() {
 
 type BattleRow = NonNullable<ReturnType<typeof useLiveBattles>["data"]>[number];
 
-function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean }) {
+function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster: boolean; userId: string }) {
   const { data: defs } = useDefs();
   const { data: races } = useRaces();
   const { data: virtues } = useVirtues();
   const qc = useQueryClient();
   const [selectedTargetIds, setSelectedTargetIds] = useState<string[]>(() => battle.target_character_id ? [battle.target_character_id] : []);
   const [manaRegenSettings, setManaRegenSettings] = useState<Record<string, { mode: "percent" | "fixed"; amount: string }>>({});
-  const { data: effects = [] } = useQuery({ queryKey: ["battle-effects", battle.id], queryFn: async () => { const { data, error } = await supabase.from("battle_effects").select("*").eq("battle_id", battle.id); if (error) throw error; return data as BattleEffect[]; } });
   const fighters = useMemo(
     () => battle.battle_participants.slice().sort((a, b) => a.sort_order - b.sort_order).map((p) => ({ ...(p.characters as Fighter), participant_turn_count: p.turn_count ?? 0 })).filter((f) => !!f.id),
     [battle],
   );
+  const fighterIds = useMemo(() => fighters.map((fighter) => fighter.id), [fighters]);
+  const { data: effects = [] } = useQuery({
+    queryKey: ["battle-effects", battle.id, fighterIds],
+    enabled: fighterIds.length > 0,
+    queryFn: async () => {
+      const [battleResult, standaloneResult] = await Promise.all([
+        supabase.from("battle_effects").select("*").eq("battle_id", battle.id),
+        supabase.from("battle_effects").select("*").is("battle_id", null).in("character_id", fighterIds),
+      ]);
+      if (battleResult.error) throw battleResult.error;
+      if (standaloneResult.error) throw standaloneResult.error;
+      const unique = new Map<string, BattleEffect>();
+      for (const effect of [...(battleResult.data ?? []), ...(standaloneResult.data ?? [])]) unique.set(effect.id, effect as BattleEffect);
+      return [...unique.values()];
+    },
+  });
+  const { data: battleAbilities = [] } = useBattleCharacterAbilities(battle.id, fighterIds);
+  const abilitiesOf = (fighterId: string) => battleAbilities.filter((ability) => ability.character_id === fighterId);
   const modsOf = (f: Fighter) => {
     const combined = { ...traitMods(races?.find((r) => r.id === f.race_id)) };
     for (const [key, value] of Object.entries(traitMods(virtues?.find((v) => v.id === f.virtue_id)))) {
@@ -139,25 +160,34 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
     const def = defs?.find((d) => d.key === key);
     const base = def ? totalOf(def, f.character_attributes.find((a) => a.attribute_key === key), modsOf(f)) : 0;
     const active = effects.filter(e => e.character_id === f.id && e.effect_type === "status" && e.attribute_key === key);
-    const fixed = active.filter(e => e.value_mode === "fixed").reduce((n,e) => n + (e.polarity === "buff" ? 1 : -1) * Number(e.amount), 0);
-    const percent = active.filter(e => e.value_mode === "percent").reduce((n,e) => n + (e.polarity === "buff" ? 1 : -1) * Number(e.amount), 0);
+    const passive = passiveStatusModifiers(abilitiesOf(f.id))[key] ?? { fixed: 0, percent: 0 };
+    const fixed = passive.fixed + active.filter(e => e.value_mode === "fixed").reduce((n,e) => n + (e.polarity === "buff" ? 1 : -1) * Number(e.amount), 0);
+    const percent = passive.percent + active.filter(e => e.value_mode === "percent").reduce((n,e) => n + (e.polarity === "buff" ? 1 : -1) * Number(e.amount), 0);
     const result = Math.floor((base + fixed) * (1 + percent / 100));
     return key === "hp" ? Math.max(1, result) : Math.max(0, result);
   };
-  const blocked = (fighterId: string, type: "no_regen_hp" | "no_regen_mana") => effects.some(e => e.character_id === fighterId && e.effect_type === type);
+  const blocked = (fighterId: string, type: "no_regen_hp" | "no_regen_mana") =>
+    effects.some(e => e.character_id === fighterId && e.effect_type === type) ||
+    passiveEffectTypeActive(abilitiesOf(fighterId), type);
   const regenValue = (fighterId: string, key: "hp" | "mana", base: number) => {
     if (blocked(fighterId, key === "hp" ? "no_regen_hp" : "no_regen_mana")) return 0;
     const active = effects.filter(e => e.character_id === fighterId && e.effect_type === "regeneration" && e.attribute_key === key);
-    const fixed = active.filter(e => e.value_mode === "fixed").reduce((n,e) => n + (e.polarity === "buff" ? 1 : -1) * Number(e.amount), 0);
-    const percent = active.filter(e => e.value_mode === "percent").reduce((n,e) => n + (e.polarity === "buff" ? 1 : -1) * Number(e.amount), 0);
+    const passive = passiveRegenerationModifiers(abilitiesOf(fighterId), key);
+    const fixed = passive.fixed + active.filter(e => e.value_mode === "fixed").reduce((n,e) => n + (e.polarity === "buff" ? 1 : -1) * Number(e.amount), 0);
+    const percent = passive.percent + active.filter(e => e.value_mode === "percent").reduce((n,e) => n + (e.polarity === "buff" ? 1 : -1) * Number(e.amount), 0);
     return Math.max(0, Math.floor(base * (1 + percent / 100) + fixed));
   };
   // Regra única de duração: tanto turno individual quanto turno geral chamam esta função.
   // Cada avanço reduz em 1 a duração de TODOS os efeitos ativos desta batalha.
   async function tickEffects() {
-    const { data: rows, error } = await supabase.from("battle_effects").select("*").eq("battle_id", battle.id);
-    if (error) { toast.error(error.message); return; }
-    for (const row of (rows ?? []) as BattleEffect[]) {
+    const [battleResult, standaloneResult] = await Promise.all([
+      supabase.from("battle_effects").select("*").eq("battle_id", battle.id),
+      supabase.from("battle_effects").select("*").is("battle_id", null).in("character_id", fighterIds),
+    ]);
+    if (battleResult.error) { toast.error(battleResult.error.message); return; }
+    if (standaloneResult.error) { toast.error(standaloneResult.error.message); return; }
+    const rows = [...(battleResult.data ?? []), ...(standaloneResult.data ?? [])] as BattleEffect[];
+    for (const row of rows) {
       const result = row.duration <= 1
         ? await supabase.from("battle_effects").delete().eq("id", row.id)
         : await supabase.from("battle_effects").update({ duration: row.duration - 1 }).eq("id", row.id);
@@ -209,6 +239,8 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
       if (error) { toast.error("Turno avançado, mas falhou a regeneração de mana: " + error.message); }
     }
     await tickEffects();
+    const { error: cooldownError } = await supabase.rpc("tick_character_ability_cooldowns", { _character_id: fighter.id });
+    if (cooldownError) toast.error("Turno avançado, mas não foi possível reduzir os cooldowns: " + cooldownError.message);
     toast.success("Turno individual de " + fighter.name + " avançado para " + nextTurn + "; regeneração configurada aplicada.");
     await qc.invalidateQueries({ queryKey: ["battles"] });
   }
@@ -231,6 +263,8 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
         const { error: participantTurnError } = await supabase.from("battle_participants").update({ turn_count: participantTurns }).eq("battle_id", battle.id).eq("character_id", fighter.id);
         if (participantTurnError) toast.error("Falha ao atualizar o contador individual de " + fighter.name);
       }
+      const { error: cooldownError } = await supabase.rpc("tick_character_ability_cooldowns", { _character_id: fighter.id });
+      if (cooldownError) toast.error("Não foi possível reduzir os cooldowns de " + fighter.name + ": " + cooldownError.message);
       const manaAttr = fighter.character_attributes.find((a) => a.attribute_key === "mana");
       if (!manaAttr) continue;
       const baseRegen = manaRegenFor(fighter)!; // Já validado antes de avançar o turno.
@@ -292,6 +326,9 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
                 return <Bar key={d.key} label={d.label} cur={attr?.current_value ?? val(f, d.key)} max={val(f, d.key)} tone="bg-sky-500" />;
               })}
               <Bar label="Mana" cur={mana?.current_value ?? 0} max={val(f, "mana")} tone="bg-arcane" />
+              <CharacterAbilitiesPanel characterId={f.id} characterName={f.name} mode="combat"
+                canUse={isMaster || f.owner_id === userId} battleId={battle.id}
+                targets={fighters.map((target) => ({ id: target.id, name: target.name }))} />
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div className="rounded border border-border p-2"><span className="text-muted-foreground">Corpo</span><div className="font-semibold">{f.body}%</div></div>
                 <div className="rounded border border-border p-2"><span className="text-muted-foreground">Sanidade</span><div className="font-semibold">{f.sanity}%</div></div>
