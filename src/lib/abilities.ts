@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Tables } from "@/integrations/supabase/types";
 import { supabase } from "@/integrations/supabase/client";
 
-export type AbilityEffectType = "status" | "regeneration" | "no_regen_hp" | "no_regen_mana" | "stun";
+export type AbilityEffectType = "status" | "regeneration" | "mana_regeneration" | "mana_used" | "no_regen_hp" | "no_regen_mana" | "stun";
 export type AbilityEffectDefinition = {
   name: string;
   effect_type: AbilityEffectType;
@@ -14,11 +14,11 @@ export type AbilityEffectDefinition = {
 };
 export type Ability = Tables<"abilities">;
 export type CharacterAbilityRow = Tables<"character_abilities">;
-export type CharacterAbility = Omit<CharacterAbilityRow, "effects"> & { effects: AbilityEffectDefinition[] };
+export type CharacterAbility = Omit<CharacterAbilityRow, "effects" | "passive_effects"> & { effects: AbilityEffectDefinition[]; passive_effects: AbilityEffectDefinition[] };
 
 export function parseAbilityEffects(value: unknown): AbilityEffectDefinition[] {
   if (!Array.isArray(value)) return [];
-  const validTypes: AbilityEffectType[] = ["status", "regeneration", "no_regen_hp", "no_regen_mana", "stun"];
+  const validTypes: AbilityEffectType[] = ["status", "regeneration", "mana_regeneration", "mana_used", "no_regen_hp", "no_regen_mana", "stun"];
   return value.flatMap((item): AbilityEffectDefinition[] => {
     if (!item || typeof item !== "object") return [];
     const raw = item as Record<string, unknown>;
@@ -62,6 +62,7 @@ export function useCharacterAbilities(characterId: string | undefined) {
       return (data ?? []).map((row) => ({
         ...row,
         effects: parseAbilityEffects(row.effects),
+        passive_effects: parseAbilityEffects(row.passive_effects),
       })) as CharacterAbility[];
     },
   });
@@ -77,6 +78,7 @@ export function useBattleCharacterAbilities(battleId: string, characterIds: stri
       return (data ?? []).map((row) => ({
         ...row,
         effects: parseAbilityEffects(row.effects),
+        passive_effects: parseAbilityEffects(row.passive_effects),
       })) as CharacterAbility[];
     },
   });
@@ -143,8 +145,7 @@ export function statusEffectModifiers(effects: ActiveCharacterEffect[] | undefin
 export function passiveStatusModifiers(abilities: CharacterAbility[] | undefined) {
   const result: Record<string, { fixed: number; percent: number }> = {};
   for (const ability of abilities ?? []) {
-    if (!ability.is_passive) continue;
-    for (const effect of ability.effects) {
+    for (const effect of ability.passive_effects) {
       if (effect.effect_type !== "status" || !effect.attribute_key) continue;
       const value = effect.polarity === "buff" ? effect.amount : -effect.amount;
       const entry = result[effect.attribute_key] ?? { fixed: 0, percent: 0 };
@@ -157,17 +158,34 @@ export function passiveStatusModifiers(abilities: CharacterAbility[] | undefined
 }
 
 export function passiveEffectTypeActive(abilities: CharacterAbility[] | undefined, type: AbilityEffectType) {
-  return (abilities ?? []).some((ability) => ability.is_passive && ability.effects.some((effect) => effect.effect_type === type));
+  return (abilities ?? []).some((ability) => ability.passive_effects.some((effect) => effect.effect_type === type));
 }
 
 export function passiveRegenerationModifiers(abilities: CharacterAbility[] | undefined, attributeKey: "hp" | "mana") {
   let fixed = 0;
   let percent = 0;
   for (const ability of abilities ?? []) {
-    if (!ability.is_passive) continue;
-    for (const effect of ability.effects) {
-      if (effect.effect_type !== "regeneration" || effect.attribute_key !== attributeKey) continue;
+    for (const effect of ability.passive_effects) {
+      const affectsAttribute =
+        (effect.effect_type === "regeneration" && effect.attribute_key === attributeKey) ||
+        (effect.effect_type === "mana_regeneration" && attributeKey === "mana");
+      if (!affectsAttribute) continue;
       const value = effect.polarity === "buff" ? effect.amount : -effect.amount;
+      if (effect.value_mode === "percent") percent += value;
+      else fixed += value;
+    }
+  }
+  return { fixed, percent };
+}
+
+/** Signed modification to mana cost: buffs reduce usage, debuffs increase it. */
+export function passiveManaUsedModifiers(abilities: CharacterAbility[] | undefined) {
+  let fixed = 0;
+  let percent = 0;
+  for (const ability of abilities ?? []) {
+    for (const effect of ability.passive_effects) {
+      if (effect.effect_type !== "mana_used") continue;
+      const value = effect.polarity === "buff" ? -effect.amount : effect.amount;
       if (effect.value_mode === "percent") percent += value;
       else fixed += value;
     }
