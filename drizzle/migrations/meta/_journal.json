@@ -162,6 +162,13 @@
       "when": 1792638000000,
       "tag": "0022_magical_abilities_flag",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1792641600000,
+      "tag": "0023_scale_hp_mana_when_battle_ends",
+      "breakpoints": true
     }
   ]
 }
