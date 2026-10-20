@@ -26,7 +26,7 @@ export function parseAbilityEffects(value: unknown): AbilityEffectDefinition[] {
     const raw = item as Record<string, unknown>;
     if (!validTypes.includes(raw.effect_type as AbilityEffectType)) return [];
     const effectType = raw.effect_type as AbilityEffectType;
-    const polarity = raw.polarity === "debuff" ? "debuff" : "buff";
+    const polarity = effectType === "no_mana" || raw.polarity === "debuff" ? "debuff" : "buff";
     const valueMode = raw.value_mode === "percent" ? "percent" : "fixed";
     const amount = Number(raw.amount ?? 0);
     const duration = Number(raw.duration ?? 1);
