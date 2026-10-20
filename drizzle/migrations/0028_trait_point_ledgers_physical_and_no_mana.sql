@@ -372,7 +372,7 @@ BEGIN
   _race_left := GREATEST(0, COALESCE(_c.race_points_granted,0) - _used);
   SELECT COALESCE(SUM(value::integer),0) INTO _used FROM jsonb_each_text(_virtue_alloc);
   _virtue_left := GREATEST(0, COALESCE(_c.virtue_points_granted,0) - _used);
-  _base_left := GREATEST(0, COALESCE(_c.available_points,0) - _race_left - _virtue_left);
+  _base_left := GREATEST(0, _available - _total - _race_left - _virtue_left);
   _source_left := CASE _source WHEN 'race' THEN _race_left WHEN 'virtue' THEN _virtue_left ELSE _base_left END;
 
   FOR _key, _delta IN
@@ -462,6 +462,78 @@ END;
 $$;
 REVOKE ALL ON FUNCTION public.invest_physical_points(uuid, jsonb) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.invest_physical_points(uuid, jsonb) TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.invest_physical_points_from_source(
+  _character_id uuid,
+  _source text,
+  _allocations jsonb
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $
+DECLARE
+  _c public.characters;
+  _current_alloc jsonb;
+  _used integer;
+  _remaining integer;
+  _total integer := 0;
+  _key text;
+  _delta integer;
+BEGIN
+  IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Não autenticado'; END IF;
+  IF _source NOT IN ('race','virtue') THEN RAISE EXCEPTION 'Origem dos pontos físicos inválida'; END IF;
+  IF _allocations IS NULL OR jsonb_typeof(_allocations) IS DISTINCT FROM 'object' THEN
+    RAISE EXCEPTION 'Distribuição de pontos físicos inválida';
+  END IF;
+  SELECT * INTO _c FROM public.characters WHERE id = _character_id FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Ficha não encontrada'; END IF;
+  IF NOT public.has_role(auth.uid(), 'master') AND _c.owner_id IS DISTINCT FROM auth.uid() THEN
+    RAISE EXCEPTION 'Sem permissão';
+  END IF;
+
+  _current_alloc := CASE WHEN _source = 'race'
+    THEN COALESCE(_c.race_physical_allocations, '{}'::jsonb)
+    ELSE COALESCE(_c.virtue_physical_allocations, '{}'::jsonb) END;
+  SELECT COALESCE(SUM(value::integer),0) INTO _used FROM jsonb_each_text(_current_alloc);
+  _remaining := GREATEST(0,
+    (CASE WHEN _source = 'race' THEN COALESCE(_c.race_physical_points_granted,0)
+      ELSE COALESCE(_c.virtue_physical_points_granted,0) END) - _used
+  );
+
+  FOR _key, _delta IN SELECT key, value::integer FROM jsonb_each_text(_allocations) LOOP
+    IF _delta <= 0 THEN RAISE EXCEPTION 'Os pontos físicos precisam ser positivos'; END IF;
+    IF _key NOT IN ('strength','phys_def','speed','atk_speed')
+      OR NOT EXISTS (SELECT 1 FROM public.attribute_definitions WHERE key = _key AND accepts_points) THEN
+      RAISE EXCEPTION 'O atributo % não aceita pontos extras físicos', _key;
+    END IF;
+    _total := _total + _delta;
+  END LOOP;
+
+  IF _total > _remaining THEN
+    RAISE EXCEPTION 'Pontos físicos insuficientes nesta origem (disponível: %)', _remaining;
+  END IF;
+
+  FOR _key, _delta IN SELECT key, value::integer FROM jsonb_each_text(_allocations) LOOP
+    _current_alloc := jsonb_set(
+      _current_alloc,
+      ARRAY[_key],
+      to_jsonb(COALESCE((_current_alloc ->> _key)::integer,0) + _delta),
+      true
+    );
+  END LOOP;
+
+  IF _source = 'race' THEN
+    UPDATE public.characters SET race_physical_allocations = _current_alloc WHERE id = _character_id;
+  ELSE
+    UPDATE public.characters SET virtue_physical_allocations = _current_alloc WHERE id = _character_id;
+  END IF;
+END;
+$;
+REVOKE ALL ON FUNCTION public.invest_physical_points_from_source(uuid, text, jsonb) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.invest_physical_points_from_source(uuid, text, jsonb) TO authenticated;
+
 
 CREATE OR REPLACE FUNCTION public.cleanup_character_race_before_delete()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
