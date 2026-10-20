@@ -57,7 +57,7 @@ function useLiveBattles() {
       .on("postgres_changes", { event: "*", schema: "public", table: "battles" }, refresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "battle_participants" }, refresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "character_attributes" }, refresh)
-      .on("postgres_changes", { event: "*", schema: "public", table: "battle_effects" }, () => { refresh(); qc.invalidateQueries({ queryKey: ["battle-effects"] }); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "battle_effects" }, () => { refresh(); qc.invalidateQueries({ queryKey: ["battle-effects"] }); qc.invalidateQueries({ queryKey: ["character-active-effects"] }); })
       .on("postgres_changes", { event: "*", schema: "public", table: "character_abilities" }, () => { qc.invalidateQueries({ queryKey: ["character-abilities"] }); qc.invalidateQueries({ queryKey: ["character-abilities-battle"] }); })
       .on("postgres_changes", { event: "*", schema: "public", table: "abilities" }, () => { qc.invalidateQueries({ queryKey: ["abilities"] }); })
       .subscribe();
@@ -194,6 +194,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
       if (result.error) toast.error(result.error.message);
     }
     await qc.invalidateQueries({ queryKey: ["battle-effects", battle.id] });
+    await qc.invalidateQueries({ queryKey: ["character-active-effects"] });
   }
   async function addEffect(characterId: string, effect: Omit<BattleEffect, "id" | "battle_id" | "character_id">) {
     const { error } = await supabase.from("battle_effects").insert({ ...effect, battle_id: battle.id, character_id: characterId });
