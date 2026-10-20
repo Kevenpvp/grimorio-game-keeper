@@ -11,6 +11,7 @@ const effectTypeLabels: Record<AbilityEffectType, string> = {
   mana_used: "Mana Usada",
   no_regen_hp: "Bloquear regeneração de HP",
   no_regen_mana: "Bloquear regeneração de Mana",
+  magic_prohibition: "Proibição de magia (debuff)",
   stun: "Stun (visual)",
 };
 
@@ -70,6 +71,7 @@ export function AbilityEffectsEditor({
       </div>
       {effects.length === 0 && <p className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">Nenhum efeito configurado.</p>}
       {effects.map((effect, index) => {
+        const isMagicProhibition = effect.effect_type === "magic_prohibition";
         const needsAttribute = effect.effect_type === "status" || effect.effect_type === "regeneration";
         const needsValue = needsAttribute || effect.effect_type === "mana_regeneration" || effect.effect_type === "mana_used";
         return (
@@ -85,9 +87,10 @@ export function AbilityEffectsEditor({
                   patch(index, {
                     effect_type: type,
                     attribute_key: type === "mana_regeneration" ? "mana" : type === "regeneration" ? "hp" : type === "status" ? firstStatusKey() : null,
+                    polarity: type === "magic_prohibition" ? "debuff" : effect.polarity,
                   });
                 }}>
-                {Object.entries(effectTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                {Object.entries(effectTypeLabels).filter(([value]) => !isPermanent || value !== "magic_prohibition").map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select>
               {needsAttribute && (
                 <select aria-label="Atributo afetado" className="h-9 min-w-0 rounded-md border border-input bg-background px-2 text-sm" value={effect.attribute_key ?? (effect.effect_type === "regeneration" ? "hp" : "strength")}
@@ -119,6 +122,7 @@ export function AbilityEffectsEditor({
                 </label>
               )}
               {isPermanent && <p className="self-end text-xs text-muted-foreground">Efeito permanente enquanto a habilidade estiver atribuída.</p>}
+              {isMagicProhibition && <p className="self-end text-xs text-amber-500 sm:col-span-2">Debuff: impede a ativação de habilidades que consomem Mana enquanto durar. Não é possível mudar sua polaridade.</p>}
               {effect.effect_type === "mana_regeneration" && <p className="self-end text-xs text-muted-foreground">Afeta regeneração de Mana por turno e recuperação manual, mas não o preenchimento completo.</p>}
               {effect.effect_type === "mana_used" && <p className="self-end text-xs text-muted-foreground">Buff reduz Mana gasta; debuff aumenta o custo das habilidades.</p>}
             </div>
