@@ -2,7 +2,7 @@ import { Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { AttributeDef } from "@/lib/sheets";
-import type { AbilityEffectDefinition, AbilityEffectType } from "@/lib/abilities";
+import type { AbilityEffectDefinition, AbilityEffectType, DamageScope } from "@/lib/abilities";
 
 const effectTypeLabels: Record<AbilityEffectType, string> = {
   status: "Buff/debuff de atributo",
@@ -54,6 +54,7 @@ export function AbilityEffectsEditor({
       value_mode: "fixed",
       amount: 10,
       duration: 2,
+      damage_scope: "any",
     }]);
   }
 
@@ -73,6 +74,7 @@ export function AbilityEffectsEditor({
       {effects.length === 0 && <p className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">Nenhum efeito configurado.</p>}
       {effects.map((effect, index) => {
         const isMagicProhibition = effect.effect_type === "magic_prohibition";
+        const isDamageDealt = effect.effect_type === "damage_dealt";
         const needsAttribute = effect.effect_type === "status" || effect.effect_type === "regeneration";
         const needsValue = needsAttribute || effect.effect_type === "mana_regeneration" || effect.effect_type === "mana_used" || effect.effect_type === "damage_dealt";
         return (
@@ -93,6 +95,18 @@ export function AbilityEffectsEditor({
                 }}>
                 {Object.entries(effectTypeLabels).filter(([value]) => !isPermanent || value !== "magic_prohibition").map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select>
+              {isDamageDealt && (
+                <label className="space-y-1 text-xs font-medium">
+                  Tipo de dano afetado
+                  <select aria-label="Tipo de dano afetado pelo buff/debuff" className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                    value={effect.damage_scope ?? "any"}
+                    onChange={(e) => patch(index, { damage_scope: e.target.value as DamageScope })}>
+                    <option value="physical">Físico</option>
+                    <option value="magical">Mágico</option>
+                    <option value="any">Qualquer dano</option>
+                  </select>
+                </label>
+              )}
               {needsAttribute && (
                 <select aria-label="Atributo afetado" className="h-9 min-w-0 rounded-md border border-input bg-background px-2 text-sm" value={effect.attribute_key ?? (effect.effect_type === "regeneration" ? "hp" : "strength")}
                   onChange={(e) => patch(index, { attribute_key: e.target.value })}>
@@ -126,7 +140,7 @@ export function AbilityEffectsEditor({
               {isMagicProhibition && <p className="self-end text-xs text-amber-500 sm:col-span-2">Debuff: impede a ativação de habilidades que consomem Mana enquanto durar. Não é possível mudar sua polaridade.</p>}
               {effect.effect_type === "mana_regeneration" && <p className="self-end text-xs text-muted-foreground">Afeta regeneração de Mana por turno e recuperação manual, mas não o preenchimento completo.</p>}
               {effect.effect_type === "mana_used" && <p className="self-end text-xs text-muted-foreground">Buff reduz Mana gasta; debuff aumenta o custo das habilidades.</p>}
-              {effect.effect_type === "damage_dealt" && <p className="self-end text-xs text-muted-foreground">Modifica o dano de cada golpe causado pelo personagem, antes das defesas do alvo.</p>}
+              {effect.effect_type === "damage_dealt" && <p className="self-end text-xs text-muted-foreground">Modifica o dano correspondente ao tipo selecionado antes das defesas. Em dano híbrido, efeitos físicos e mágicos ajustam sua metade correspondente; “Qualquer dano” também afeta dano verdadeiro.</p>}
             </div>
           </div>
         );
