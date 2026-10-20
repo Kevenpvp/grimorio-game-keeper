@@ -38,7 +38,7 @@ function HabilidadesPage() {
 
   async function create() {
     const { error } = await supabase.from("abilities").insert({
-      name: "Nova habilidade", description: "", is_passive: false, can_activate: true, cooldown_turns: 1, mana_cost: 0, effects: [], passive_effects: [],
+      name: "Nova habilidade", description: "", is_passive: false, can_activate: true, self_target_only: false, cooldown_turns: 1, mana_cost: 0, effects: [], passive_effects: [], end_effects: [],
     });
     if (error) { toast.error(error.message); return; }
     toast.success("Habilidade criada");
@@ -65,20 +65,24 @@ function AbilityEditor({ ability, defs }: { ability: Ability; defs: NonNullable<
   const [name, setName] = useState(ability.name);
   const [description, setDescription] = useState(ability.description ?? "");
   const [canActivate, setCanActivate] = useState(ability.can_activate);
+  const [selfTargetOnly, setSelfTargetOnly] = useState(ability.self_target_only);
   const [cooldown, setCooldown] = useState(String(ability.cooldown_turns));
   const [manaCost, setManaCost] = useState(String(ability.mana_cost));
   const [effects, setEffects] = useState<AbilityEffectDefinition[]>(() => parseAbilityEffects(ability.effects));
   const [passiveEffects, setPassiveEffects] = useState<AbilityEffectDefinition[]>(() => parseAbilityEffects(ability.passive_effects));
+  const [endEffects, setEndEffects] = useState<AbilityEffectDefinition[]>(() => parseAbilityEffects(ability.end_effects));
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     setName(ability.name);
     setDescription(ability.description ?? "");
     setCanActivate(ability.can_activate);
+    setSelfTargetOnly(ability.self_target_only);
     setCooldown(String(ability.cooldown_turns));
     setManaCost(String(ability.mana_cost));
     setEffects(parseAbilityEffects(ability.effects));
     setPassiveEffects(parseAbilityEffects(ability.passive_effects));
+    setEndEffects(parseAbilityEffects(ability.end_effects));
   }, [ability]);
 
   async function save() {
@@ -90,7 +94,7 @@ function AbilityEditor({ ability, defs }: { ability: Ability; defs: NonNullable<
       toast.error("Uma habilidade ativável precisa ter cooldown de pelo menos 1 turno. Marque como não ativável se não puder ser usada.");
       return;
     }
-    const allConfiguredEffects = [...effects, ...passiveEffects];
+    const allConfiguredEffects = [...effects, ...passiveEffects, ...endEffects];
     if (allConfiguredEffects.some((effect) => !effect.name.trim() || (
       ["status", "regeneration", "mana_regeneration", "mana_used"].includes(effect.effect_type) &&
       (!Number.isFinite(effect.amount) || effect.amount < 0)
@@ -103,11 +107,13 @@ function AbilityEditor({ ability, defs }: { ability: Ability; defs: NonNullable<
       name: name.trim(),
       description: description.trim() || null,
       can_activate: canActivate,
+      self_target_only: canActivate && selfTargetOnly,
       is_passive: !canActivate,
       cooldown_turns: cool,
       mana_cost: canActivate ? mana : 0,
       effects: effects.map((effect) => ({ ...effect, duration: Math.max(1, effect.duration) })) as unknown as Json,
       passive_effects: passiveEffects.map((effect) => ({ ...effect, duration: 1 })) as unknown as Json,
+      end_effects: endEffects.map((effect) => ({ ...effect, duration: Math.max(1, effect.duration) })) as unknown as Json,
     }).eq("id", ability.id);
     setBusy(false);
     if (error) { toast.error(error.message); return; }
@@ -140,6 +146,12 @@ function AbilityEditor({ ability, defs }: { ability: Ability; defs: NonNullable<
           }} />
           Habilidade não ativável
         </label>
+        {canActivate && (
+          <label className="flex min-h-10 items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
+            <input type="checkbox" checked={selfTargetOnly} onChange={(e) => setSelfTargetOnly(e.target.checked)} />
+            Só pode ser usada no próprio personagem
+          </label>
+        )}
       </div>
       <div className="space-y-1.5">
         <Label>Descrição</Label>
@@ -159,6 +171,14 @@ function AbilityEditor({ ability, defs }: { ability: Ability; defs: NonNullable<
         permanent={false}
         title="Efeitos ao ativar"
         description="Aplicados ao alvo escolhido quando a habilidade for ativada."
+        defs={defs}
+      />}
+      {canActivate && <AbilityEffectsEditor
+        effects={endEffects}
+        onChange={setEndEffects}
+        permanent={false}
+        title="Efeitos quando a habilidade acaba"
+        description="Aplicados ao alvo quando todos os efeitos desta ativação terminarem."
         defs={defs}
       />}
       <AbilityEffectsEditor
