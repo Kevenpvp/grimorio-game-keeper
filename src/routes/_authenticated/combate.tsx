@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
-import { computeValue, raceMods, useDefs, useMe, useRaces, type AttributeDef } from "@/lib/sheets";
+import { computeValue, traitMods, useDefs, useMe, useRaces, useVirtues, type AttributeDef } from "@/lib/sheets";
 import { Portrait } from "@/components/sheet/CharacterSheetView";
 import { StatBar } from "@/components/sheet/StatBar";
 import { cn } from "@/lib/utils";
@@ -29,7 +29,7 @@ export const Route = createFileRoute("/_authenticated/combate")({
 type Attr = { attribute_key: string; current_value: number; max_value: number; points: number; bonus: number };
 type BattleEffect = { id: string; battle_id: string; character_id: string; name: string; effect_type: 'status' | 'regeneration' | 'no_regen_hp' | 'no_regen_mana' | 'stun'; attribute_key: string | null; polarity: 'buff' | 'debuff'; value_mode: 'percent' | 'fixed'; amount: number; duration: number; duration_scope: 'individual' | 'global' };
 type Fighter = {
-  id: string; name: string; player_name: string; photo_path: string | null; race_id: string | null;
+  id: string; name: string; player_name: string; photo_path: string | null; race_id: string | null; virtue_id: string | null;
   body: number; sanity: number; participant_turn_count?: number;
   character_attributes: Attr[];
 };
@@ -64,7 +64,7 @@ function useLiveBattles() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("battles")
-        .select("*, battle_participants(sort_order,turn_count, characters(id,name,player_name,photo_path,race_id,body,sanity,character_attributes(attribute_key,current_value,max_value,points,bonus)))")
+        .select("*, battle_participants(sort_order,turn_count, characters(id,name,player_name,photo_path,race_id,virtue_id,body,sanity,character_attributes(attribute_key,current_value,max_value,points,bonus)))")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data;
@@ -118,6 +118,7 @@ type BattleRow = NonNullable<ReturnType<typeof useLiveBattles>["data"]>[number];
 function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean }) {
   const { data: defs } = useDefs();
   const { data: races } = useRaces();
+  const { data: virtues } = useVirtues();
   const qc = useQueryClient();
   const [selectedTargetIds, setSelectedTargetIds] = useState<string[]>(() => battle.target_character_id ? [battle.target_character_id] : []);
   const [manaRegenSettings, setManaRegenSettings] = useState<Record<string, { mode: "percent" | "fixed"; amount: string }>>({});
@@ -126,7 +127,14 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
     () => battle.battle_participants.slice().sort((a, b) => a.sort_order - b.sort_order).map((p) => ({ ...(p.characters as Fighter), participant_turn_count: p.turn_count ?? 0 })).filter((f) => !!f.id),
     [battle],
   );
-  const modsOf = (f: Fighter) => raceMods(races?.find((r) => r.id === f.race_id));
+  const modsOf = (f: Fighter) => {
+    const combined = { ...traitMods(races?.find((r) => r.id === f.race_id)) };
+    for (const [key, value] of Object.entries(traitMods(virtues?.find((v) => v.id === f.virtue_id)))) {
+      combined[key] = (combined[key] ?? 0) + value;
+      if (combined[key] === 0) delete combined[key];
+    }
+    return combined;
+  };
   const val = (f: Fighter, key: string) => {
     const def = defs?.find((d) => d.key === key);
     const base = def ? totalOf(def, f.character_attributes.find((a) => a.attribute_key === key), modsOf(f)) : 0;
