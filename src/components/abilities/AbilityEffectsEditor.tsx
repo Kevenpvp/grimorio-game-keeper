@@ -84,7 +84,7 @@ export function AbilityEffectsEditor({
                   const type = e.target.value as AbilityEffectType;
                   patch(index, {
                     effect_type: type,
-                    attribute_key: type === "regeneration" || type === "mana_regeneration" ? "mana" : type === "status" ? firstStatusKey() : null,
+                    attribute_key: type === "mana_regeneration" ? "mana" : type === "regeneration" ? "hp" : type === "status" ? firstStatusKey() : null,
                   });
                 }}>
                 {Object.entries(effectTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
