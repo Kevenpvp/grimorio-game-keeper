@@ -60,7 +60,9 @@ export function AbilityEffectsEditor({
       damage_scope: "any",
       damage_reduction_scope: "physical",
       damage_reduction_type_id: null,
-      damage_reduction_magic_level: "baixa",
+      damage_reduction_magic_level: null,
+      damage_reduction_type_ids: damageTypes[0] ? [damageTypes[0].id] : [],
+      damage_reduction_magic_levels: ["baixa"],
     }]);
   }
 
@@ -83,6 +85,8 @@ export function AbilityEffectsEditor({
         const isDamageDealt = effect.effect_type === "damage_dealt";
         const isNoMana = effect.effect_type === "no_mana";
         const isDamageReduction = effect.effect_type === "damage_reduction";
+        const selectedReductionTypeIds = effect.damage_reduction_type_ids ?? (effect.damage_reduction_type_id ? [effect.damage_reduction_type_id] : []);
+        const selectedReductionMagicLevels = effect.damage_reduction_magic_levels ?? (effect.damage_reduction_magic_level ? [effect.damage_reduction_magic_level] : []);
         const needsAttribute = effect.effect_type === "status" || effect.effect_type === "regeneration";
         const needsValue = needsAttribute || effect.effect_type === "mana_regeneration" || effect.effect_type === "mana_used" || effect.effect_type === "damage_dealt" || isDamageReduction;
         return (
@@ -100,8 +104,10 @@ export function AbilityEffectsEditor({
                     attribute_key: type === "mana_regeneration" ? "mana" : type === "regeneration" ? "hp" : type === "status" ? firstStatusKey() : null,
                     polarity: type === "magic_prohibition" || type === "no_mana" ? "debuff" : type === "damage_reduction" ? "buff" : effect.polarity,
                     damage_reduction_scope: type === "damage_reduction" ? "physical" : effect.damage_reduction_scope,
-                    damage_reduction_type_id: type === "damage_reduction" ? (damageTypes[0]?.id ?? null) : null,
-                    damage_reduction_magic_level: type === "damage_reduction" ? "baixa" : null,
+                    damage_reduction_type_id: null,
+                    damage_reduction_magic_level: null,
+                    damage_reduction_type_ids: type === "damage_reduction" ? (damageTypes[0] ? [damageTypes[0].id] : []) : null,
+                    damage_reduction_magic_levels: type === "damage_reduction" ? ["baixa"] : null,
                   });
                 }}>
                 {Object.entries(effectTypeLabels).filter(([value]) => !isPermanent || value !== "magic_prohibition").map(([value, label]) => <option key={value} value={value}>{label}</option>)}
@@ -128,8 +134,14 @@ export function AbilityEffectsEditor({
                         const scope = e.target.value as DamageReductionScope;
                         patch(index, {
                           damage_reduction_scope: scope,
-                          damage_reduction_type_id: scope === "magical" ? (effect.damage_reduction_type_id ?? damageTypes[0]?.id ?? null) : null,
-                          damage_reduction_magic_level: scope === "magical" ? (effect.damage_reduction_magic_level ?? "baixa") : null,
+                          damage_reduction_type_id: null,
+                          damage_reduction_magic_level: null,
+                          damage_reduction_type_ids: scope === "magical"
+                            ? (effect.damage_reduction_type_ids != null ? effect.damage_reduction_type_ids : effect.damage_reduction_type_id ? [effect.damage_reduction_type_id] : damageTypes[0] ? [damageTypes[0].id] : [])
+                            : null,
+                          damage_reduction_magic_levels: scope === "magical"
+                            ? (effect.damage_reduction_magic_levels != null ? effect.damage_reduction_magic_levels : effect.damage_reduction_magic_level ? [effect.damage_reduction_magic_level] : ["baixa"])
+                            : null,
                           polarity: "buff",
                         });
                       }}>
@@ -139,25 +151,53 @@ export function AbilityEffectsEditor({
                   </label>
                   {effect.damage_reduction_scope === "magical" && (
                     <>
-                      <label className="space-y-1 text-xs font-medium">
-                        Tipo mágico
-                        <select aria-label="Tipo mágico que será reduzido" className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
-                          value={effect.damage_reduction_type_id ?? ""}
-                          onChange={(e) => patch(index, { damage_reduction_type_id: e.target.value || null, polarity: "buff" })}>
-                          <option value="" disabled>{damageTypes.length ? "Selecione um tipo" : "Nenhum tipo mágico cadastrado"}</option>
-                          {damageTypes.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}
-                        </select>
-                      </label>
-                      <label className="space-y-1 text-xs font-medium">
-                        Grau da magia
-                        <select aria-label="Grau mágico que será reduzido" className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
-                          value={effect.damage_reduction_magic_level ?? "baixa"}
-                          onChange={(e) => patch(index, { damage_reduction_magic_level: e.target.value as DamageMagicLevel, polarity: "buff" })}>
-                          <option value="baixa">Baixa</option>
-                          <option value="media">Média</option>
-                          <option value="alta">Alta</option>
-                        </select>
-                      </label>
+                      <fieldset className="space-y-2 text-xs sm:col-span-2">
+                        <legend className="font-medium">Tipo mágico</legend>
+                        <label className="flex items-center gap-2 rounded-md border border-border px-2 py-2">
+                          <input type="checkbox" checked={selectedReductionTypeIds.length === 0}
+                            onChange={(e) => { if (e.target.checked) patch(index, { damage_reduction_type_ids: [], damage_reduction_type_id: null, polarity: "buff" }); }} />
+                          Todos os tipos
+                        </label>
+                        <p className="text-muted-foreground">{selectedReductionTypeIds.length === 0 ? "A redução afeta todos os tipos mágicos cadastrados." : `${selectedReductionTypeIds.length} tipo(s) selecionado(s).`}</p>
+                        {damageTypes.length === 0
+                          ? <p className="text-amber-500">Nenhum tipo mágico cadastrado.</p>
+                          : <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                              {damageTypes.map((type) => (
+                                <label key={type.id} className="flex items-center gap-2 rounded-md border border-border px-2 py-2">
+                                  <input type="checkbox" checked={selectedReductionTypeIds.includes(type.id)}
+                                    onChange={(e) => {
+                                      const next = e.target.checked
+                                        ? [...selectedReductionTypeIds, type.id]
+                                        : selectedReductionTypeIds.filter((id) => id !== type.id);
+                                      patch(index, { damage_reduction_type_ids: next, damage_reduction_type_id: null, polarity: "buff" });
+                                    }} />
+                                  {type.name}
+                                </label>
+                              ))}
+                            </div>}
+                      </fieldset>
+                      <fieldset className="space-y-2 text-xs sm:col-span-2">
+                        <legend className="font-medium">Grau da magia</legend>
+                        <label className="flex items-center gap-2 rounded-md border border-border px-2 py-2">
+                          <input type="checkbox" checked={selectedReductionMagicLevels.length === 0}
+                            onChange={(e) => { if (e.target.checked) patch(index, { damage_reduction_magic_levels: [], damage_reduction_magic_level: null, polarity: "buff" }); }} />
+                          Todos os graus
+                        </label>
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                          {([["baixa", "Baixa"], ["media", "Média"], ["alta", "Alta"]] as const).map(([level, label]) => (
+                            <label key={level} className="flex items-center gap-2 rounded-md border border-border px-2 py-2">
+                              <input type="checkbox" checked={selectedReductionMagicLevels.includes(level)}
+                                onChange={(e) => {
+                                  const next = e.target.checked
+                                    ? [...selectedReductionMagicLevels, level]
+                                    : selectedReductionMagicLevels.filter((selected) => selected !== level);
+                                  patch(index, { damage_reduction_magic_levels: next, damage_reduction_magic_level: null, polarity: "buff" });
+                                }} />
+                              {label}
+                            </label>
+                          ))}
+                        </div>
+                      </fieldset>
                     </>
                   )}
                   <p className="self-end text-xs text-muted-foreground sm:col-span-2">Reduz o dano recebido depois da defesa correspondente. O valor fixo é aplicado primeiro e depois a porcentagem. Em dano híbrido, a redução atua apenas na metade compatível.</p>
