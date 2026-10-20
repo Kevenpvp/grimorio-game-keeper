@@ -29,7 +29,7 @@ export const Route = createFileRoute("/_authenticated/combate")({
 });
 
 type Attr = { attribute_key: string; current_value: number; max_value: number; points: number; bonus: number };
-type BattleEffect = { id: string; battle_id: string | null; character_id: string; name: string; effect_type: 'status' | 'regeneration' | 'no_regen_hp' | 'no_regen_mana' | 'stun'; attribute_key: string | null; polarity: 'buff' | 'debuff'; value_mode: 'percent' | 'fixed'; amount: number; duration: number; duration_scope: 'individual' | 'global'; source_character_ability_id?: string | null };
+type BattleEffect = { id: string; battle_id: string | null; character_id: string; name: string; effect_type: 'status' | 'regeneration' | 'mana_used' | 'no_regen_hp' | 'no_regen_mana' | 'stun'; attribute_key: string | null; polarity: 'buff' | 'debuff'; value_mode: 'percent' | 'fixed'; amount: number; duration: number; duration_scope: 'individual' | 'global'; source_character_ability_id?: string | null };
 type Fighter = {
   id: string; name: string; player_name: string; photo_path: string | null; race_id: string | null; virtue_id: string | null; owner_id: string | null;
   body: number; sanity: number; participant_turn_count?: number;
@@ -427,8 +427,9 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
     if (!Number.isFinite(amount) || amount <= 0) { toast.error("Informe uma quantidade positiva de Mana"); return; }
     const maximum = val(fighter, "mana");
     const regenEffects = effects.filter(e => e.effect_type === "regeneration" && e.attribute_key === "mana");
-    const fixedRegen = regenEffects.filter(e => e.value_mode === "fixed").reduce((n,e) => n + (e.polarity === "buff" ? 1 : -1) * Number(e.amount), 0);
-    const percentRegen = regenEffects.filter(e => e.value_mode === "percent").reduce((n,e) => n + (e.polarity === "buff" ? 1 : -1) * Number(e.amount), 0);
+    const passiveRegen = passiveRegenerationModifiers(characterAbilities, "mana");
+    const fixedRegen = passiveRegen.fixed + regenEffects.filter(e => e.value_mode === "fixed").reduce((n,e) => n + (e.polarity === "buff" ? 1 : -1) * Number(e.amount), 0);
+    const percentRegen = passiveRegen.percent + regenEffects.filter(e => e.value_mode === "percent").reduce((n,e) => n + (e.polarity === "buff" ? 1 : -1) * Number(e.amount), 0);
     const adjustedRegen = Math.max(0, Math.floor(amount * (1 + percentRegen / 100) + fixedRegen));
     const next = Math.min(maximum, (attr.current_value ?? 0) + adjustedRegen);
     setBusy(true);
