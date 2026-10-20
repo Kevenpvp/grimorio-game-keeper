@@ -32,6 +32,7 @@ export function PhysicalPointsDistribution({
   const virtueAlloc = numberAllocation(character.virtue_physical_allocations);
   const raceRemaining = Math.max(0, character.race_physical_points_granted - allocationTotal(raceAlloc));
   const virtueRemaining = Math.max(0, character.virtue_physical_points_granted - allocationTotal(virtueAlloc));
+  const physicalPointsGranted = character.race_physical_points_granted + character.virtue_physical_points_granted;
   const spentDraft = Object.values(alloc).reduce((sum, n) => sum + n, 0);
   const sourceRemaining = source === "race" ? raceRemaining : virtueRemaining;
   const remaining = sourceRemaining - spentDraft;
@@ -74,6 +75,9 @@ export function PhysicalPointsDistribution({
         <div>
           <h2 className="text-lg text-gold">Pontos Extras de Atributos Físicos</h2>
           <p className="mt-1 text-xs text-muted-foreground">Só podem ser distribuídos em Força, Defesa física, Velocidade e Velocidade de ataque. Estes pontos são separados dos pontos livres normais.</p>
+          {physicalPointsGranted === 0 && (
+            <p className="mt-2 text-xs text-amber-500">Esta ficha ainda não recebeu pontos físicos extras. A quantidade disponível depende dos pontos físicos configurados na raça e na virtude escolhidas.</p>
+          )}
         </div>
         <div className="w-full space-y-1 sm:max-w-xs">
           <label className="text-xs font-medium">Origem dos pontos físicos</label>
