@@ -103,6 +103,10 @@ export function DamageApplier({ target, battleId = null, sources = [] }: {
         damage_physical_percent_modifier?: number;
         damage_magical_fixed_modifier?: number;
         damage_magical_percent_modifier?: number;
+        physical_reduction_fixed?: number;
+        physical_reduction_percent?: number;
+        magical_reduction_fixed?: number;
+        magical_reduction_percent?: number;
       };
       let defenseText: string;
       if (damageKind === "true") defenseText = "defesas ignoradas";
@@ -129,8 +133,22 @@ export function DamageApplier({ target, battleId = null, sources = [] }: {
         : damageKind === "hybrid"
           ? ` Origem: ${sourceName ?? "personagem selecionado"}; metade física: ${signed(anyFixed + physicalFixed)} fixos, ${signed(anyPercent + physicalPercent)}%; metade mágica: ${signed(anyFixed + magicalFixed)} fixos, ${signed(anyPercent + magicalPercent)}%.`
           : ` Origem: ${sourceName ?? "personagem selecionado"}; modificadores de dano: ${signed(fixedModifier)} fixos, ${signed(percentModifier)}%.`;
+      const physicalReductionFixed = Number(result.physical_reduction_fixed ?? 0);
+      const physicalReductionPercent = Number(result.physical_reduction_percent ?? 0);
+      const magicalReductionFixed = Number(result.magical_reduction_fixed ?? 0);
+      const magicalReductionPercent = Number(result.magical_reduction_percent ?? 0);
+      const reductionPart = (label: string, fixed: number, percent: number) =>
+        fixed === 0 && percent === 0 ? "" : ` ${label}: -${fixed} fixos, -${percent}%.`;
+      const reductionSummary = damageKind === "physical"
+        ? reductionPart("Mitigação física recebida", physicalReductionFixed, physicalReductionPercent)
+        : damageKind === "magical"
+          ? reductionPart(`Mitigação mágica recebida para ${typeName} / grau ${magicLevel}`, magicalReductionFixed, magicalReductionPercent)
+          : damageKind === "hybrid"
+            ? reductionPart("Mitigação da metade física", physicalReductionFixed, physicalReductionPercent)
+              + reductionPart(`Mitigação da metade mágica (${typeName}, grau ${magicLevel})`, magicalReductionFixed, magicalReductionPercent)
+            : "";
       toast.success(
-        `${target.name}: ${result.hits} golpe(s) de ${damageDescription}; ${defenseText}; ${result.total_damage} de dano total. HP: ${result.hp_before} → ${result.hp_after}.${sourceSummary}`,
+        `${target.name}: ${result.hits} golpe(s) de ${damageDescription}; ${defenseText}; ${result.total_damage} de dano total. HP: ${result.hp_before} → ${result.hp_after}.${sourceSummary}${reductionSummary}`,
         { duration: 8000 },
       );
       await Promise.all([
