@@ -652,7 +652,7 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
               <fieldset className="col-span-2 space-y-2 text-xs">
                 <legend className="font-medium">Tipo mágico</legend>
                 <label className="flex items-center gap-2 rounded-md border border-border px-2 py-2">
-                  <input type="checkbox" checked={reductionTypeIds.length === 0} onChange={e => { if (e.target.checked) setReductionTypeIds([]); }} />
+                  <input type="radio" name={`mitigacao-tipos-manual-${fighter.id}`} checked={reductionTypeIds.length === 0} onChange={() => setReductionTypeIds([])} />
                   Todos os tipos
                 </label>
                 <p className="text-muted-foreground">{reductionTypeIds.length === 0 ? "A redução afeta todos os tipos mágicos cadastrados." : `${reductionTypeIds.length} tipo(s) selecionado(s).`}</p>
@@ -670,7 +670,7 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
               <fieldset className="col-span-2 space-y-2 text-xs">
                 <legend className="font-medium">Grau da magia</legend>
                 <label className="flex items-center gap-2 rounded-md border border-border px-2 py-2">
-                  <input type="checkbox" checked={reductionMagicLevels.length === 0} onChange={e => { if (e.target.checked) setReductionMagicLevels([]); }} />
+                  <input type="radio" name={`mitigacao-graus-manual-${fighter.id}`} checked={reductionMagicLevels.length === 0} onChange={() => setReductionMagicLevels([])} />
                   Todos os graus
                 </label>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
