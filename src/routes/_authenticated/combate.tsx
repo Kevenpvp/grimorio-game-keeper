@@ -27,6 +27,7 @@ export const Route = createFileRoute("/_authenticated/combate")({
 });
 
 type Attr = { attribute_key: string; current_value: number; max_value: number; points: number; bonus: number };
+type BattleEffect = { id: string; battle_id: string; character_id: string; name: string; effect_type: 'status' | 'regeneration' | 'no_regen_hp' | 'no_regen_mana' | 'stun'; attribute_key: string | null; polarity: 'buff' | 'debuff'; value_mode: 'percent' | 'fixed'; amount: number; duration: number; duration_scope: 'individual' | 'global' };
 type Fighter = {
   id: string; name: string; player_name: string; photo_path: string | null; race_id: string | null;
   body: number; sanity: number; participant_turn_count?: number;
@@ -54,6 +55,7 @@ function useLiveBattles() {
       .on("postgres_changes", { event: "*", schema: "public", table: "battles" }, refresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "battle_participants" }, refresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "character_attributes" }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "battle_effects" }, refresh)
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [qc]);
@@ -119,6 +121,7 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
   const qc = useQueryClient();
   const [selectedTargetIds, setSelectedTargetIds] = useState<string[]>(() => battle.target_character_id ? [battle.target_character_id] : []);
   const [manaRegenSettings, setManaRegenSettings] = useState<Record<string, { mode: "percent" | "fixed"; amount: string }>>({});
+  const { data: effects = [] } = useQuery({ queryKey: ["battle-effects", battle.id], queryFn: async () => { const { data, error } = await supabase.from("battle_effects").select("*").eq("battle_id", battle.id); if (error) throw error; return data as BattleEffect[]; } });
   const fighters = useMemo(
     () => battle.battle_participants.slice().sort((a, b) => a.sort_order - b.sort_order).map((p) => ({ ...(p.characters as Fighter), participant_turn_count: p.turn_count ?? 0 })).filter((f) => !!f.id),
     [battle],
@@ -126,8 +129,37 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
   const modsOf = (f: Fighter) => raceMods(races?.find((r) => r.id === f.race_id));
   const val = (f: Fighter, key: string) => {
     const def = defs?.find((d) => d.key === key);
-    return def ? totalOf(def, f.character_attributes.find((a) => a.attribute_key === key), modsOf(f)) : 0;
+    const base = def ? totalOf(def, f.character_attributes.find((a) => a.attribute_key === key), modsOf(f)) : 0;
+    const active = effects.filter(e => e.character_id === f.id && e.effect_type === "status" && e.attribute_key === key);
+    const fixed = active.filter(e => e.value_mode === "fixed").reduce((n,e) => n + (e.polarity === "buff" ? 1 : -1) * Number(e.amount), 0);
+    const percent = active.filter(e => e.value_mode === "percent").reduce((n,e) => n + (e.polarity === "buff" ? 1 : -1) * Number(e.amount), 0);
+    const result = Math.floor((base + fixed) * (1 + percent / 100));
+    return key === "hp" ? Math.max(1, result) : Math.max(0, result);
   };
+  const blocked = (fighterId: string, type: "no_regen_hp" | "no_regen_mana") => effects.some(e => e.character_id === fighterId && e.effect_type === type);
+  const regenValue = (fighterId: string, key: "hp" | "mana", base: number) => {
+    if (blocked(fighterId, key === "hp" ? "no_regen_hp" : "no_regen_mana")) return 0;
+    const active = effects.filter(e => e.character_id === fighterId && e.effect_type === "regeneration" && e.attribute_key === key);
+    const fixed = active.filter(e => e.value_mode === "fixed").reduce((n,e) => n + (e.polarity === "buff" ? 1 : -1) * Number(e.amount), 0);
+    const percent = active.filter(e => e.value_mode === "percent").reduce((n,e) => n + (e.polarity === "buff" ? 1 : -1) * Number(e.amount), 0);
+    return Math.max(0, Math.floor(base * (1 + percent / 100) + fixed));
+  };
+  async function tickEffects(scope: "global" | "individual", characterId?: string) {
+    const { data: rows, error } = await supabase.from("battle_effects").select("*").eq("battle_id", battle.id).eq("duration_scope", scope);
+    if (error) { toast.error(error.message); return; }
+    for (const row of (rows ?? []) as BattleEffect[]) {
+      if (scope === "individual" && row.character_id !== characterId) continue;
+      const result = row.duration <= 1 ? await supabase.from("battle_effects").delete().eq("id", row.id) : await supabase.from("battle_effects").update({ duration: row.duration - 1 }).eq("id", row.id);
+      if (result.error) toast.error(result.error.message);
+    }
+    await qc.invalidateQueries({ queryKey: ["battle-effects", battle.id] });
+  }
+  async function addEffect(characterId: string, effect: Omit<BattleEffect, "id" | "battle_id" | "character_id">) {
+    const { error } = await supabase.from("battle_effects").insert({ ...effect, battle_id: battle.id, character_id: characterId });
+    if (error) { toast.error(error.message); return; }
+    toast.success("Efeito aplicado: " + effect.name);
+    await qc.invalidateQueries({ queryKey: ["battle-effects", battle.id] });
+  }
 
   const update = async (patch: { current_character_id?: string | null; target_character_id?: string | null; active?: boolean; name?: string }) => {
     const { error } = await supabase.from("battles").update(patch).eq("id", battle.id);
@@ -158,12 +190,14 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
     const manaAttr = fighter.character_attributes.find((a) => a.attribute_key === "mana");
     if (manaAttr) {
       const maximum = val(fighter, "mana");
-      const regen = manaRegenFor(fighter);
+      const baseRegen = manaRegenFor(fighter);
+      const regen = baseRegen === null ? null : regenValue(fighter.id, "mana", baseRegen);
       if (regen === null) { toast.error("Informe uma regeneração de mana válida"); return; }
       const nextMana = Math.min(maximum, (manaAttr.current_value ?? 0) + regen);
       const { error } = await supabase.from("character_attributes").update({ current_value: nextMana, updated_at: new Date().toISOString() }).eq("character_id", fighter.id).eq("attribute_key", "mana");
       if (error) { toast.error("Turno avançado, mas falhou a regeneração de mana: " + error.message); }
     }
+    await tickEffects("individual", fighter.id);
     toast.success("Turno individual de " + fighter.name + " avançado para " + nextTurn + "; regeneração configurada aplicada.");
     await qc.invalidateQueries({ queryKey: ["battles"] });
   }
@@ -187,6 +221,7 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
       const { error } = await supabase.from("character_attributes").update({ current_value: nextMana, updated_at: new Date().toISOString() }).eq("character_id", fighter.id).eq("attribute_key", "mana");
       if (error) toast.error("Falha ao regenerar mana de " + fighter.name + ": " + error.message);
     }
+    await tickEffects("global");
     toast.success("Turno " + nextTurn + ": regeneração configurada aplicada.");
     await qc.invalidateQueries({ queryKey: ["battles"] });
   }
@@ -248,7 +283,7 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
                   <div key={d.key} className="rounded border border-border p-2"><span className="text-muted-foreground">{d.label}</span><div className="font-semibold">{val(f, d.key)}</div></div>
                 ))}
               </div>
-              {isMaster && <CombatResourceEditor fighter={f} val={val} manaRegenMode={manaRegenSettings[f.id]?.mode ?? "percent"} manaRegenAmount={manaRegenSettings[f.id]?.amount ?? "0"} onManaRegenModeChange={(mode) => setManaRegen(f.id, { mode })} onManaRegenAmountChange={(amount) => setManaRegen(f.id, { amount })} /> }
+              {isMaster && <CombatResourceEditor fighter={f} val={val} effects={effects.filter(e => e.character_id === f.id)} defs={defs} onAddEffect={(effect) => void addEffect(f.id, effect)} onRemoveEffect={async (id) => { const { error } = await supabase.from("battle_effects").delete().eq("id", id); if (error) toast.error(error.message); await qc.invalidateQueries({ queryKey: ["battle-effects", battle.id] }); }} hpRegenBlocked={blocked(f.id, "no_regen_hp")} manaRegenBlocked={blocked(f.id, "no_regen_mana")} manaRegenMode={manaRegenSettings[f.id]?.mode ?? "percent"} manaRegenAmount={manaRegenSettings[f.id]?.amount ?? "0"} onManaRegenModeChange={(mode) => setManaRegen(f.id, { mode })} onManaRegenAmountChange={(amount) => setManaRegen(f.id, { amount })} /> }
               <div className="flex flex-wrap items-center justify-between gap-2 rounded border border-border p-2">
                 <span className="text-xs text-muted-foreground">Turnos individuais: {f.participant_turn_count ?? 0}</span>
                 {isMaster && <Button size="sm" variant="outline" onClick={() => void advanceFighterTurn(f)}><RotateCw className="mr-1 h-3.5 w-3.5" /> Avançar turno</Button>}
@@ -282,7 +317,7 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
 }
 
 
-function CombatResourceEditor({ fighter, val, manaRegenMode, manaRegenAmount, onManaRegenModeChange, onManaRegenAmountChange }: { fighter: Fighter; val: (f: Fighter, k: string) => number; manaRegenMode: "percent" | "fixed"; manaRegenAmount: string; onManaRegenModeChange: (mode: "percent" | "fixed") => void; onManaRegenAmountChange: (amount: string) => void }) {
+function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemoveEffect, hpRegenBlocked, manaRegenBlocked, manaRegenMode, manaRegenAmount, onManaRegenModeChange, onManaRegenAmountChange }: { fighter: Fighter; val: (f: Fighter, k: string) => number; effects: BattleEffect[]; defs: AttributeDef[]; onAddEffect: (effect: Omit<BattleEffect, "id" | "battle_id" | "character_id">) => void; onRemoveEffect: (id: string) => void; hpRegenBlocked: boolean; manaRegenBlocked: boolean; manaRegenMode: "percent" | "fixed"; manaRegenAmount: string; onManaRegenModeChange: (mode: "percent" | "fixed") => void; onManaRegenAmountChange: (amount: string) => void }) {
   const qc = useQueryClient();
   const [manaDelta, setManaDelta] = useState("10");
   const [sanityDelta, setSanityDelta] = useState("10");
@@ -290,6 +325,14 @@ function CombatResourceEditor({ fighter, val, manaRegenMode, manaRegenAmount, on
   const [hpRegenMode, setHpRegenMode] = useState<"percent" | "fixed">("percent");
   const [hpRegenAmount, setHpRegenAmount] = useState("10");
   const [busy, setBusy] = useState(false);
+  const [effectName, setEffectName] = useState("");
+  const [effectType, setEffectType] = useState<BattleEffect["effect_type"]>("status");
+  const [effectAttr, setEffectAttr] = useState("hp");
+  const [effectPolarity, setEffectPolarity] = useState<"buff" | "debuff">("buff");
+  const [effectMode, setEffectMode] = useState<"percent" | "fixed">("fixed");
+  const [effectAmount, setEffectAmount] = useState("10");
+  const [effectDuration, setEffectDuration] = useState("2");
+  const [effectScope, setEffectScope] = useState<"individual" | "global">("individual");
 
 
   async function regenerateHp() {
@@ -299,7 +342,8 @@ function CombatResourceEditor({ fighter, val, manaRegenMode, manaRegenAmount, on
     if (!Number.isFinite(amount) || amount < 0) { toast.error("Informe uma regeneração de HP válida"); return; }
     const maximum = val(fighter, "hp");
     const regen = hpRegenMode === "percent" ? Math.ceil(maximum * amount / 100) : Math.floor(amount);
-    const next = Math.min(maximum, (attr.current_value ?? 0) + regen);
+    const adjustedRegen = hpRegenBlocked ? 0 : regen;
+    const next = Math.min(maximum, (attr.current_value ?? 0) + adjustedRegen);
     setBusy(true);
     try {
       const { error } = await supabase.from("character_attributes").update({ current_value: next, updated_at: new Date().toISOString() }).eq("character_id", fighter.id).eq("attribute_key", "hp");
@@ -356,7 +400,7 @@ function CombatResourceEditor({ fighter, val, manaRegenMode, manaRegenAmount, on
           </select>
           <Input aria-label="Valor de regeneração de HP" type="number" min="0" value={hpRegenAmount} onChange={(e) => setHpRegenAmount(e.target.value)} />
         </div>
-        <Button size="sm" disabled={busy} onClick={() => void regenerateHp()}><Plus className="mr-1 h-3 w-3" /> Regenerar HP</Button>
+        <Button size="sm" disabled={busy || hpRegenBlocked} onClick={() => void regenerateHp()}><Plus className="mr-1 h-3 w-3" /> Regenerar HP</Button>
       </div>
       <div className="grid grid-cols-[1fr_auto] gap-2">
         <Input aria-label="Quantidade de mana a reduzir" type="number" min="1" value={manaDelta} onChange={(e) => setManaDelta(e.target.value)} />
@@ -371,6 +415,22 @@ function CombatResourceEditor({ fighter, val, manaRegenMode, manaRegenAmount, on
           <Button size="sm" variant="outline" disabled={busy} onClick={() => void changePercent("body", bodyDelta, -1)}><Minus className="mr-1 h-3 w-3" /> Corpo</Button>
           <Button size="sm" variant="outline" disabled={busy} onClick={() => void changePercent("body", bodyDelta, 1)}><Plus className="mr-1 h-3 w-3" /> Corpo</Button>
         </div>
+      </div>
+      <div className="space-y-2 border-t border-border pt-2">
+        <div className="text-xs font-semibold text-muted-foreground">Efeitos ativos</div>
+        {effects.map(effect => <div key={effect.id} className="flex items-center justify-between gap-2 rounded border border-border p-2 text-xs"><div><strong>{effect.name}</strong> · {effect.effect_type} · {effect.duration} turno(s)</div><Button size="sm" variant="ghost" onClick={() => onRemoveEffect(effect.id)}><Trash2 className="h-3 w-3" /></Button></div>)}
+        <Input placeholder="Nome do efeito" value={effectName} onChange={e => setEffectName(e.target.value)} />
+        <div className="grid grid-cols-2 gap-2">
+          <select className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={effectType} onChange={e => { const type = e.target.value as BattleEffect["effect_type"]; setEffectType(type); if(type === "regeneration") setEffectAttr("hp"); }}>
+            <option value="status">Buff/debuff de status</option><option value="regeneration">Buff/debuff de regeneração</option><option value="no_regen_hp">Não regenera HP</option><option value="no_regen_mana">Não regenera Mana</option><option value="stun">Stun (visual)</option>
+          </select>
+          {(effectType === "status" || effectType === "regeneration") && <select className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={effectAttr} onChange={e => setEffectAttr(e.target.value)}>{(effectType === "regeneration" ? [{key:"hp",label:"HP"},{key:"mana",label:"Mana"}] : defs.map(d => ({key:d.key,label:d.key === "hp" ? "HP máximo" : d.key === "mana" ? "Mana máxima" : d.label}))).map(d => <option key={d.key} value={d.key}>{d.label}</option>)}</select>}
+          {(effectType === "status" || effectType === "regeneration") && <><select className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={effectPolarity} onChange={e => setEffectPolarity(e.target.value as "buff" | "debuff")}><option value="buff">Buff</option><option value="debuff">Debuff</option></select><select className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={effectMode} onChange={e => setEffectMode(e.target.value as "percent" | "fixed")}><option value="percent">Porcentagem</option><option value="fixed">Pontos fixos</option></select><Input type="number" min="0" value={effectAmount} onChange={e => setEffectAmount(e.target.value)} /></>}
+          <Input type="number" min="1" value={effectDuration} onChange={e => setEffectDuration(e.target.value)} />
+          <select className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={effectScope} onChange={e => setEffectScope(e.target.value as "individual" | "global")}><option value="individual">Turno individual</option><option value="global">Turno geral</option></select>
+        </div>
+        <Button size="sm" onClick={() => { const duration = Math.floor(Number(effectDuration)), amount = Number(effectAmount); if (!effectName.trim() || duration < 1 || !Number.isFinite(duration) || !Number.isFinite(amount) || amount < 0) { toast.error("Preencha nome, valor e duração válidos"); return; } onAddEffect({name:effectName.trim(),effect_type:effectType,attribute_key:effectType === "status" || effectType === "regeneration" ? effectAttr : null,polarity:effectPolarity,value_mode:effectMode,amount,duration,duration_scope:effectScope}); setEffectName(""); }}><Plus className="mr-1 h-3 w-3" /> Aplicar efeito</Button>
+        {hpRegenBlocked && <div className="text-xs text-destructive">Regeneração de HP bloqueada.</div>}{manaRegenBlocked && <div className="text-xs text-destructive">Regeneração de Mana bloqueada.</div>}
       </div>
     </div>
   );
