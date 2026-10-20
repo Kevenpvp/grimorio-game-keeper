@@ -1,6 +1,6 @@
 import { User } from "lucide-react";
 import type { AttributeDef, Character, CharacterAttr } from "@/lib/sheets";
-import { computeValue, physicalAttributePoints, useCharacterTraitMods, usePhotoUrl } from "@/lib/sheets";
+import { computeValue, conditionAdjustedValue, physicalAttributePoints, useCharacterTraitMods, usePhotoUrl } from "@/lib/sheets";
 import { passiveEffectTypeActive, passiveStatusModifiers, statusEffectModifiers, useCharacterAbilities, useCharacterActiveEffects } from "@/lib/abilities";
 import { AttrIcon, barTone } from "./icons";
 import { StatBar } from "./StatBar";
@@ -76,7 +76,7 @@ export function CharacterSheetView({
           <div className="grid gap-3 sm:grid-cols-2">
             {barDefs.map((d) => {
               const a = byKey.get(d.key);
-              const cur = noMana && d.key === "mana" ? 0 : a?.current_value ?? 0;
+              const cur = noMana && d.key === "mana" ? 0 : conditionAdjustedValue(character, d.key, a?.current_value ?? 0);
               const rm = mods[d.key] ?? 0;
               const raceMod = raceModifiers[d.key] ?? 0;
               const virtueMod = virtueModifiers[d.key] ?? 0;
@@ -87,7 +87,7 @@ export function CharacterSheetView({
               const rawMax = d.accepts_points ? base + bonus : (a?.max_value ?? 0) + rm + bonus;
               const passive = passiveMods[d.key] ?? { fixed: 0, percent: 0 };
               const active = statusEffectModifiers(activeEffects, d.key);
-              const maxWithPassives = Math.floor((rawMax + passive.fixed + active.fixed) * (1 + (passive.percent + active.percent) / 100));
+              const maxWithPassives = conditionAdjustedValue(character, d.key, Math.floor((rawMax + passive.fixed + active.fixed) * (1 + (passive.percent + active.percent) / 100)));
               const max = noMana && d.key === "mana" ? 0 : d.key === "hp" ? Math.max(1, maxWithPassives) : Math.max(0, maxWithPassives);
               return (
                 <div key={d.key} className="panel p-4">
@@ -129,7 +129,8 @@ export function CharacterSheetView({
             const passive = passiveMods[d.key] ?? { fixed: 0, percent: 0 };
             const active = statusEffectModifiers(activeEffects, d.key);
             const rawValue = d.accepts_points ? base + bonus : a?.current_value ?? 0;
-            const value = noMana && d.key === "mana" ? 0 : Math.max(0, Math.floor((rawValue + passive.fixed + active.fixed) * (1 + (passive.percent + active.percent) / 100)));
+            const calculatedValue = Math.max(0, Math.floor((rawValue + passive.fixed + active.fixed) * (1 + (passive.percent + active.percent) / 100)));
+            const value = noMana && d.key === "mana" ? 0 : conditionAdjustedValue(character, d.key, calculatedValue);
             return (
               <div key={d.key} className="panel p-4">
                 <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
