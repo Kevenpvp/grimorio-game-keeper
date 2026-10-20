@@ -82,3 +82,11 @@ after update of active on public.battles
 for each row
 when (old.active is true and new.active is false)
 execute function public.scale_resources_after_battle_end();
+
+-- Repair characters already left with an over-cap current value by earlier ended combats.
+-- The effective maximum excludes every inactive battle, so this clamps stale values such as 60/50.
+update public.character_attributes ca
+set current_value = public.calculate_character_resource_max(ca.character_id, ca.attribute_key)::integer,
+    updated_at = now()
+where ca.attribute_key in ('hp', 'mana')
+  and ca.current_value > public.calculate_character_resource_max(ca.character_id, ca.attribute_key);
