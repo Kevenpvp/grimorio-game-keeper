@@ -55,16 +55,19 @@ export type Database = {
           battle_id: string
           character_id: string
           sort_order: number
+          turn_count: number
         }
         Insert: {
           battle_id: string
           character_id: string
           sort_order?: number
+          turn_count?: number
         }
         Update: {
           battle_id?: string
           character_id?: string
           sort_order?: number
+          turn_count?: number
         }
         Relationships: [
           {
