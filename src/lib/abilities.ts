@@ -19,6 +19,9 @@ export type AbilityEffectDefinition = {
   damage_reduction_scope?: DamageReductionScope;
   damage_reduction_type_id?: string | null;
   damage_reduction_magic_level?: DamageMagicLevel | null;
+  /** Empty arrays mean all registered magic types / all magic grades. */
+  damage_reduction_type_ids?: string[] | null;
+  damage_reduction_magic_levels?: DamageMagicLevel[] | null;
 };
 export type Ability = Tables<"abilities">;
 export type CharacterAbilityRow = Tables<"character_abilities">;
@@ -36,6 +39,15 @@ export function parseAbilityEffects(value: unknown): AbilityEffectDefinition[] {
     const valueMode = raw.value_mode === "percent" ? "percent" : "fixed";
     const amount = Number(raw.amount ?? 0);
     const duration = Number(raw.duration ?? 1);
+    const damageReductionTypeIds = Array.isArray(raw.damage_reduction_type_ids)
+      ? raw.damage_reduction_type_ids.filter((value): value is string => typeof value === "string")
+      : typeof raw.damage_reduction_type_id === "string" ? [raw.damage_reduction_type_id] : [];
+    const validMagicLevels: DamageMagicLevel[] = ["baixa", "media", "alta"];
+    const damageReductionMagicLevels = Array.isArray(raw.damage_reduction_magic_levels)
+      ? raw.damage_reduction_magic_levels.filter((value): value is DamageMagicLevel => validMagicLevels.includes(value as DamageMagicLevel))
+      : validMagicLevels.includes(raw.damage_reduction_magic_level as DamageMagicLevel)
+        ? [raw.damage_reduction_magic_level as DamageMagicLevel]
+        : [];
     return [{
       name: typeof raw.name === "string" && raw.name.trim() ? raw.name.trim() : "Efeito",
       effect_type: effectType,
@@ -46,8 +58,10 @@ export function parseAbilityEffects(value: unknown): AbilityEffectDefinition[] {
       duration: Number.isFinite(duration) ? Math.max(1, Math.floor(duration)) : 1,
       damage_scope: raw.damage_scope === "physical" || raw.damage_scope === "magical" ? raw.damage_scope : "any",
       damage_reduction_scope: raw.damage_reduction_scope === "magical" ? "magical" : "physical",
-      damage_reduction_type_id: typeof raw.damage_reduction_type_id === "string" ? raw.damage_reduction_type_id : null,
-      damage_reduction_magic_level: raw.damage_reduction_magic_level === "baixa" || raw.damage_reduction_magic_level === "media" || raw.damage_reduction_magic_level === "alta" ? raw.damage_reduction_magic_level : "baixa",
+      damage_reduction_type_id: null,
+      damage_reduction_magic_level: null,
+      damage_reduction_type_ids: damageReductionTypeIds,
+      damage_reduction_magic_levels: damageReductionMagicLevels,
     }];
   });
 }
@@ -125,6 +139,9 @@ export type ActiveCharacterEffect = {
   damage_reduction_scope?: DamageReductionScope;
   damage_reduction_type_id?: string | null;
   damage_reduction_magic_level?: DamageMagicLevel | null;
+  /** Empty arrays mean all registered magic types / all magic grades. */
+  damage_reduction_type_ids?: string[] | null;
+  damage_reduction_magic_levels?: DamageMagicLevel[] | null;
 };
 
 export function useCharacterActiveEffects(characterId: string | undefined) {
