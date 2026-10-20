@@ -280,6 +280,153 @@ $$;
 REVOKE ALL ON FUNCTION public.invest_points(uuid, jsonb) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.invest_points(uuid, jsonb) TO authenticated;
 
+-- Explicit source selector: race, virtue, or independent base points. This keeps the provenance
+-- chosen in the UI deterministic rather than silently spending the race pool first.
+CREATE OR REPLACE FUNCTION public.invest_points_from_source(
+  _character_id uuid,
+  _source text,
+  _allocations jsonb
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $
+DECLARE
+  _c public.characters;
+  _race_alloc jsonb;
+  _virtue_alloc jsonb;
+  _race_left integer;
+  _virtue_left integer;
+  _base_left integer;
+  _source_left integer;
+  _available integer;
+  _total integer := 0;
+  _positive integer := 0;
+  _key text;
+  _delta integer;
+  _current integer;
+  _owned integer;
+  _take integer;
+  _used integer;
+BEGIN
+  IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Não autenticado'; END IF;
+  IF _source NOT IN ('race','virtue','base') THEN RAISE EXCEPTION 'Origem dos pontos inválida'; END IF;
+  IF _allocations IS NULL OR jsonb_typeof(_allocations) IS DISTINCT FROM 'object' THEN
+    RAISE EXCEPTION 'Distribuição de pontos inválida';
+  END IF;
+
+  SELECT * INTO _c FROM public.characters WHERE id = _character_id FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Ficha não encontrada'; END IF;
+  IF NOT public.has_role(auth.uid(), 'master') AND _c.owner_id IS DISTINCT FROM auth.uid() THEN
+    RAISE EXCEPTION 'Sem permissão';
+  END IF;
+
+  _race_alloc := COALESCE(_c.race_attribute_allocations, '{}'::jsonb);
+  _virtue_alloc := COALESCE(_c.virtue_attribute_allocations, '{}'::jsonb);
+  SELECT COALESCE(SUM(value::integer),0) INTO _used FROM jsonb_each_text(_race_alloc);
+  _race_left := GREATEST(0, COALESCE(_c.race_points_granted,0) - _used);
+  SELECT COALESCE(SUM(value::integer),0) INTO _used FROM jsonb_each_text(_virtue_alloc);
+  _virtue_left := GREATEST(0, COALESCE(_c.virtue_points_granted,0) - _used);
+  _base_left := GREATEST(0, COALESCE(_c.available_points,0) - _race_left - _virtue_left);
+  _source_left := CASE _source WHEN 'race' THEN _race_left WHEN 'virtue' THEN _virtue_left ELSE _base_left END;
+  _available := COALESCE(_c.available_points,0);
+
+  -- Point removals are master-only and may remove only points belonging to the selected source.
+  FOR _key, _delta IN
+    SELECT key, value::integer FROM jsonb_each_text(_allocations) WHERE value::integer < 0
+  LOOP
+    IF NOT public.has_role(auth.uid(), 'master') THEN RAISE EXCEPTION 'Apenas o mestre pode retirar pontos'; END IF;
+    IF NOT EXISTS (SELECT 1 FROM public.attribute_definitions WHERE key = _key AND accepts_points) THEN
+      RAISE EXCEPTION 'O atributo % não aceita pontos', _key;
+    END IF;
+    SELECT COALESCE(points,0) INTO _current
+    FROM public.character_attributes
+    WHERE character_id = _character_id AND attribute_key = _key
+    FOR UPDATE;
+    _take := -_delta;
+    IF _source = 'race' THEN
+      _owned := COALESCE((_race_alloc ->> _key)::integer,0);
+      IF _take > _owned THEN RAISE EXCEPTION 'A raça não possui % ponto(s) investido(s) em %', _take, _key; END IF;
+      IF _take = _owned THEN _race_alloc := _race_alloc - _key;
+      ELSE _race_alloc := jsonb_set(_race_alloc, ARRAY[_key], to_jsonb(_owned - _take), true); END IF;
+    ELSIF _source = 'virtue' THEN
+      _owned := COALESCE((_virtue_alloc ->> _key)::integer,0);
+      IF _take > _owned THEN RAISE EXCEPTION 'A virtude não possui % ponto(s) investido(s) em %', _take, _key; END IF;
+      IF _take = _owned THEN _virtue_alloc := _virtue_alloc - _key;
+      ELSE _virtue_alloc := jsonb_set(_virtue_alloc, ARRAY[_key], to_jsonb(_owned - _take), true); END IF;
+    ELSE
+      _owned := GREATEST(0, COALESCE(_current,0)
+        - COALESCE((_race_alloc ->> _key)::integer,0)
+        - COALESCE((_virtue_alloc ->> _key)::integer,0));
+      IF _take > _owned THEN RAISE EXCEPTION 'Os pontos livres não possuem % ponto(s) investido(s) em %', _take, _key; END IF;
+    END IF;
+    IF COALESCE(_current,0) < _take THEN RAISE EXCEPTION 'Pontos investidos insuficientes em %', _key; END IF;
+    UPDATE public.character_attributes SET points = points + _delta
+    WHERE character_id = _character_id AND attribute_key = _key;
+    _total := _total + _delta;
+  END LOOP;
+
+  -- Positive allocations consume only the currently selected source.
+  SELECT COALESCE(SUM(value::integer),0) INTO _used FROM jsonb_each_text(_race_alloc);
+  _race_left := GREATEST(0, COALESCE(_c.race_points_granted,0) - _used);
+  SELECT COALESCE(SUM(value::integer),0) INTO _used FROM jsonb_each_text(_virtue_alloc);
+  _virtue_left := GREATEST(0, COALESCE(_c.virtue_points_granted,0) - _used);
+  _base_left := GREATEST(0, COALESCE(_c.available_points,0) - _race_left - _virtue_left);
+  _source_left := CASE _source WHEN 'race' THEN _race_left WHEN 'virtue' THEN _virtue_left ELSE _base_left END;
+
+  FOR _key, _delta IN
+    SELECT key, value::integer FROM jsonb_each_text(_allocations) WHERE value::integer > 0
+  LOOP
+    IF NOT EXISTS (SELECT 1 FROM public.attribute_definitions WHERE key = _key AND accepts_points) THEN
+      RAISE EXCEPTION 'O atributo % não aceita pontos', _key;
+    END IF;
+    _positive := _positive + _delta;
+    _total := _total + _delta;
+  END LOOP;
+  IF _positive > _source_left THEN
+    RAISE EXCEPTION 'Pontos insuficientes nesta origem (disponível: %)', _source_left;
+  END IF;
+  IF _total > _available THEN
+    RAISE EXCEPTION 'Pontos insuficientes (disponível: %)', _available;
+  END IF;
+
+  FOR _key, _delta IN
+    SELECT key, value::integer FROM jsonb_each_text(_allocations) WHERE value::integer > 0
+  LOOP
+    INSERT INTO public.character_attributes (character_id, attribute_key, points)
+    VALUES (_character_id, _key, _delta)
+    ON CONFLICT (character_id, attribute_key) DO UPDATE
+      SET points = public.character_attributes.points + EXCLUDED.points;
+    IF _source = 'race' THEN
+      _race_alloc := jsonb_set(_race_alloc, ARRAY[_key],
+        to_jsonb(COALESCE((_race_alloc ->> _key)::integer,0) + _delta), true);
+    ELSIF _source = 'virtue' THEN
+      _virtue_alloc := jsonb_set(_virtue_alloc, ARRAY[_key],
+        to_jsonb(COALESCE((_virtue_alloc ->> _key)::integer,0) + _delta), true);
+    END IF;
+  END LOOP;
+
+  UPDATE public.characters
+  SET available_points = available_points - _total,
+      race_attribute_allocations = _race_alloc,
+      virtue_attribute_allocations = _virtue_alloc
+  WHERE id = _character_id;
+
+  UPDATE public.character_attributes ca
+  SET max_value = GREATEST(0, ROUND(COALESCE(ad.base_value,0) + ca.points * COALESCE(ad.points_multiplier,1)))::integer,
+      current_value = CASE
+        WHEN ad.cap_current AND ca.current_value > GREATEST(0, ROUND(COALESCE(ad.base_value,0) + ca.points * COALESCE(ad.points_multiplier,1)))::integer
+        THEN GREATEST(0, ROUND(COALESCE(ad.base_value,0) + ca.points * COALESCE(ad.points_multiplier,1)))::integer
+        ELSE ca.current_value END
+  FROM public.attribute_definitions ad
+  WHERE ca.character_id = _character_id AND ad.key = ca.attribute_key AND ad.accepts_points;
+END;
+$;
+REVOKE ALL ON FUNCTION public.invest_points_from_source(uuid, text, jsonb) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.invest_points_from_source(uuid, text, jsonb) TO authenticated;
+
+
 CREATE OR REPLACE FUNCTION public.invest_physical_points(_character_id uuid, _allocations jsonb)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
