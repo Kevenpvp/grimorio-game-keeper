@@ -313,13 +313,13 @@ function CombatResourceEditor({ fighter, val, onManaRegenSaved }: { fighter: Fig
     } finally { setBusy(false); }
   }
 
-  async function changePercent(field: "sanity" | "body", deltaText: string) {
+  async function changePercent(field: "sanity" | "body", deltaText: string, direction: 1 | -1) {
     const delta = Number(deltaText);
     if (!Number.isFinite(delta) || delta <= 0) { toast.error("Informe uma quantidade positiva"); return; }
     setBusy(true);
     try {
       const current = field === "sanity" ? fighter.sanity : fighter.body;
-      const next = Math.max(0, Math.min(100, current + delta));
+      const next = Math.max(0, Math.min(100, current + delta * direction));
       const { error } = await supabase.from("characters").update({ [field]: next }).eq("id", fighter.id);
       if (error) { toast.error(error.message); return; }
       toast.success((field === "sanity" ? "Sanidade" : "Corpo") + ": " + current + "% → " + next + "%");
@@ -366,10 +366,16 @@ function CombatResourceEditor({ fighter, val, onManaRegenSaved }: { fighter: Fig
       <div className="grid grid-cols-[1fr_auto] gap-2">
         <Input aria-label="Quantidade de mana a reduzir" type="number" min="1" value={manaDelta} onChange={(e) => setManaDelta(e.target.value)} />
         <Button size="sm" variant="outline" disabled={busy} onClick={() => void changeMana()}><Minus className="mr-1 h-3 w-3" /> − Mana</Button>
-        <Input aria-label="Quantidade de sanidade a reduzir" type="number" min="1" value={sanityDelta} onChange={(e) => setSanityDelta(e.target.value)} />
-        <Button size="sm" variant="outline" disabled={busy} onClick={() => void changePercent("sanity", sanityDelta)}><Brain className="mr-1 h-3 w-3" /> + Sanidade</Button>
-        <Input aria-label="Quantidade de corpo a reduzir" type="number" min="1" value={bodyDelta} onChange={(e) => setBodyDelta(e.target.value)} />
-        <Button size="sm" variant="outline" disabled={busy} onClick={() => void changePercent("body", bodyDelta)}><Activity className="mr-1 h-3 w-3" /> + Corpo</Button>
+        <Input aria-label="Quantidade de sanidade para alterar" type="number" min="1" value={sanityDelta} onChange={(e) => setSanityDelta(e.target.value)} />
+        <div className="flex gap-1">
+          <Button size="sm" variant="outline" disabled={busy} onClick={() => void changePercent("sanity", sanityDelta, -1)}><Minus className="mr-1 h-3 w-3" /> Sanidade</Button>
+          <Button size="sm" variant="outline" disabled={busy} onClick={() => void changePercent("sanity", sanityDelta, 1)}><Plus className="mr-1 h-3 w-3" /> Sanidade</Button>
+        </div>
+        <Input aria-label="Quantidade de corpo para alterar" type="number" min="1" value={bodyDelta} onChange={(e) => setBodyDelta(e.target.value)} />
+        <div className="flex gap-1">
+          <Button size="sm" variant="outline" disabled={busy} onClick={() => void changePercent("body", bodyDelta, -1)}><Minus className="mr-1 h-3 w-3" /> Corpo</Button>
+          <Button size="sm" variant="outline" disabled={busy} onClick={() => void changePercent("body", bodyDelta, 1)}><Plus className="mr-1 h-3 w-3" /> Corpo</Button>
+        </div>
       </div>
     </div>
   );
