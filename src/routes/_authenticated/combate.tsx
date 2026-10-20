@@ -29,7 +29,7 @@ export const Route = createFileRoute("/_authenticated/combate")({
 type Attr = { attribute_key: string; current_value: number; max_value: number; points: number; bonus: number };
 type Fighter = {
   id: string; name: string; player_name: string; photo_path: string | null; race_id: string | null;
-  body: number; sanity: number;
+  body: number; sanity: number; participant_turn_count?: number;
   character_attributes: Attr[];
 };
 
@@ -62,7 +62,7 @@ function useLiveBattles() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("battles")
-        .select("*, battle_participants(sort_order, characters(id,name,player_name,photo_path,race_id,body,sanity,character_attributes(attribute_key,current_value,max_value,points,bonus)))")
+        .select("*, battle_participants(sort_order,turn_count, characters(id,name,player_name,photo_path,race_id,body,sanity,character_attributes(attribute_key,current_value,max_value,points,bonus)))")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data;
@@ -119,7 +119,7 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
   const qc = useQueryClient();
   const [selectedTargetIds, setSelectedTargetIds] = useState<string[]>(() => battle.target_character_id ? [battle.target_character_id] : []);
   const fighters = useMemo(
-    () => battle.battle_participants.slice().sort((a, b) => a.sort_order - b.sort_order).map((p) => p.characters as Fighter).filter(Boolean),
+    () => battle.battle_participants.slice().sort((a, b) => a.sort_order - b.sort_order).map((p) => ({ ...(p.characters as Fighter), participant_turn_count: p.turn_count ?? 0 })).filter((f) => !!f.id),
     [battle],
   );
   const modsOf = (f: Fighter) => raceMods(races?.find((r) => r.id === f.race_id));
@@ -133,6 +133,23 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
     if (error) toast.error(error.message);
     qc.invalidateQueries({ queryKey: ["battles"] });
   };
+
+  async function advanceFighterTurn(fighter: Fighter) {
+    const participant = battle.battle_participants.find((p) => p.characters?.id === fighter.id);
+    if (!participant) { toast.error("Personagem não encontrado nesta batalha"); return; }
+    const nextTurn = ((participant as typeof participant & { turn_count?: number }).turn_count ?? 0) + 1;
+    const { error: turnError } = await supabase.from("battle_participants").update({ turn_count: nextTurn }).eq("battle_id", battle.id).eq("character_id", fighter.id);
+    if (turnError) { toast.error(turnError.message); return; }
+    const manaAttr = fighter.character_attributes.find((a) => a.attribute_key === "mana");
+    if (manaAttr) {
+      const maximum = val(fighter, "mana");
+      const nextMana = Math.min(maximum, (manaAttr.current_value ?? 0) + Math.ceil(maximum * 0.05));
+      const { error } = await supabase.from("character_attributes").update({ current_value: nextMana, updated_at: new Date().toISOString() }).eq("character_id", fighter.id).eq("attribute_key", "mana");
+      if (error) { toast.error("Turno avançado, mas falhou a regeneração de mana: " + error.message); }
+    }
+    toast.success("Turno individual de " + fighter.name + " avançado para " + nextTurn + "; regenerou 5% da Mana máxima.");
+    await qc.invalidateQueries({ queryKey: ["battles"] });
+  }
 
   async function advanceTurn() {
     const nextTurn = (battle.turn_count ?? 0) + 1;
@@ -204,6 +221,10 @@ function BattleView({ battle, isMaster }: { battle: BattleRow; isMaster: boolean
                 ))}
               </div>
               {isMaster && <CombatResourceEditor fighter={f} val={val} />}
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded border border-border p-2">
+                <span className="text-xs text-muted-foreground">Turnos individuais: {f.participant_turn_count ?? 0}</span>
+                {isMaster && <Button size="sm" variant="outline" onClick={() => void advanceFighterTurn(f)}><RotateCw className="mr-1 h-3.5 w-3.5" /> Avançar turno</Button>}
+              </div>
               {isMaster && (
                 <div className="flex gap-2 pt-1">
                   <Button size="sm" variant={isActor ? "default" : "outline"} onClick={() => {
