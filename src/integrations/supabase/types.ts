@@ -565,7 +565,7 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
+      },
       virtues: {
         Row: {
           bonus_points: number
