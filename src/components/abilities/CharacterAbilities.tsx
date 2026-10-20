@@ -28,6 +28,7 @@ function effectSummary(effect: AbilityEffectDefinition, defs: NonNullable<Return
   if (effect.effect_type === "no_regen_mana") return `${effect.name}: bloqueia regeneração de Mana`;
   if (effect.effect_type === "magic_prohibition") return `${effect.name}: impede habilidades que consomem Mana`;
   if (effect.effect_type === "no_mana") return `${effect.name}: Sem Mana — zera a Mana e bloqueia habilidades mágicas ou que consomem Mana`;
+  if (effect.effect_type === "no_mana") return `${effect.name}: Sem Mana — zera a Mana e bloqueia habilidades mágicas ou que consomem Mana`;
   return `${effect.name}: Stun (visual)`;
 }
 
