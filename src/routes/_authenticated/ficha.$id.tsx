@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  clampPct, computeValue, useCharacter, useCharacterLive, useDefs, useMe, useRaceMods,
+  clampPct, computeValue, useCharacter, useCharacterLive, useCharacterTraitMods, useDefs, useMe,
   type AttributeDef, type Character, type CharacterAttr,
 } from "@/lib/sheets";
 import { CharacterSheetView, Portrait } from "@/components/sheet/CharacterSheetView";
@@ -145,7 +145,7 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
   }
 
   const byKey = new Map(attrs.map((a) => [a.attribute_key, a]));
-  const { mods } = useRaceMods(character.race_id);
+  const { mods, raceModifiers, virtueModifiers } = useCharacterTraitMods(character.race_id, character.virtue_id);
 
   return (
     <div className="space-y-6">
@@ -247,7 +247,7 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
             <h2 className="mb-3 text-lg text-gold">Atributos</h2>
             <div className="grid gap-3 md:grid-cols-2">
               {defs.map((d) => (
-                <AttrEditor key={d.key} def={d} characterId={character.id} attr={byKey.get(d.key)} racePts={mods[d.key] ?? 0}
+                <AttrEditor key={d.key} def={d} characterId={character.id} attr={byKey.get(d.key)} racePts={raceModifiers[d.key] ?? 0} virtuePts={virtueModifiers[d.key] ?? 0}
                   onSaved={() => { mark(); refresh(); }} />
               ))}
             </div>
@@ -326,15 +326,16 @@ function PercentEditor({ label, icon, tone, value, onSave }: {
   );
 }
 
-function AttrEditor({ def, characterId, attr, racePts, onSaved }: {
-  def: AttributeDef; characterId: string; attr: CharacterAttr | undefined; racePts: number; onSaved: () => void;
+function AttrEditor({ def, characterId, attr, racePts, virtuePts, onSaved }: {
+  def: AttributeDef; characterId: string; attr: CharacterAttr | undefined; racePts: number; virtuePts: number; onSaved: () => void;
 }) {
   const cur0 = attr?.current_value ?? 0;
   const max0 = attr?.max_value ?? 0;
   const pts0 = attr?.points ?? 0;
   const bonus0 = attr?.bonus ?? 0;
-  const base = def.accepts_points ? computeValue(def, pts0 + racePts) : max0;
-  const rawTotal = def.accepts_points ? base + bonus0 : max0 + racePts + bonus0;
+  const traitPts = racePts + virtuePts;
+  const base = def.accepts_points ? computeValue(def, pts0 + traitPts) : max0;
+  const rawTotal = def.accepts_points ? base + bonus0 : max0 + traitPts + bonus0;
   // HP can receive negative racial modifiers, but its displayed maximum is always at least 1.
   const total = def.key === "hp" ? Math.max(1, rawTotal) : rawTotal;
   const [cur, setCur] = useState(cur0);
@@ -390,7 +391,7 @@ function AttrEditor({ def, characterId, attr, racePts, onSaved }: {
           ) : def.accepts_points ? (
             <>{cur0} <span className="text-sm text-muted-foreground">/ {total}</span></>
           ) : (
-            <>{cur0} <span className="text-sm text-muted-foreground">/ {total}{racePts !== 0 && ` (${racePts > 0 ? "+" : ""}${racePts} raça)`}</span></>
+            <>{cur0} <span className="text-sm text-muted-foreground">/ {total}{(racePts !== 0 || virtuePts !== 0) && ` (${racePts !== 0 ? `${racePts > 0 ? "+" : ""}${racePts} raça` : ""}${racePts !== 0 && virtuePts !== 0 ? ", " : ""}${virtuePts !== 0 ? `${virtuePts > 0 ? "+" : ""}${virtuePts} virtude` : ""})`}</span></>
           )}
         </span>
       </div>
@@ -400,7 +401,7 @@ function AttrEditor({ def, characterId, attr, racePts, onSaved }: {
           <div className="flex flex-wrap items-end gap-3">
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">Pontos investidos</Label>
-              <div className="tabular panel px-4 py-1.5 text-center text-sm">{pts0}{racePts !== 0 && <span className={racePts > 0 ? "text-gold" : "text-destructive"}> {racePts > 0 ? "+" : ""}{racePts} raça</span>}</div>
+              <div className="tabular panel px-4 py-1.5 text-center text-sm">{pts0}{racePts !== 0 && <span className={racePts > 0 ? "text-gold" : "text-destructive"}> {racePts > 0 ? "+" : ""}{racePts} raça</span>}{virtuePts !== 0 && <span className={virtuePts > 0 ? "text-gold" : "text-destructive"}> {virtuePts > 0 ? "+" : ""}{virtuePts} virtude</span>}</div>
             </div>
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">Valor por pontos</Label>
