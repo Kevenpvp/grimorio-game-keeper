@@ -210,35 +210,54 @@ begin
       _character_id := old.character_id;
       _attribute_key := old.attribute_key;
       _old_max := public.calculate_character_resource_max(_character_id, _attribute_key);
-      _extra := jsonb_build_array(jsonb_build_object(
-        'effect_type', new.effect_type,
-        'attribute_key', new.attribute_key,
-        'polarity', new.polarity,
-        'value_mode', new.value_mode,
-        'amount', new.amount
-      ));
-      _new_max := public.calculate_character_resource_max(
-        new.character_id, new.attribute_key, old.id, null, _extra, '[]'::jsonb
-      );
+      if new.effect_type = 'status'
+         and new.character_id = old.character_id
+         and new.attribute_key = old.attribute_key
+         and (new.battle_id is null or exists (
+           select 1 from public.battles b where b.id = new.battle_id and b.active
+         )) then
+        _extra := jsonb_build_array(jsonb_build_object(
+          'effect_type', new.effect_type,
+          'attribute_key', new.attribute_key,
+          'polarity', new.polarity,
+          'value_mode', new.value_mode,
+          'amount', new.amount
+        ));
+        _new_max := public.calculate_character_resource_max(
+          _character_id, _attribute_key, old.id, null, _extra, '[]'::jsonb
+        );
+      else
+        _new_max := public.calculate_character_resource_max(_character_id, _attribute_key, old.id);
+      end if;
       perform public.scale_character_resource_current(_character_id, _attribute_key, _old_max, _new_max);
-    elsif new.effect_type = 'status' and new.attribute_key in ('hp', 'mana') then
+    end if;
+
+    if new.effect_type = 'status' and new.attribute_key in ('hp', 'mana')
+       and (old.effect_type <> 'status'
+         or old.attribute_key is distinct from new.attribute_key
+         or old.character_id is distinct from new.character_id) then
       _character_id := new.character_id;
       _attribute_key := new.attribute_key;
       _old_max := public.calculate_character_resource_max(_character_id, _attribute_key, old.id);
-      _extra := jsonb_build_array(jsonb_build_object(
-        'effect_type', new.effect_type,
-        'attribute_key', new.attribute_key,
-        'polarity', new.polarity,
-        'value_mode', new.value_mode,
-        'amount', new.amount
-      ));
-      _new_max := public.calculate_character_resource_max(
-        _character_id, _attribute_key, old.id, null, _extra, '[]'::jsonb
-      );
+      if new.battle_id is null or exists (
+        select 1 from public.battles b where b.id = new.battle_id and b.active
+      ) then
+        _extra := jsonb_build_array(jsonb_build_object(
+          'effect_type', new.effect_type,
+          'attribute_key', new.attribute_key,
+          'polarity', new.polarity,
+          'value_mode', new.value_mode,
+          'amount', new.amount
+        ));
+        _new_max := public.calculate_character_resource_max(
+          _character_id, _attribute_key, old.id, null, _extra, '[]'::jsonb
+        );
+      else
+        _new_max := _old_max;
+      end if;
       perform public.scale_character_resource_current(_character_id, _attribute_key, _old_max, _new_max);
     end if;
     return new;
-  end if;
 
   return null;
 end;
