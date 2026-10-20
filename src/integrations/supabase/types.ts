@@ -14,6 +14,96 @@ export type Database = {
   }
   public: {
     Tables: {
+      abilities: {
+        Row: {
+          cooldown_turns: number
+          created_at: string
+          description: string | null
+          effects: Json
+          id: string
+          is_passive: boolean
+          mana_cost: number
+          name: string
+        }
+        Insert: {
+          cooldown_turns?: number
+          created_at?: string
+          description?: string | null
+          effects?: Json
+          id?: string
+          is_passive?: boolean
+          mana_cost?: number
+          name: string
+        }
+        Update: {
+          cooldown_turns?: number
+          created_at?: string
+          description?: string | null
+          effects?: Json
+          id?: string
+          is_passive?: boolean
+          mana_cost?: number
+          name?: string
+        }
+        Relationships: []
+      }
+      character_abilities: {
+        Row: {
+          ability_id: string
+          character_id: string
+          cooldown_remaining: number
+          cooldown_turns: number
+          created_at: string
+          description: string | null
+          effects: Json
+          id: string
+          is_passive: boolean
+          mana_cost: number
+          name: string
+        }
+        Insert: {
+          ability_id: string
+          character_id: string
+          cooldown_remaining?: number
+          cooldown_turns?: number
+          created_at?: string
+          description?: string | null
+          effects?: Json
+          id?: string
+          is_passive?: boolean
+          mana_cost?: number
+          name: string
+        }
+        Update: {
+          ability_id?: string
+          character_id?: string
+          cooldown_remaining?: number
+          cooldown_turns?: number
+          created_at?: string
+          description?: string | null
+          effects?: Json
+          id?: string
+          is_passive?: boolean
+          mana_cost?: number
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "character_abilities_ability_id_fkey"
+            columns: ["ability_id"]
+            isOneToOne: false
+            referencedRelation: "abilities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "character_abilities_character_id_fkey"
+            columns: ["character_id"]
+            isOneToOne: false
+            referencedRelation: "characters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       attribute_definitions: {
         Row: {
           accepts_points: boolean
@@ -54,7 +144,7 @@ export type Database = {
         Row: {
           amount: number
           attribute_key: string | null
-          battle_id: string
+          battle_id: string | null
           character_id: string
           created_at: string
           duration: number
@@ -63,12 +153,13 @@ export type Database = {
           id: string
           name: string
           polarity: string
+          source_character_ability_id: string | null
           value_mode: string
         }
         Insert: {
           amount?: number
           attribute_key?: string | null
-          battle_id: string
+          battle_id?: string | null
           character_id: string
           created_at?: string
           duration: number
@@ -77,12 +168,13 @@ export type Database = {
           id?: string
           name: string
           polarity?: string
+          source_character_ability_id?: string | null
           value_mode?: string
         }
         Update: {
           amount?: number
           attribute_key?: string | null
-          battle_id?: string
+          battle_id?: string | null
           character_id?: string
           created_at?: string
           duration?: number
@@ -91,6 +183,7 @@ export type Database = {
           id?: string
           name?: string
           polarity?: string
+          source_character_ability_id?: string | null
           value_mode?: string
         }
         Relationships: [
@@ -106,6 +199,13 @@ export type Database = {
             columns: ["character_id"]
             isOneToOne: false
             referencedRelation: "characters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "battle_effects_source_character_ability_id_fkey"
+            columns: ["source_character_ability_id"]
+            isOneToOne: false
+            referencedRelation: "character_abilities"
             referencedColumns: ["id"]
           },
         ]
@@ -443,6 +543,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      activate_character_ability: {
+        Args: { _battle_id?: string | null; _character_ability_id: string; _target_character_id: string }
+        Returns: undefined
+      }
+      tick_character_ability_cooldowns: {
+        Args: { _character_id: string }
+        Returns: undefined
+      }
       apply_battle_damage: {
         Args: {
           _battle_id: string
