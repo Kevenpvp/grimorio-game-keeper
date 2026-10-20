@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2, WandSparkles } from "lucide-react";
+import { Plus, Search, Trash2, WandSparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,18 +32,34 @@ function HabilidadesPage() {
   const { data: abilities } = useAbilities();
   const { data: defs } = useDefs();
   const qc = useQueryClient();
+  const [search, setSearch] = useState("");
+  const [pendingSaveIds, setPendingSaveIds] = useState<string[]>([]);
 
   if (!me || !abilities || !defs) return <p className="text-muted-foreground">Carregando…</p>;
   if (!me.isMaster) return <p className="text-muted-foreground">Apenas o mestre pode gerenciar habilidades.</p>;
 
   async function create() {
-    const { error } = await supabase.from("abilities").insert({
-      name: "Nova habilidade", description: "", is_passive: false, can_activate: true, self_target_only: false, cooldown_turns: 1, mana_cost: 0, effects: [], passive_effects: [], end_effects: [],
-    });
+    const { data, error } = await supabase.from("abilities").insert({
+      name: "Nova habilidade", description: "", is_passive: false, can_activate: true, is_magical: true, self_target_only: false, cooldown_turns: 1, mana_cost: 0, effects: [], passive_effects: [], end_effects: [],
+    }).select("id").single();
     if (error) { toast.error(error.message); return; }
-    toast.success("Habilidade criada");
+    setPendingSaveIds((current) => [data.id, ...current.filter((id) => id !== data.id)]);
+    toast.success("Nova habilidade criada. Ela ficará no topo até você salvar.");
     await qc.invalidateQueries({ queryKey: ["abilities"] });
   }
+
+  const normalizedSearch = search.trim().toLocaleLowerCase("pt-BR");
+  const visibleAbilities = abilities
+    .filter((ability) => ability.name.toLocaleLowerCase("pt-BR").includes(normalizedSearch))
+    .slice()
+    .sort((a, b) => {
+      const aPending = pendingSaveIds.indexOf(a.id);
+      const bPending = pendingSaveIds.indexOf(b.id);
+      if (aPending >= 0 && bPending >= 0) return aPending - bPending;
+      if (aPending >= 0) return -1;
+      if (bPending >= 0) return 1;
+      return 0;
+    });
 
   return (
     <div className="space-y-6">
@@ -54,13 +70,18 @@ function HabilidadesPage() {
         </div>
         <Button onClick={() => void create()}><Plus className="mr-1 h-4 w-4" /> Nova habilidade</Button>
       </div>
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input className="pl-9" aria-label="Pesquisar habilidades pelo nome" placeholder="Pesquisar habilidade pelo nome..." value={search} onChange={(e) => setSearch(e.target.value)} />
+      </div>
       {!abilities.length && <p className="panel p-5 text-sm text-muted-foreground">Nenhuma habilidade cadastrada.</p>}
-      {abilities.map((ability) => <AbilityEditor key={ability.id} ability={ability} defs={defs} />)}
+      {abilities.length > 0 && visibleAbilities.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma habilidade encontrada para “{search}”.</p>}
+      {visibleAbilities.map((ability) => <AbilityEditor key={ability.id} ability={ability} defs={defs} isNew={pendingSaveIds.includes(ability.id)} onSaved={() => setPendingSaveIds((current) => current.filter((id) => id !== ability.id))} />)}
     </div>
   );
 }
 
-function AbilityEditor({ ability, defs }: { ability: Ability; defs: NonNullable<ReturnType<typeof useDefs>["data"]> }) {
+function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; defs: NonNullable<ReturnType<typeof useDefs>["data"]>; isNew: boolean; onSaved: () => void }) {
   const qc = useQueryClient();
   const [name, setName] = useState(ability.name);
   const [description, setDescription] = useState(ability.description ?? "");
@@ -126,6 +147,7 @@ function AbilityEditor({ ability, defs }: { ability: Ability; defs: NonNullable<
     if (error) { toast.error(error.message); return; }
     toast.success("Habilidade salva");
     await qc.invalidateQueries({ queryKey: ["abilities"] });
+    onSaved();
   }
 
   async function remove() {
@@ -139,6 +161,7 @@ function AbilityEditor({ ability, defs }: { ability: Ability; defs: NonNullable<
 
   return (
     <section className="panel space-y-4 p-4 sm:p-5">
+      {isNew && <p className="text-xs font-semibold text-amber-500">Nova habilidade — salve para confirmar as alterações.</p>}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
         <div className="min-w-0 flex-1 space-y-1.5">
           <Label>Nome da habilidade</Label>
@@ -201,7 +224,7 @@ function AbilityEditor({ ability, defs }: { ability: Ability; defs: NonNullable<
         defs={defs}
       />
       <div className="flex flex-wrap gap-2 border-t border-border pt-3">
-        <Button disabled={busy} onClick={() => void save()}>{busy ? "Salvando..." : "Salvar habilidade"}</Button>
+        <Button disabled={busy} onClick={() => void save()}>{busy ? "Salvando..." : isNew ? "Salvar nova habilidade" : "Salvar habilidade"}</Button>
         <Button disabled={busy} variant="destructive" onClick={() => void remove()}><Trash2 className="mr-1 h-4 w-4" /> Excluir</Button>
       </div>
     </section>
