@@ -3,6 +3,7 @@ import type { Tables } from "@/integrations/supabase/types";
 import { supabase } from "@/integrations/supabase/client";
 
 export type AbilityEffectType = "status" | "regeneration" | "mana_regeneration" | "mana_used" | "no_regen_hp" | "no_regen_mana" | "magic_prohibition" | "stun" | "damage_dealt";
+export type DamageScope = "any" | "physical" | "magical";
 export type AbilityEffectDefinition = {
   name: string;
   effect_type: AbilityEffectType;
@@ -11,6 +12,7 @@ export type AbilityEffectDefinition = {
   value_mode: "percent" | "fixed";
   amount: number;
   duration: number;
+  damage_scope: DamageScope;
 };
 export type Ability = Tables<"abilities">;
 export type CharacterAbilityRow = Tables<"character_abilities">;
@@ -36,6 +38,7 @@ export function parseAbilityEffects(value: unknown): AbilityEffectDefinition[] {
       value_mode: valueMode,
       amount: Number.isFinite(amount) ? Math.max(0, amount) : 0,
       duration: Number.isFinite(duration) ? Math.max(1, Math.floor(duration)) : 1,
+      damage_scope: raw.damage_scope === "physical" || raw.damage_scope === "magical" ? raw.damage_scope : "any",
     }];
   });
 }
