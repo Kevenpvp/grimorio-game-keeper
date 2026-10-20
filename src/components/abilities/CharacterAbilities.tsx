@@ -224,7 +224,7 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
       is_passive: isPassive,
       cooldown_turns: cooldownTurns,
       cooldown_remaining: isPassive ? 0 : Math.min(ability.cooldown_remaining, cooldownTurns),
-      mana_cost: ability.is_passive ? 0 : cost,
+      mana_cost: isPassive ? 0 : cost,
       effects: effects.map((effect) => ({ ...effect, duration: Math.max(1, effect.duration) })) as unknown as Json,
     }).eq("id", ability.id);
     setBusy(false);
