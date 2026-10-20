@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  clampPct, computeValue, physicalAttributePoints, useCharacter, useCharacterLive, useCharacterTraitMods, useDefs, useMe,
+  clampPct, computeValue, conditionAdjustedValue, physicalAttributePoints, useCharacter, useCharacterLive, useCharacterTraitMods, useDefs, useMe,
   type AttributeDef, type Character, type CharacterAttr,
 } from "@/lib/sheets";
 import { CharacterSheetView, Portrait } from "@/components/sheet/CharacterSheetView";
@@ -265,7 +265,7 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
             <h2 className="mb-3 text-lg text-gold">Atributos</h2>
             <div className="grid gap-3 md:grid-cols-2">
               {defs.map((d) => (
-                <AttrEditor key={d.key} def={d} characterId={character.id} attr={byKey.get(d.key)} racePts={raceModifiers[d.key] ?? 0} virtuePts={virtueModifiers[d.key] ?? 0} physicalPts={physicalAttributePoints(character, d.key)} noMana={noMana && d.key === "mana"} statusModifier={{ fixed: (passiveStatus[d.key]?.fixed ?? 0) + statusEffectModifiers(activeEffects, d.key).fixed, percent: (passiveStatus[d.key]?.percent ?? 0) + statusEffectModifiers(activeEffects, d.key).percent }}
+                <AttrEditor key={d.key} def={d} characterId={character.id} body={character.body} sanity={character.sanity} attr={byKey.get(d.key)} racePts={raceModifiers[d.key] ?? 0} virtuePts={virtueModifiers[d.key] ?? 0} physicalPts={physicalAttributePoints(character, d.key)} noMana={noMana && d.key === "mana"} statusModifier={{ fixed: (passiveStatus[d.key]?.fixed ?? 0) + statusEffectModifiers(activeEffects, d.key).fixed, percent: (passiveStatus[d.key]?.percent ?? 0) + statusEffectModifiers(activeEffects, d.key).percent }}
                   onSaved={() => { mark(); refresh(); }} />
               ))}
             </div>
@@ -344,8 +344,8 @@ function PercentEditor({ label, icon, tone, value, onSave }: {
   );
 }
 
-function AttrEditor({ def, characterId, attr, racePts, virtuePts, physicalPts, noMana, statusModifier, onSaved }: {
-  def: AttributeDef; characterId: string; attr: CharacterAttr | undefined; racePts: number; virtuePts: number; physicalPts: number; noMana: boolean; statusModifier: { fixed: number; percent: number }; onSaved: () => void;
+function AttrEditor({ def, characterId, body, sanity, attr, racePts, virtuePts, physicalPts, noMana, statusModifier, onSaved }: {
+  def: AttributeDef; characterId: string; body: number; sanity: number; attr: CharacterAttr | undefined; racePts: number; virtuePts: number; physicalPts: number; noMana: boolean; statusModifier: { fixed: number; percent: number }; onSaved: () => void;
 }) {
   const cur0 = noMana ? 0 : attr?.current_value ?? 0;
   const max0 = noMana ? 0 : attr?.max_value ?? 0;
@@ -356,7 +356,7 @@ function AttrEditor({ def, characterId, attr, racePts, virtuePts, physicalPts, n
   const rawTotal = def.accepts_points ? base + bonus0 : max0 + traitPts + bonus0;
   const adjustedTotal = Math.floor((rawTotal + statusModifier.fixed) * (1 + statusModifier.percent / 100));
   // HP can receive negative trait modifiers, but its displayed maximum is always at least 1.
-  const total = noMana ? 0 : def.key === "hp" ? Math.max(1, adjustedTotal) : Math.max(0, adjustedTotal);
+  const total = noMana ? 0 : def.key === "hp" ? Math.max(1, adjustedTotal) : conditionAdjustedValue({ body, sanity }, def.key, Math.max(0, adjustedTotal));
   const [cur, setCur] = useState(cur0);
   const [max, setMax] = useState(max0);
   const [bonus, setBonus] = useState(bonus0);
