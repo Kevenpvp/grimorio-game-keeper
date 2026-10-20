@@ -16,6 +16,7 @@ import { Route as AuthenticatedCombateRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedPainelRouteImport } from './routes/_authenticated/painel'
 import { Route as AuthenticatedRacasRouteImport } from './routes/_authenticated/racas'
 import { Route as AuthenticatedVirtudesRouteImport } from './routes/_authenticated/virtudes'
+import { Route as AuthenticatedHabilidadesRouteImport } from './routes/_authenticated/habilidades'
 import { Route as AuthenticatedTiposDanoRouteImport } from './routes/_authenticated/tipos-dano'
 import { Route as AuthenticatedFichaIdRouteImport } from './routes/_authenticated/ficha.$id'
 
@@ -53,6 +54,11 @@ const AuthenticatedVirtudesRoute = AuthenticatedVirtudesRouteImport.update({
   path: '/virtudes',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedHabilidadesRoute = AuthenticatedHabilidadesRouteImport.update({
+  id: '/habilidades',
+  path: '/habilidades',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedTiposDanoRoute = AuthenticatedTiposDanoRouteImport.update({
   id: '/tipos-dano',
   path: '/tipos-dano',
@@ -71,6 +77,7 @@ export interface FileRoutesByFullPath {
   '/painel': typeof AuthenticatedPainelRoute
   '/racas': typeof AuthenticatedRacasRoute
   '/virtudes': typeof AuthenticatedVirtudesRoute
+  '/habilidades': typeof AuthenticatedHabilidadesRoute
   '/tipos-dano': typeof AuthenticatedTiposDanoRoute
   '/ficha/$id': typeof AuthenticatedFichaIdRoute
 }
@@ -81,6 +88,7 @@ export interface FileRoutesByTo {
   '/painel': typeof AuthenticatedPainelRoute
   '/racas': typeof AuthenticatedRacasRoute
   '/virtudes': typeof AuthenticatedVirtudesRoute
+  '/habilidades': typeof AuthenticatedHabilidadesRoute
   '/ficha/$id': typeof AuthenticatedFichaIdRoute
 }
 export interface FileRoutesById {
@@ -92,14 +100,15 @@ export interface FileRoutesById {
   '/_authenticated/painel': typeof AuthenticatedPainelRoute
   '/_authenticated/racas': typeof AuthenticatedRacasRoute
   '/_authenticated/virtudes': typeof AuthenticatedVirtudesRoute
+  '/_authenticated/habilidades': typeof AuthenticatedHabilidadesRoute
   '/_authenticated/tipos-dano': typeof AuthenticatedTiposDanoRoute
   '/_authenticated/ficha/$id': typeof AuthenticatedFichaIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/combate' | '/painel' | '/racas' | '/virtudes' | '/tipos-dano' | '/ficha/$id'
+  fullPaths: '/' | '/auth' | '/combate' | '/painel' | '/racas' | '/virtudes' | '/habilidades' | '/tipos-dano' | '/ficha/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/combate' | '/painel' | '/racas' | '/virtudes' | '/tipos-dano' | '/ficha/$id'
+  to: '/' | '/auth' | '/combate' | '/painel' | '/racas' | '/virtudes' | '/habilidades' | '/tipos-dano' | '/ficha/$id'
   id:
     | '__root__'
     | '/'
@@ -109,6 +118,7 @@ export interface FileRouteTypes {
     | '/_authenticated/painel'
     | '/_authenticated/racas'
     | '/_authenticated/virtudes'
+    | '/_authenticated/habilidades'
     | '/_authenticated/ficha/$id'
   fileRoutesById: FileRoutesById
 }
@@ -169,6 +179,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedVirtudesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/habilidades': {
+      id: '/_authenticated/habilidades'
+      path: '/habilidades'
+      fullPath: '/habilidades'
+      preLoaderRoute: typeof AuthenticatedHabilidadesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/tipos-dano': {
       id: '/_authenticated/tipos-dano'
       path: '/tipos-dano'
@@ -191,6 +208,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedPainelRoute: typeof AuthenticatedPainelRoute
   AuthenticatedRacasRoute: typeof AuthenticatedRacasRoute
   AuthenticatedVirtudesRoute: typeof AuthenticatedVirtudesRoute
+  AuthenticatedHabilidadesRoute: typeof AuthenticatedHabilidadesRoute
   AuthenticatedTiposDanoRoute: typeof AuthenticatedTiposDanoRoute
   AuthenticatedFichaIdRoute: typeof AuthenticatedFichaIdRoute
 }
@@ -200,6 +218,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedPainelRoute: AuthenticatedPainelRoute,
   AuthenticatedRacasRoute: AuthenticatedRacasRoute,
   AuthenticatedVirtudesRoute: AuthenticatedVirtudesRoute,
+  AuthenticatedHabilidadesRoute: AuthenticatedHabilidadesRoute,
   AuthenticatedTiposDanoRoute: AuthenticatedTiposDanoRoute,
   AuthenticatedFichaIdRoute: AuthenticatedFichaIdRoute,
 }
