@@ -21,6 +21,8 @@ export type Database = {
           created_at: string
           description: string | null
           effects: Json
+          end_effects: Json
+          self_target_only: boolean
           id: string
           is_passive: boolean
           mana_cost: number
@@ -33,6 +35,8 @@ export type Database = {
           created_at?: string
           description?: string | null
           effects?: Json
+          end_effects?: Json
+          self_target_only?: boolean
           id?: string
           is_passive?: boolean
           mana_cost?: number
@@ -98,6 +102,8 @@ export type Database = {
           created_at: string
           duration: number
           duration_scope: string
+          effect_group_id: string | null
+          is_end_effect: boolean
           effect_type: string
           id: string
           name: string
@@ -113,6 +119,8 @@ export type Database = {
           created_at?: string
           duration: number
           duration_scope?: string
+          effect_group_id?: string | null
+          is_end_effect?: boolean
           effect_type: string
           id?: string
           name: string
@@ -128,6 +136,8 @@ export type Database = {
           created_at?: string
           duration?: number
           duration_scope?: string
+          effect_group_id?: string | null
+          is_end_effect?: boolean
           effect_type?: string
           id?: string
           name?: string
@@ -250,6 +260,8 @@ export type Database = {
           created_at: string
           description: string | null
           effects: Json
+          end_effects: Json
+          self_target_only: boolean
           granted_by_virtue_id: string | null
           id: string
           is_passive: boolean
@@ -266,6 +278,8 @@ export type Database = {
           created_at?: string
           description?: string | null
           effects?: Json
+          end_effects?: Json
+          self_target_only?: boolean
           granted_by_virtue_id?: string | null
           id?: string
           is_passive?: boolean
