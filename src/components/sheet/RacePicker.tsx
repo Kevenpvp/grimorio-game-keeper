@@ -16,10 +16,13 @@ export function ModsList({ race, defs }: { race: Trait; defs: AttributeDef[] }) 
           {(mods[d.key] ?? 0) > 0 ? "+" : ""}{mods[d.key]} {d.label}
         </span>
       ))}
+      {race.physical_bonus_points > 0 && (
+        <span className="tabular rounded bg-muted px-2 py-0.5 text-gold">+{race.physical_bonus_points} pontos físicos</span>
+      )}
       {race.bonus_points > 0 && (
         <span className="tabular rounded bg-muted px-2 py-0.5 text-gold">+{race.bonus_points} pontos livres</span>
       )}
-      {!entries.length && !race.bonus_points && <span className="text-muted-foreground">Sem modificadores</span>}
+      {!entries.length && !race.bonus_points && !race.physical_bonus_points && <span className="text-muted-foreground">Sem modificadores</span>}
     </div>
   );
 }
