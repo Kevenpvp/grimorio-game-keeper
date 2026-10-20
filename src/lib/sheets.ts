@@ -133,7 +133,8 @@ export function conditionAdjustedValue(
     return value;
   }
   if (condition === 100) return value;
-  return Math.max(0, Math.floor(value * condition / 100));
+  // Keep fractional values so a 1% condition loss translates to exactly 1% stat loss.
+  return Math.max(0, Math.round(value * condition) / 100);
 }
 
 export type Race = Tables<"races">;
