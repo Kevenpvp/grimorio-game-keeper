@@ -364,7 +364,7 @@ begin
   new.updated_at := now();
   return new;
 end;
-$;
+$$;
 
 -- Process virtue-driven character ability changes row-by-row so each resource adjustment
 -- sees one well-defined old/new maximum instead of scaling multiple times from a bulk statement.
@@ -373,7 +373,7 @@ returns void
 language plpgsql
 security definer
 set search_path = public
-as $
+as $$
 declare
   _old_assignment record;
   _new_assignment record;
@@ -439,7 +439,7 @@ begin
     on conflict (character_id, ability_id) do nothing;
   end loop;
 end;
-$;
+$$;
 
 revoke all on function public.sync_virtue_ability_assignments(uuid) from public, anon, authenticated;
 grant execute on function public.sync_virtue_ability_assignments(uuid) to service_role;
@@ -449,7 +449,7 @@ returns trigger
 language plpgsql
 security definer
 set search_path = public
-as $
+as $$
 declare
   _old_assignment record;
 begin
@@ -472,7 +472,7 @@ begin
   end if;
   return new;
 end;
-$;
+$$;
 
 -- One transaction per turn advance. Locking the battle row serializes concurrent advances so
 -- counters, cooldowns, regeneration, end effects, and each duration decrement cannot overwrite
