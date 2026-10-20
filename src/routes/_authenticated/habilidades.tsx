@@ -65,6 +65,7 @@ function AbilityEditor({ ability, defs }: { ability: Ability; defs: NonNullable<
   const [name, setName] = useState(ability.name);
   const [description, setDescription] = useState(ability.description ?? "");
   const [canActivate, setCanActivate] = useState(ability.can_activate);
+  const [isMagical, setIsMagical] = useState(ability.is_magical);
   const [selfTargetOnly, setSelfTargetOnly] = useState(ability.self_target_only);
   const [cooldown, setCooldown] = useState(String(ability.cooldown_turns));
   const [manaCost, setManaCost] = useState(String(ability.mana_cost));
@@ -77,6 +78,7 @@ function AbilityEditor({ ability, defs }: { ability: Ability; defs: NonNullable<
     setName(ability.name);
     setDescription(ability.description ?? "");
     setCanActivate(ability.can_activate);
+    setIsMagical(ability.is_magical);
     setSelfTargetOnly(ability.self_target_only);
     setCooldown(String(ability.cooldown_turns));
     setManaCost(String(ability.mana_cost));
@@ -111,6 +113,7 @@ function AbilityEditor({ ability, defs }: { ability: Ability; defs: NonNullable<
       name: name.trim(),
       description: description.trim() || null,
       can_activate: canActivate,
+      is_magical: isMagical,
       self_target_only: canActivate && selfTargetOnly,
       is_passive: !canActivate,
       cooldown_turns: cool,
@@ -149,6 +152,10 @@ function AbilityEditor({ ability, defs }: { ability: Ability; defs: NonNullable<
             if (notActivatable) setManaCost("0");
           }} />
           Habilidade não ativável
+        </label>
+        <label className="flex min-h-10 items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
+          <input type="checkbox" checked={isMagical} onChange={(e) => setIsMagical(e.target.checked)} />
+          Habilidade Mágica
         </label>
         {canActivate && (
           <label className="flex min-h-10 items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
