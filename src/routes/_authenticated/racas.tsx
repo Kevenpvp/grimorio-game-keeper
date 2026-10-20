@@ -37,6 +37,7 @@ function RacasPage() {
   async function create() {
     const { data, error } = await supabase.from("races").insert({ name: "Nova raça" }).select("id").single();
     if (error) { toast.error(error.message); return; }
+    setSearch("");
     setPendingSaveIds((current) => [data.id, ...current.filter((id) => id !== data.id)]);
     toast.success("Nova raça criada. Ela ficará no topo até você salvar.");
     await qc.invalidateQueries({ queryKey: ["races"] });
