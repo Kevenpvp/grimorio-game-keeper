@@ -2,8 +2,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Tables } from "@/integrations/supabase/types";
 import { supabase } from "@/integrations/supabase/client";
 
-export type AbilityEffectType = "status" | "regeneration" | "mana_regeneration" | "mana_used" | "no_regen_hp" | "no_regen_mana" | "magic_prohibition" | "stun" | "damage_dealt" | "no_mana";
+export type AbilityEffectType = "status" | "regeneration" | "mana_regeneration" | "mana_used" | "no_regen_hp" | "no_regen_mana" | "magic_prohibition" | "stun" | "damage_dealt" | "damage_reduction" | "no_mana";
 export type DamageScope = "any" | "physical" | "magical";
+export type DamageReductionScope = "physical" | "magical";
+export type DamageMagicLevel = "baixa" | "media" | "alta";
+export type DamageTypeOption = Pick<Tables<"damage_types">, "id" | "name">;
 export type AbilityEffectDefinition = {
   name: string;
   effect_type: AbilityEffectType;
@@ -13,6 +16,9 @@ export type AbilityEffectDefinition = {
   amount: number;
   duration: number;
   damage_scope: DamageScope;
+  damage_reduction_scope?: DamageReductionScope;
+  damage_reduction_type_id?: string | null;
+  damage_reduction_magic_level?: DamageMagicLevel | null;
 };
 export type Ability = Tables<"abilities">;
 export type CharacterAbilityRow = Tables<"character_abilities">;
@@ -20,13 +26,13 @@ export type CharacterAbility = Omit<CharacterAbilityRow, "effects" | "passive_ef
 
 export function parseAbilityEffects(value: unknown): AbilityEffectDefinition[] {
   if (!Array.isArray(value)) return [];
-  const validTypes: AbilityEffectType[] = ["status", "regeneration", "mana_regeneration", "mana_used", "no_regen_hp", "no_regen_mana", "magic_prohibition", "stun", "damage_dealt", "no_mana"];
+  const validTypes: AbilityEffectType[] = ["status", "regeneration", "mana_regeneration", "mana_used", "no_regen_hp", "no_regen_mana", "magic_prohibition", "stun", "damage_dealt", "damage_reduction", "no_mana"];
   return value.flatMap((item): AbilityEffectDefinition[] => {
     if (!item || typeof item !== "object") return [];
     const raw = item as Record<string, unknown>;
     if (!validTypes.includes(raw.effect_type as AbilityEffectType)) return [];
     const effectType = raw.effect_type as AbilityEffectType;
-    const polarity = effectType === "no_mana" || raw.polarity === "debuff" ? "debuff" : "buff";
+    const polarity = effectType === "no_mana" ? "debuff" : effectType === "damage_reduction" ? "buff" : raw.polarity === "debuff" ? "debuff" : "buff";
     const valueMode = raw.value_mode === "percent" ? "percent" : "fixed";
     const amount = Number(raw.amount ?? 0);
     const duration = Number(raw.duration ?? 1);
@@ -39,7 +45,21 @@ export function parseAbilityEffects(value: unknown): AbilityEffectDefinition[] {
       amount: Number.isFinite(amount) ? Math.max(0, amount) : 0,
       duration: Number.isFinite(duration) ? Math.max(1, Math.floor(duration)) : 1,
       damage_scope: raw.damage_scope === "physical" || raw.damage_scope === "magical" ? raw.damage_scope : "any",
+      damage_reduction_scope: raw.damage_reduction_scope === "magical" ? "magical" : "physical",
+      damage_reduction_type_id: typeof raw.damage_reduction_type_id === "string" ? raw.damage_reduction_type_id : null,
+      damage_reduction_magic_level: raw.damage_reduction_magic_level === "baixa" || raw.damage_reduction_magic_level === "media" || raw.damage_reduction_magic_level === "alta" ? raw.damage_reduction_magic_level : "baixa",
     }];
+  });
+}
+
+export function useDamageTypes() {
+  return useQuery({
+    queryKey: ["damage-types"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("damage_types").select("id,name").order("name");
+      if (error) throw error;
+      return (data ?? []) as DamageTypeOption[];
+    },
   });
 }
 
