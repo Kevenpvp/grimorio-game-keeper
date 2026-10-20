@@ -705,6 +705,10 @@ export type Database = {
         Args: { _allocations: Json; _character_id: string }
         Returns: undefined
       }
+      invest_points_from_source: {
+        Args: { _allocations: Json; _character_id: string; _source: string }
+        Returns: undefined
+      }
       invest_physical_points: {
         Args: { _allocations: Json; _character_id: string }
         Returns: undefined
