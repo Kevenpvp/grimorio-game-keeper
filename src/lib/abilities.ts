@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Tables } from "@/integrations/supabase/types";
 import { supabase } from "@/integrations/supabase/client";
 
-export type AbilityEffectType = "status" | "regeneration" | "mana_regeneration" | "mana_used" | "no_regen_hp" | "no_regen_mana" | "magic_prohibition" | "stun";
+export type AbilityEffectType = "status" | "regeneration" | "mana_regeneration" | "mana_used" | "no_regen_hp" | "no_regen_mana" | "magic_prohibition" | "stun" | "damage_dealt";
 export type AbilityEffectDefinition = {
   name: string;
   effect_type: AbilityEffectType;
@@ -18,7 +18,7 @@ export type CharacterAbility = Omit<CharacterAbilityRow, "effects" | "passive_ef
 
 export function parseAbilityEffects(value: unknown): AbilityEffectDefinition[] {
   if (!Array.isArray(value)) return [];
-  const validTypes: AbilityEffectType[] = ["status", "regeneration", "mana_regeneration", "mana_used", "no_regen_hp", "no_regen_mana", "magic_prohibition", "stun"];
+  const validTypes: AbilityEffectType[] = ["status", "regeneration", "mana_regeneration", "mana_used", "no_regen_hp", "no_regen_mana", "magic_prohibition", "stun", "damage_dealt"];
   return value.flatMap((item): AbilityEffectDefinition[] => {
     if (!item || typeof item !== "object") return [];
     const raw = item as Record<string, unknown>;
