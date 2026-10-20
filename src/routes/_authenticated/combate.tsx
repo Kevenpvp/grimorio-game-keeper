@@ -646,7 +646,36 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
           <label className="col-span-2 space-y-1 text-xs font-medium"><span>Duração (quantos turnos)</span><Input aria-label="Duração em turnos" type="number" min="1" value={effectDuration} onChange={e => setEffectDuration(e.target.value)} /></label>
           <p className="col-span-2 text-xs text-muted-foreground">Cada vez que qualquer turno for avançado, todos os efeitos ativos perdem 1 turno de duração.</p>
         </div>
-        <Button size="sm" onClick={() => { const duration = Math.floor(Number(effectDuration)), amount = Number(effectAmount); const needsAttribute = effectType === "status" || effectType === "regeneration"; const needsAmount = needsAttribute || effectType === "damage_dealt"; if (!effectName.trim() || duration < 1 || !Number.isFinite(duration) || (needsAmount && (!Number.isFinite(amount) || amount < 0))) { toast.error("Preencha o nome e uma duração válida; efeitos de status/regeneração também precisam de um valor válido"); return; } onAddEffect({name:effectName.trim(),effect_type:effectType,attribute_key:needsAttribute ? effectAttr : null,damage_scope:effectType === "damage_dealt" ? effectDamageScope : "any",polarity:effectType === "magic_prohibition" || effectType === "no_mana" ? "debuff" : effectPolarity,value_mode:effectType === "magic_prohibition" || effectType === "no_mana" ? "fixed" : effectMode,amount:needsAmount ? amount : 0,duration,duration_scope:"global"}); setEffectName(""); }}><Plus className="mr-1 h-3 w-3" /> Aplicar efeito</Button>
+        <Button size="sm" onClick={() => {
+          const duration = Math.floor(Number(effectDuration));
+          const amount = Number(effectAmount);
+          const needsAttribute = effectType === "status" || effectType === "regeneration";
+          const needsAmount = needsAttribute || effectType === "damage_dealt" || effectType === "damage_reduction";
+          const reductionType = reductionTypeId || damageTypes[0]?.id || null;
+          if (!effectName.trim() || duration < 1 || !Number.isFinite(duration) || (needsAmount && (!Number.isFinite(amount) || amount < 0))) {
+            toast.error("Preencha o nome, uma duração e um valor válidos.");
+            return;
+          }
+          if (effectType === "damage_reduction" && reductionScope === "magical" && !reductionType) {
+            toast.error("Cadastre e selecione um tipo mágico para esta mitigação.");
+            return;
+          }
+          onAddEffect({
+            name: effectName.trim(),
+            effect_type: effectType,
+            attribute_key: needsAttribute ? effectAttr : null,
+            damage_scope: effectType === "damage_dealt" ? effectDamageScope : "any",
+            damage_reduction_scope: effectType === "damage_reduction" ? reductionScope : "physical",
+            damage_reduction_type_id: effectType === "damage_reduction" && reductionScope === "magical" ? reductionType : null,
+            damage_reduction_magic_level: effectType === "damage_reduction" && reductionScope === "magical" ? reductionMagicLevel : null,
+            polarity: effectType === "magic_prohibition" || effectType === "no_mana" ? "debuff" : effectType === "damage_reduction" ? "buff" : effectPolarity,
+            value_mode: effectType === "magic_prohibition" || effectType === "no_mana" ? "fixed" : effectMode,
+            amount: needsAmount ? amount : 0,
+            duration,
+            duration_scope: "global",
+          });
+          setEffectName("");
+        }}><Plus className="mr-1 h-3 w-3" /> Aplicar efeito</Button>
         </div>
       </details>
     </div>
