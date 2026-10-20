@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, Clock3, Minus, Plus, Sparkles, Trash2, WandSparkles, Zap } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Clock3, Minus, Plus, Sparkles, Trash2, WandSparkles, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,6 +41,8 @@ export function CharacterAbilitiesPanel({
   const { data: defs } = useDefs();
   const [targetId, setTargetId] = useState(characterId);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(true);
+  const hasActivatableAbility = loadout?.some((ability) => ability.can_activate) ?? false;
   const targetOptions = useMemo(() => [
     { id: characterId, name: `${characterName} (si mesmo)` },
     ...targets.filter((target) => target.id !== characterId),
@@ -76,72 +78,88 @@ export function CharacterAbilitiesPanel({
 
   return (
     <section className="space-y-3 rounded-md border border-border p-3">
-      <div className="flex items-center gap-2 text-sm font-semibold text-gold">
-        <WandSparkles className="h-4 w-4" /> Habilidades
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 text-sm font-semibold text-gold">
+          <WandSparkles className="h-4 w-4" /> Habilidades
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((value) => !value)}
+        >
+          {expanded ? <ChevronUp className="mr-1 h-4 w-4" /> : <ChevronDown className="mr-1 h-4 w-4" />}
+          {expanded ? "Minimizar" : "Maximizar"}
+        </Button>
       </div>
-      {mode === "combat" && canUse && targetOptions.length > 1 && (
-        <label className="block space-y-1 text-xs">
-          <span className="font-medium text-muted-foreground">Alvo da próxima habilidade</span>
-          <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={targetId} onChange={(e) => setTargetId(e.target.value)}>
-            {targetOptions.map((target) => <option key={target.id} value={target.id}>{target.name}</option>)}
-          </select>
-        </label>
-      )}
-      {activeEffects.length > 0 && (
-        <div className="space-y-1.5 border-b border-border pb-3">
-          <div className="text-xs font-semibold text-muted-foreground">Efeitos ativos no personagem</div>
-          <div className="flex flex-wrap gap-1.5">
-            {activeEffects.map((effect) => (
-              <span key={effect.id} className="rounded bg-muted px-2 py-1 text-xs">
-                {effect.name} · {effect.duration} turno(s)
-              </span>
+      {expanded && (
+        <div className="space-y-3">
+          {mode === "combat" && canUse && hasActivatableAbility && targetOptions.length > 1 && (
+            <label className="block space-y-1 text-xs">
+              <span className="font-medium text-muted-foreground">Alvo da próxima habilidade</span>
+              <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={targetId} onChange={(e) => setTargetId(e.target.value)}>
+                {targetOptions.map((target) => <option key={target.id} value={target.id}>{target.name}</option>)}
+              </select>
+            </label>
+          )}
+          {activeEffects.length > 0 && (
+            <div className="space-y-1.5 border-b border-border pb-3">
+              <div className="text-xs font-semibold text-muted-foreground">Efeitos ativos no personagem</div>
+              <div className="flex flex-wrap gap-1.5">
+                {activeEffects.map((effect) => (
+                  <span key={effect.id} className="rounded bg-muted px-2 py-1 text-xs">
+                    {effect.name} · {effect.duration} turno(s)
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="space-y-2">
+            {loadout.map((ability) => (
+              <article key={ability.id} className="rounded-md border border-border bg-muted/20 p-3">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="font-semibold">{ability.name}</div>
+                    {ability.description && <p className="mt-1 text-xs text-muted-foreground">{ability.description}</p>}
+                    <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
+                      {ability.granted_by_virtue_id && (
+                        <span className="rounded bg-gold/10 px-2 py-1 text-gold">Concedida por virtude</span>
+                      )}
+                      {!ability.can_activate ? (
+                        <span className="rounded bg-gold/10 px-2 py-1 text-gold"><Sparkles className="mr-1 inline h-3 w-3" /> Não ativável</span>
+                      ) : (
+                        <span className={`rounded px-2 py-1 ${ability.cooldown_remaining > 0 ? "bg-muted text-muted-foreground" : "bg-emerald-500/10 text-emerald-500"}`}>
+                          <Clock3 className="mr-1 inline h-3 w-3" /> {ability.cooldown_remaining > 0 ? `Cooldown: ${ability.cooldown_remaining} turno(s)` : "Pronta para usar"}
+                        </span>
+                      )}
+                      {ability.can_activate && ability.mana_cost > 0 && <span className="rounded bg-muted px-2 py-1">Custo base: {ability.mana_cost} Mana</span>}
+                      {ability.can_activate && !ability.mana_cost && <span className="rounded bg-muted px-2 py-1">Sem custo base de Mana</span>}
+                    </div>
+                  </div>
+                  {canUse && ability.can_activate && (
+                    <Button size="sm" disabled={busyId !== null || ability.cooldown_turns <= 0 || ability.cooldown_remaining > 0} onClick={() => void activate(ability)}>
+                      <Zap className="mr-1 h-3.5 w-3.5" /> {busyId === ability.id ? "Ativando..." : "Ativar"}
+                    </Button>
+                  )}
+                </div>
+                {ability.can_activate && ability.effects.length > 0 && (
+                  <div className="mt-2 space-y-1 border-t border-border pt-2 text-xs text-muted-foreground">
+                    <div className="font-semibold">Efeitos ao ativar</div>
+                    {ability.effects.map((effect, index) => <div key={index}>{effectSummary(effect, defs ?? [])} · {effect.duration} turno(s)</div>)}
+                  </div>
+                )}
+                {ability.passive_effects.length > 0 && (
+                  <div className="mt-2 space-y-1 border-t border-border pt-2 text-xs text-muted-foreground">
+                    <div className="font-semibold text-gold">Efeitos passivos · permanentes</div>
+                    {ability.passive_effects.map((effect, index) => <div key={index}>{effectSummary(effect, defs ?? [])}</div>)}
+                  </div>
+                )}
+              </article>
             ))}
           </div>
         </div>
       )}
-      <div className="space-y-2">
-        {loadout.map((ability) => (
-          <article key={ability.id} className="rounded-md border border-border bg-muted/20 p-3">
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div className="min-w-0 flex-1">
-                <div className="font-semibold">{ability.name}</div>
-                {ability.description && <p className="mt-1 text-xs text-muted-foreground">{ability.description}</p>}
-                <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
-                  {ability.granted_by_virtue_id && (
-                    <span className="rounded bg-gold/10 px-2 py-1 text-gold">Concedida por virtude</span>
-                  )}
-                  {!ability.can_activate ? (
-                    <span className="rounded bg-gold/10 px-2 py-1 text-gold"><Sparkles className="mr-1 inline h-3 w-3" /> Não ativável</span>
-                  ) : (
-                    <span className={`rounded px-2 py-1 ${ability.cooldown_remaining > 0 ? "bg-muted text-muted-foreground" : "bg-emerald-500/10 text-emerald-500"}`}>
-                      <Clock3 className="mr-1 inline h-3 w-3" /> {ability.cooldown_remaining > 0 ? `Cooldown: ${ability.cooldown_remaining} turno(s)` : "Pronta para usar"}
-                    </span>
-                  )}
-                  {ability.can_activate && ability.mana_cost > 0 && <span className="rounded bg-muted px-2 py-1">Custo base: {ability.mana_cost} Mana</span>}
-                  {ability.can_activate && !ability.mana_cost && <span className="rounded bg-muted px-2 py-1">Sem custo base de Mana</span>}
-                </div>
-              </div>
-              {canUse && ability.can_activate && (
-                <Button size="sm" disabled={busyId !== null || ability.cooldown_turns <= 0 || ability.cooldown_remaining > 0} onClick={() => void activate(ability)}>
-                  <Zap className="mr-1 h-3.5 w-3.5" /> {busyId === ability.id ? "Ativando..." : "Ativar"}
-                </Button>
-              )}
-            </div>
-            {ability.can_activate && ability.effects.length > 0 && (
-              <div className="mt-2 space-y-1 border-t border-border pt-2 text-xs text-muted-foreground">
-                <div className="font-semibold">Efeitos ao ativar</div>
-                {ability.effects.map((effect, index) => <div key={index}>{effectSummary(effect, defs ?? [])} · {effect.duration} turno(s)</div>)}
-              </div>
-            )}
-            {ability.passive_effects.length > 0 && (
-              <div className="mt-2 space-y-1 border-t border-border pt-2 text-xs text-muted-foreground">
-                <div className="font-semibold text-gold">Efeitos passivos · permanentes</div>
-                {ability.passive_effects.map((effect, index) => <div key={index}>{effectSummary(effect, defs ?? [])}</div>)}
-              </div>
-            )}
-          </article>
-        ))}
-      </div>
     </section>
   );
 }
