@@ -183,8 +183,10 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
       </div>
 
       {preview ? (
-        <CharacterAbilitiesPanel characterId={character.id} characterName={character.name} mode="sheet" canUse />
-        <CharacterSheetView character={character} attrs={attrs} defs={defs} />
+        <>
+          <CharacterAbilitiesPanel characterId={character.id} characterName={character.name} mode="sheet" canUse />
+          <CharacterSheetView character={character} attrs={attrs} defs={defs} />
+        </>
       ) : (
         <>
           <section className="panel grid gap-6 p-5 md:grid-cols-[200px_1fr]">
