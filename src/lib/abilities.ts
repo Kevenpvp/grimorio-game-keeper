@@ -198,6 +198,8 @@ export type ActiveCharacterEffect = {
   duration_scope: string;
   until_combat_end: boolean;
   source_character_ability_id: string | null;
+  source_race_id?: string | null;
+  source_race_effect_index?: number | null;
   target_character_id?: string | null;
   effect_data?: import("@/integrations/supabase/types").Json;
   damage_reduction_scope?: DamageReductionScope;
