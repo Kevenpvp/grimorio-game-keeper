@@ -244,14 +244,25 @@ export function useCharacterActiveEffects(characterId: string | undefined, enabl
         if (error) throw error;
         activeBattleIds = (data ?? []).map((row) => row.id);
       }
+      const normalizeEffect = (row: ActiveCharacterEffect): ActiveCharacterEffect => {
+        const metadata = row.effect_data && typeof row.effect_data === "object" && !Array.isArray(row.effect_data)
+          ? row.effect_data as Record<string, unknown>
+          : null;
+        return {
+          ...row,
+          effect_type: row.effect_type === "healing_blocked" && metadata?.effect_type === "magic_healing_reversal"
+            ? "magic_healing_reversal"
+            : row.effect_type,
+        };
+      };
       let battleEffects: ActiveCharacterEffect[] = [];
       if (activeBattleIds.length > 0) {
         const { data, error } = await supabase.from("battle_effects").select("*")
           .eq("character_id", characterId!).in("battle_id", activeBattleIds);
         if (error) throw error;
-        battleEffects = (data ?? []) as ActiveCharacterEffect[];
+        battleEffects = ((data ?? []) as ActiveCharacterEffect[]).map(normalizeEffect);
       }
-      const standaloneEffects = (standaloneResult.data ?? []) as ActiveCharacterEffect[];
+      const standaloneEffects = ((standaloneResult.data ?? []) as ActiveCharacterEffect[]).map(normalizeEffect);
       return [...standaloneEffects, ...battleEffects];
     },
   });
