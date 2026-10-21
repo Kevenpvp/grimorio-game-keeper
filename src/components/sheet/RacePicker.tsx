@@ -1,14 +1,21 @@
 import { useEffect, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Shield, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { traitMods, useDefs, useRaces, useVirtues, type AttributeDef, type Character, type Trait } from "@/lib/sheets";
+import { useAbilities } from "@/lib/abilities";
 
-export function ModsList({ race, defs }: { race: Trait; defs: AttributeDef[] }) {
+export function ModsList({ race, defs, abilities = [] }: {
+  race: Trait;
+  defs: AttributeDef[];
+  abilities?: { id: string; name: string }[];
+}) {
   const mods = traitMods(race);
   const entries = defs.filter((d) => mods[d.key]);
+  const body = mods.body ?? 0;
+  const sanity = mods.sanity ?? 0;
   return (
     <div className="flex flex-wrap gap-1.5 text-xs">
       {entries.map((d) => (
@@ -16,13 +23,30 @@ export function ModsList({ race, defs }: { race: Trait; defs: AttributeDef[] }) 
           {(mods[d.key] ?? 0) > 0 ? "+" : ""}{mods[d.key]} {d.label}
         </span>
       ))}
+      {body !== 0 && (
+        <span className={`tabular rounded bg-muted px-2 py-0.5 ${body < 0 ? "text-destructive" : "text-gold"}`}>
+          {body > 0 ? "+" : ""}{body}% Corpo inicial
+        </span>
+      )}
+      {sanity !== 0 && (
+        <span className={`tabular rounded bg-muted px-2 py-0.5 ${sanity < 0 ? "text-destructive" : "text-gold"}`}>
+          {sanity > 0 ? "+" : ""}{sanity}% Sanidade inicial
+        </span>
+      )}
       {race.physical_bonus_points > 0 && (
         <span className="tabular rounded bg-muted px-2 py-0.5 text-gold">+{race.physical_bonus_points} pontos físicos</span>
       )}
       {race.bonus_points > 0 && (
         <span className="tabular rounded bg-muted px-2 py-0.5 text-gold">+{race.bonus_points} pontos livres</span>
       )}
-      {!entries.length && !race.bonus_points && !race.physical_bonus_points && <span className="text-muted-foreground">Sem modificadores</span>}
+      {abilities.map((ability) => (
+        <span key={ability.id} className="rounded bg-gold/10 px-2 py-0.5 text-gold">
+          Habilidade inicial: {ability.name}
+        </span>
+      ))}
+      {!entries.length && body === 0 && sanity === 0 && !race.bonus_points && !race.physical_bonus_points && !abilities.length && (
+        <span className="text-muted-foreground">Sem modificadores</span>
+      )}
     </div>
   );
 }
@@ -33,6 +57,23 @@ export function RacePicker({ character, isMaster }: { character: Character; isMa
   const { data: races } = useRaces();
   const { data: virtues } = useVirtues();
   const { data: defs } = useDefs();
+  const { data: abilities = [] } = useAbilities();
+  const { data: raceAbilityRows = [] } = useQuery({
+    queryKey: ["race-abilities"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("race_abilities").select("race_id,ability_id");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const { data: virtueAbilityRows = [] } = useQuery({
+    queryKey: ["virtue-abilities-picker"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("virtue_abilities").select("virtue_id,ability_id");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
   const [busy, setBusy] = useState<"race" | "virtue" | null>(null);
   const [pendingRaceId, setPendingRaceId] = useState<string | null>(character.race_id);
   const [pendingVirtueId, setPendingVirtueId] = useState<string | null>(character.virtue_id);
@@ -143,7 +184,11 @@ export function RacePicker({ character, isMaster }: { character: Character; isMa
                       {selected ? <><Check className="mr-1 h-3.5 w-3.5" /> Selecionada</> : "Selecionar"}
                     </Button>
                   </div>
-                  <div className="mt-2"><ModsList race={race} defs={defs} /></div>
+                  <div className="mt-2"><ModsList
+                    race={race}
+                    defs={defs}
+                    abilities={abilities.filter((ability) => raceAbilityRows.some((row) => row.race_id === race.id && row.ability_id === ability.id))}
+                  /></div>
                 </article>
               );
             })}
@@ -177,7 +222,11 @@ export function RacePicker({ character, isMaster }: { character: Character; isMa
                       {selected ? <><Check className="mr-1 h-3.5 w-3.5" /> Selecionada</> : "Selecionar"}
                     </Button>
                   </div>
-                  <div className="mt-2"><ModsList race={virtue} defs={defs} /></div>
+                  <div className="mt-2"><ModsList
+                    race={virtue}
+                    defs={defs}
+                    abilities={abilities.filter((ability) => virtueAbilityRows.some((row) => row.virtue_id === virtue.id && row.ability_id === ability.id))}
+                  /></div>
                 </article>
               );
             })}
