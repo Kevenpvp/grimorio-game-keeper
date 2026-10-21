@@ -196,6 +196,18 @@ function makeApi(
         maximum = Math.max(0, Number(resourceMax ?? 0));
       }
 
+      if (field === "hp" && input.operacao !== "definir") {
+        const delta = input.operacao === "somar" ? -Math.round(amount) : input.operacao === "subtrair" ? Math.round(amount) : null;
+        if (delta === null) throw new Error("Operação de HP inválida.");
+        const { data: resultingHp, error: hpAdjustmentError } = await service.rpc("adjust_character_hp_for_custom_damage", {
+          _character_id: character.id,
+          _damage_delta: delta,
+        });
+        if (hpAdjustmentError) throw hpAdjustmentError;
+        registrarLog(`HP: ${current} → ${Number(resultingHp)}`, { personagem: character.id, operacao: input.operacao });
+        return;
+      }
+
       let next = current;
       if (input.operacao === "somar") next = current + amount;
       else if (input.operacao === "subtrair") next = current - amount;
@@ -233,6 +245,50 @@ function makeApi(
       });
       if (error) throw error;
       context.estado = asObject(data);
+    },
+
+    async ajustarEstadoNumerico(input: { chave: string; delta: number; minimo?: number }) {
+      const characterAbilityId = context.habilidade.idNaFicha;
+      if (!characterAbilityId) throw new Error("Este evento não está vinculado a uma habilidade da ficha.");
+      if (!input.chave.trim()) throw new Error("Informe a chave do estado.");
+      const delta = finiteNumber(input.delta, "Ajuste de estado", -1_000_000_000_000, 1_000_000_000_000);
+      const minimo = finiteNumber(input.minimo ?? 0, "Limite mínimo", -1_000_000_000_000, 1_000_000_000_000);
+      const { data, error } = await service.rpc("adjust_character_ability_custom_state_number", {
+        _character_ability_id: characterAbilityId,
+        _key: input.chave,
+        _delta: delta,
+        _minimum: minimo,
+      });
+      if (error) throw error;
+      context.estado = asObject(data);
+      return Number(context.estado[input.chave] ?? minimo);
+    },
+
+    async consultarRecurso(input: { personagem: ScriptTarget; recurso: ScriptResource }) {
+      const character = resolveTarget(input.personagem);
+      const field = resourceField(input.recurso);
+      if (field === "body" || field === "sanity") {
+        const { data, error } = await service.from("characters")
+          .select(field)
+          .eq("id", character.id)
+          .single();
+        if (error) throw error;
+        return { atual: Number(data[field] ?? 0), maximo: 100 };
+      }
+
+      const { data, error } = await service.from("character_attributes")
+        .select("current_value")
+        .eq("character_id", character.id)
+        .eq("attribute_key", field)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error(`A ficha não possui o recurso ${field}.`);
+      const { data: maximum, error: maximumError } = await service.rpc("calculate_character_resource_max", {
+        _character_id: character.id,
+        _attribute_key: field,
+      });
+      if (maximumError) throw maximumError;
+      return { atual: Number(data.current_value ?? 0), maximo: Math.max(0, Number(maximum ?? 0)) };
     },
 
     async modificarDanoFinal(input: { valoresPorGolpe: number[] }) {
@@ -423,16 +479,17 @@ async function runDamageScriptHooks(
     try {
       const context = await buildContext(service, event);
       const api = makeApi(service, context, eventType === "causou_dano" ? async (values) => {
-        const total = values.reduce((sum, value) => sum + Math.round(value), 0);
-        const nextHp = Math.max(0, Math.round(tracker.hpBefore - total));
-        const { error } = await service.from("character_attributes")
-          .update({ current_value: nextHp, updated_at: new Date().toISOString() })
-          .eq("character_id", tracker.call.targetId)
-          .eq("attribute_key", "hp");
+        const normalizedValues = values.map((value) => Math.round(value));
+        const total = normalizedValues.reduce((sum, value) => sum + value, 0);
+        const delta = total - tracker.total;
+        const { data: nextHp, error } = await service.rpc("adjust_character_hp_for_custom_damage", {
+          _character_id: tracker.call.targetId,
+          _damage_delta: delta,
+        });
         if (error) throw error;
-        tracker.finalValues = values.map((value) => Math.round(value));
+        tracker.finalValues = normalizedValues;
         tracker.total = total;
-        tracker.hpAfter = nextHp;
+        tracker.hpAfter = Number(nextHp);
       } : undefined);
       await handler(context, api);
       processed += 1;
