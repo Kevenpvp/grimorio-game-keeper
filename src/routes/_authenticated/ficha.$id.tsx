@@ -63,7 +63,7 @@ function FichaPage() {
     return (
       <div className="space-y-6">
         <RacePicker character={data.character} isMaster={false} />
-        <CharacterAbilitiesPanel characterId={data.character.id} characterName={data.character.name} mode="sheet" canUse />
+        <CharacterAbilitiesPanel characterId={data.character.id} characterName={data.character.name} mode="sheet" canUse={false} />
         <CharacterSheetView character={data.character} attrs={data.attrs} defs={defs} />
         {/* Keep this panel before normal points: physical grants must be visible to the player without being buried below the regular allocation panel. */}
         <PhysicalPointsDistribution character={data.character} attrs={data.attrs} defs={defs} />
