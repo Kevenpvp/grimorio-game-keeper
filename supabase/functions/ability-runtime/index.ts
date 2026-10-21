@@ -571,7 +571,8 @@ async function applyDamageWithScripts(
   }
 
   const call: DamageCall = { battleId, targetId, sourceId, kind, typeId, magicLevel, rawValues, critical };
-  const { data, error } = await userClient.rpc("apply_battle_damage", {
+  const damageFunction = critical ? "apply_battle_damage_critical" : "apply_battle_damage";
+  const { data, error } = await userClient.rpc(damageFunction, {
     _battle_id: battleId,
     _character_id: targetId,
     _damage_kind: kind,
@@ -586,28 +587,16 @@ async function applyDamageWithScripts(
     throw new Error("A migração 0041 ainda não foi aplicada: falta o resultado por golpe.");
   }
 
-  let finalValues = base.final_damage_by_hit.map((value) => finiteNumber(value, "Dano calculado", 0, 1_000_000));
-  let hpAfter = Number(base.hp_after ?? 0);
-  if (critical) {
-    const damageBeforeCritical = finalValues.reduce((sum, value) => sum + Math.round(value), 0);
-    finalValues = finalValues.map((value) => Math.min(2_000_000, Math.round(value * 2)));
-    const criticalExtraDamage = finalValues.reduce((sum, value) => sum + value, 0) - damageBeforeCritical;
-    if (criticalExtraDamage > 0) {
-      const { data: criticalHpAfter, error: criticalHpError } = await service.rpc("adjust_character_hp_for_custom_damage", {
-        _character_id: targetId,
-        _damage_delta: criticalExtraDamage,
-      });
-      if (criticalHpError) throw criticalHpError;
-      hpAfter = Number(criticalHpAfter);
-    }
-  }
+  const finalValues = base.final_damage_by_hit.map((value) =>
+    finiteNumber(value, "Dano calculado", 0, critical ? 2_000_000 : 1_000_000)
+  );
   const tracker: DamageTracker = {
     call,
     rawValues,
     finalValues,
     total: finalValues.reduce((sum, value) => sum + Math.round(value), 0),
     hpBefore: Number(base.hp_before ?? 0),
-    hpAfter,
+    hpAfter: Number(base.hp_after ?? 0),
   };
   const hookErrors: string[] = [];
   let hooksProcessed = 0;
