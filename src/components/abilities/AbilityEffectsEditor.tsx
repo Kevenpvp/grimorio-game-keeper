@@ -3,7 +3,7 @@ import { Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { AttributeDef } from "@/lib/sheets";
-import { useDamageTypes, type AbilityEffectDefinition, type AbilityEffectType, type DamageScope, type DamageReductionScope } from "@/lib/abilities";
+import { useDamageTypes, type AbilityEffectDefinition, type AbilityEffectType, type DamageScope, type DamageReductionScope, type DamageMagicLevel } from "@/lib/abilities";
 
 const effectTypeLabels: Record<AbilityEffectType, string> = {
   status: "Buff/debuff de atributo",
@@ -17,6 +17,7 @@ const effectTypeLabels: Record<AbilityEffectType, string> = {
   damage_dealt: "Dano Causado",
   no_mana: "Sem Mana",
   damage_reduction: "Mitigação de Dano",
+  healing: "Cura / cura por rodada",
 };
 
 export function AbilityEffectsEditor({
@@ -27,6 +28,8 @@ export function AbilityEffectsEditor({
   title = "Efeitos da habilidade",
   description,
   defs,
+  allowHealing = true,
+  allowPeriodicHealing = true,
 }: {
   effects: AbilityEffectDefinition[];
   onChange: (effects: AbilityEffectDefinition[]) => void;
@@ -37,6 +40,8 @@ export function AbilityEffectsEditor({
   title?: string;
   description?: string;
   defs: AttributeDef[];
+  allowHealing?: boolean;
+  allowPeriodicHealing?: boolean;
 }) {
   const isPermanent = permanent ?? isPassive ?? false;
   const { data: damageTypes = [] } = useDamageTypes();
@@ -65,6 +70,26 @@ export function AbilityEffectsEditor({
       damage_reduction_magic_level: null,
       damage_reduction_type_ids: damageTypes[0] ? [damageTypes[0].id] : [],
       damage_reduction_magic_levels: ["baixa"],
+      target_scope: "target",
+      healing_timing: "instant",
+      healing_hp_enabled: false,
+      healing_hp_mode: "fixed",
+      healing_hp_amount: 10,
+      healing_mana_enabled: false,
+      healing_mana_mode: "fixed",
+      healing_mana_amount: 10,
+      healing_body_enabled: false,
+      healing_body_mode: "fixed",
+      healing_body_amount: 10,
+      healing_sanity_enabled: false,
+      healing_sanity_mode: "fixed",
+      healing_sanity_amount: 10,
+      healing_remove_debuffs: false,
+      healing_debuff_blacklist: [],
+      healing_reduce_debuff_turns_fixed: 0,
+      healing_reduce_debuff_turns_percent: 0,
+      healing_damage_type_id: damageTypes[0]?.id ?? null,
+      healing_magic_level: "baixa",
     }]);
   }
 
@@ -87,6 +112,7 @@ export function AbilityEffectsEditor({
         const isDamageDealt = effect.effect_type === "damage_dealt";
         const isNoMana = effect.effect_type === "no_mana";
         const isDamageReduction = effect.effect_type === "damage_reduction";
+        const isHealing = effect.effect_type === "healing";
         const selectedReductionTypeIds = effect.damage_reduction_type_ids ?? (effect.damage_reduction_type_id ? [effect.damage_reduction_type_id] : []);
         const selectedReductionMagicLevels = effect.damage_reduction_magic_levels ?? (effect.damage_reduction_magic_level ? [effect.damage_reduction_magic_level] : []);
         const needsAttribute = effect.effect_type === "status" || effect.effect_type === "regeneration";
@@ -103,6 +129,14 @@ export function AbilityEffectsEditor({
                   const type = e.target.value as AbilityEffectType;
                   patch(index, {
                     effect_type: type,
+                    target_scope: effect.target_scope ?? "target",
+                    healing_timing: type === "healing" ? "instant" : effect.healing_timing ?? "instant",
+                    healing_hp_enabled: type === "healing" ? (effect.healing_hp_enabled ?? false) : effect.healing_hp_enabled,
+                    healing_mana_enabled: type === "healing" ? (effect.healing_mana_enabled ?? false) : effect.healing_mana_enabled,
+                    healing_body_enabled: type === "healing" ? (effect.healing_body_enabled ?? false) : effect.healing_body_enabled,
+                    healing_sanity_enabled: type === "healing" ? (effect.healing_sanity_enabled ?? false) : effect.healing_sanity_enabled,
+                    healing_damage_type_id: type === "healing" ? (effect.healing_damage_type_id ?? damageTypes[0]?.id ?? null) : effect.healing_damage_type_id,
+                    healing_magic_level: type === "healing" ? (effect.healing_magic_level ?? "baixa") : effect.healing_magic_level,
                     attribute_key: type === "mana_regeneration" ? "mana" : type === "regeneration" ? "hp" : type === "status" ? firstStatusKey() : null,
                     polarity: type === "magic_prohibition" || type === "no_mana" ? "debuff" : type === "damage_reduction" ? "buff" : effect.polarity,
                     damage_reduction_scope: type === "damage_reduction" ? "physical" : effect.damage_reduction_scope,
@@ -112,8 +146,21 @@ export function AbilityEffectsEditor({
                     damage_reduction_magic_levels: type === "damage_reduction" ? ["baixa"] : null,
                   });
                 }}>
-                {Object.entries(effectTypeLabels).filter(([value]) => !isPermanent || value !== "magic_prohibition").map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                {Object.entries(effectTypeLabels)
+                  .filter(([value]) => (!isPermanent || value !== "magic_prohibition") && (allowHealing || value !== "healing"))
+                  .map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select>
+              {!isPermanent && (
+                <label className="space-y-1 text-xs font-medium">
+                  Aplicar efeito em
+                  <select aria-label="Aplicar efeito em" className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                    value={effect.target_scope ?? "target"}
+                    onChange={(e) => patch(index, { target_scope: e.target.value as "caster" | "target" })}>
+                    <option value="caster">Caster (quem usa)</option>
+                    <option value="target">Alvo</option>
+                  </select>
+                </label>
+              )}
               {isDamageDealt && (
                 <label className="space-y-1 text-xs font-medium">
                   Tipo de dano afetado
