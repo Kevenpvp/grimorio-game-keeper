@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
+import { dispatchCustomAbilityScriptEvents } from "@/lib/ability-script-runtime";
 import { useDefs } from "@/lib/sheets";
 import { parseAbilityEffects, useAbilities, useCharacterAbilities, useCharacterActiveEffects, useDamageTypes, type Ability, type AbilityEffectDefinition, type CharacterAbility } from "@/lib/abilities";
 import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
@@ -105,6 +106,7 @@ export function CharacterAbilitiesPanel({
     setBusyId(null);
     if (error) { toast.error(error.message); return; }
     toast.success(`${ability.name} ativada!${typeof spentMana === "number" && spentMana > 0 ? ` Mana gasta: ${spentMana}.` : ""}`);
+    void dispatchCustomAbilityScriptEvents(mode === "combat" ? battleId : null);
     await Promise.all([
       qc.invalidateQueries({ queryKey: ["character-abilities", characterId] }),
       qc.invalidateQueries({ queryKey: ["character-abilities-battle"] }),
