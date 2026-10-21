@@ -267,6 +267,13 @@
       "when": 1792764000000,
       "tag": "0037_master_only_ability_activation",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1792767600000,
+      "tag": "0038_public_combat_resource_states",
+      "breakpoints": true
     }
   ]
 }
