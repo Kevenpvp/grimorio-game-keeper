@@ -238,11 +238,16 @@ SECURITY DEFINER
 SET search_path = public
 AS $function$
 DECLARE
-  _old_body integer := COALESCE((OLD.modifiers ->> 'body')::integer, 0);
-  _new_body integer := COALESCE((NEW.modifiers ->> 'body')::integer, 0);
-  _old_sanity integer := COALESCE((OLD.modifiers ->> 'sanity')::integer, 0);
-  _new_sanity integer := COALESCE((NEW.modifiers ->> 'sanity')::integer, 0);
+  _old_body integer;
+  _new_body integer;
+  _old_sanity integer;
+  _new_sanity integer;
 BEGIN
+  _old_body := COALESCE((OLD.modifiers ->> 'body')::integer, 0);
+  _new_body := COALESCE((NEW.modifiers ->> 'body')::integer, 0);
+  _old_sanity := COALESCE((OLD.modifiers ->> 'sanity')::integer, 0);
+  _new_sanity := COALESCE((NEW.modifiers ->> 'sanity')::integer, 0);
+
   IF TG_TABLE_NAME = 'races' THEN
     UPDATE public.characters c
     SET body = GREATEST(0, LEAST(100, c.body - _old_body + _new_body)),
