@@ -85,10 +85,10 @@ begin
     elsif _caster_character_id = _target_character_id then
       if _target_scope in ('caster', 'both') then _effect_character_ids := array[_caster_character_id];
       else _effect_character_ids := array[]::uuid[]; end if;
-    elsif _target_scope in ('caster', 'both') then
-      _effect_character_ids := array[_caster_character_id];
-    else
+    elsif _target_scope in ('target', 'both') then
       _effect_character_ids := array[_target_character_id];
+    else
+      _effect_character_ids := array[]::uuid[];
     end if;
     if jsonb_typeof(_effect->'damage_reduction_type_ids') = 'array' then
       select coalesce(array_agg(value::uuid), array[]::uuid[]) into _damage_reduction_type_ids
@@ -408,10 +408,10 @@ begin
     elsif _assignment.character_id = _target_character_id then
       if _target_scope in ('caster', 'both') then _effect_character_ids := array[_assignment.character_id];
       else _effect_character_ids := array[]::uuid[]; end if;
-    elsif _target_scope in ('caster', 'both') then
-      _effect_character_ids := array[_assignment.character_id];
-    else
+    elsif _target_scope in ('target', 'both') then
       _effect_character_ids := array[_target_character_id];
+    else
+      _effect_character_ids := array[]::uuid[];
     end if;
     if jsonb_typeof(_effect->'damage_reduction_type_ids') = 'array' then
       select coalesce(array_agg(value::uuid), array[]::uuid[]) into _damage_reduction_type_ids
