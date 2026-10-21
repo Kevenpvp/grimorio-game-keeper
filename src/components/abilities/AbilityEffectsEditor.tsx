@@ -86,6 +86,7 @@ export function AbilityEffectsEditor({
       healing_sanity_amount: 10,
       healing_remove_debuffs: false,
       healing_debuff_blacklist: [],
+      healing_debuff_name_blacklist: [],
       healing_reduce_debuff_turns_fixed: 0,
       healing_reduce_debuff_turns_percent: 0,
       healing_damage_type_id: damageTypes[0]?.id ?? null,
