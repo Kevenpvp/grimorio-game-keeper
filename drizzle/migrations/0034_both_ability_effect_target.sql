@@ -206,7 +206,7 @@ begin
 
   return old;
 end;
-$;
+$$;
 
 
 create or replace function public.activate_character_ability(
@@ -557,5 +557,5 @@ begin
 
   return _effective_mana_cost;
 end;
-$;
+$$;
 
