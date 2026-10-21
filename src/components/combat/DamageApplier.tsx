@@ -73,27 +73,33 @@ export function DamageApplier({ target, battleId = null, sources = [] }: {
 
     setApplyingDamage(true);
     try {
-      const { data, error } = await supabase.rpc("apply_battle_damage", {
-        _battle_id: battleId,
-        _character_id: target.id,
-        _damage_kind: damageKind,
-        _damage_type_id: needsMagic ? damageTypeId : null,
-        _damage_values: values,
-        _magic_level: needsMagic ? magicLevel : null,
-        _source_character_id: sourceCharacterId || null,
+      const { data: runtimeResponse, error } = await supabase.functions.invoke("ability-runtime", {
+        body: {
+          action: "apply_damage",
+          battle_id: battleId,
+          _battle_id: battleId,
+          _character_id: target.id,
+          _damage_kind: damageKind,
+          _damage_type_id: needsMagic ? damageTypeId : null,
+          _damage_values: values,
+          _magic_level: needsMagic ? magicLevel : null,
+          _source_character_id: sourceCharacterId || null,
+        },
       });
       if (error) {
         toast.error(error.message);
         return;
       }
 
-      const result = data as unknown as {
+      const result = (runtimeResponse as { damage_result?: {
         hits: number;
         physical_defense: number;
         magical_defense: number;
         total_damage: number;
         hp_before: number;
         hp_after: number;
+        final_damage_by_hit?: number[];
+        custom_script_hooks?: { processed: number; errors: string[] };
         damage_fixed_modifier?: number;
         damage_percent_modifier?: number;
         damage_source_character_id?: string | null;
@@ -107,7 +113,11 @@ export function DamageApplier({ target, battleId = null, sources = [] }: {
         physical_reduction_percent?: number;
         magical_reduction_fixed?: number;
         magical_reduction_percent?: number;
-      };
+      } } | null)?.damage_result;
+      if (!result) {
+        toast.error("O servidor não retornou o resultado do dano.");
+        return;
+      }
       let defenseText: string;
       if (damageKind === "true") defenseText = "defesas ignoradas";
       else if (damageKind === "physical") defenseText = `Defesa física: ${result.physical_defense}`;
