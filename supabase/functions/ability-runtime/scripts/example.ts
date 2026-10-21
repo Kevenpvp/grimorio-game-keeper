@@ -23,7 +23,7 @@ const exampleAbilityScript: AbilityScript = {
 
   async "efeito_aplicado_no_caster"(context, api) {
     api.registrarLog(`Efeito aplicado em ${context.caster.nome}`, {
-      efeito: context.efeito?.name ?? context.efeito?.name,
+      efeito: context.efeito?.name ?? null,
       origem: context.dados.effect_source_character_ability_id ?? null,
     });
   },
