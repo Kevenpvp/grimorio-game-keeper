@@ -24,6 +24,24 @@ function effectSummary(effect: AbilityEffectDefinition, defs: NonNullable<Return
     const scope = effect.damage_scope === "physical" ? "dano físico" : effect.damage_scope === "magical" ? "dano mágico" : "qualquer dano";
     return `${effect.name}: ${polarity}${amount} de dano causado (${scope})`;
   }
+  if (effect.effect_type === "healing") {
+    const parts: string[] = [];
+    const restoreAmount = (enabled: boolean | undefined, mode: "fixed" | "percent" | undefined, amount: number | undefined, name: string, percentBasis: string) => {
+      if (!enabled) return;
+      parts.push(`${name} +${amount ?? 0}${mode === "percent" ? `% ${percentBasis}` : name === "Corpo" || name === "Sanidade" ? " pontos percentuais" : " fixos"}`);
+    };
+    restoreAmount(effect.healing_hp_enabled, effect.healing_hp_mode, effect.healing_hp_amount, "HP", "do máximo");
+    restoreAmount(effect.healing_mana_enabled, effect.healing_mana_mode, effect.healing_mana_amount, "Mana", "do máximo");
+    restoreAmount(effect.healing_body_enabled, effect.healing_body_mode, effect.healing_body_amount, "Corpo", "do que falta");
+    restoreAmount(effect.healing_sanity_enabled, effect.healing_sanity_mode, effect.healing_sanity_amount, "Sanidade", "do que falta");
+    if (effect.healing_remove_debuffs) parts.push("remove debuffs permitidos");
+    if ((effect.healing_reduce_debuff_turns_fixed ?? 0) > 0) parts.push(`reduz debuffs em ${effect.healing_reduce_debuff_turns_fixed} turno(s)`);
+    if ((effect.healing_reduce_debuff_turns_percent ?? 0) > 0) parts.push(`reduz duração em ${effect.healing_reduce_debuff_turns_percent}%`);
+    const damageName = damageTypes.find((type) => type.id === effect.healing_damage_type_id)?.name;
+    const magic = damageName ? ` · tipo mágico: ${damageName}, grau ${effect.healing_magic_level ?? "não definido"}` : "";
+    const timing = effect.healing_timing === "per_turn" ? `cura por rodada (${effect.duration} turnos)` : "cura instantânea";
+    return `${effect.name}: ${timing}; ${parts.join(", ") || "sem opções configuradas"}${magic}`;
+  }
   if (effect.effect_type === "damage_reduction") {
     const selectedTypeIds = effect.damage_reduction_type_ids ?? (effect.damage_reduction_type_id ? [effect.damage_reduction_type_id] : []);
     const selectedLevels = effect.damage_reduction_magic_levels ?? (effect.damage_reduction_magic_level ? [effect.damage_reduction_magic_level] : []);
@@ -170,7 +188,7 @@ export function CharacterAbilitiesPanel({
                 {ability.can_activate && ability.effects.length > 0 && (
                   <div className="mt-2 space-y-1 border-t border-border pt-2 text-xs text-muted-foreground">
                     <div className="font-semibold">Efeitos ao ativar</div>
-                    {ability.effects.map((effect, index) => <div key={index}>{effectSummary(effect, defs ?? [], damageTypes)} · {effect.duration} turno(s)</div>)}
+                    {ability.effects.map((effect, index) => <div key={index}>{effectSummary(effect, defs ?? [], damageTypes)} · Destino: {effect.target_scope === "caster" ? "Caster" : "Alvo"}{effect.effect_type === "healing" && effect.healing_timing !== "per_turn" ? "" : ` · ${effect.duration} turno(s)`}</div>)}
                   </div>
                 )}
                 {ability.passive_effects.length > 0 && (
@@ -182,7 +200,7 @@ export function CharacterAbilitiesPanel({
                 {ability.end_effects.length > 0 && ability.can_activate && (
                   <div className="mt-2 space-y-1 border-t border-border pt-2 text-xs text-muted-foreground">
                     <div className="font-semibold text-gold">Efeitos quando a habilidade acaba</div>
-                    {ability.end_effects.map((effect, index) => <div key={index}>{effectSummary(effect, defs ?? [], damageTypes)} · {effect.duration} turno(s)</div>)}
+                    {ability.end_effects.map((effect, index) => <div key={index}>{effectSummary(effect, defs ?? [], damageTypes)} · Destino: {effect.target_scope === "caster" ? "Caster" : "Alvo"} · {effect.duration} turno(s)</div>)}
                   </div>
                 )}
               </article>
@@ -415,8 +433,9 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
         onChange={setEndEffects}
         permanent={false}
         title="Efeitos quando a habilidade acaba"
-        description="Aplicados ao alvo quando todos os efeitos desta ativação terminarem."
+        description="Aplicados ao destino escolhido quando todos os efeitos desta ativação terminarem."
         defs={defs}
+        allowPeriodicHealing={false}
       />}
       <AbilityEffectsEditor
         effects={passiveEffects}
@@ -425,6 +444,7 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
         title="Efeitos passivos"
         description="Aplicados continuamente enquanto a habilidade estiver atribuída a esta ficha."
         defs={defs}
+        allowHealing={false}
       />
           <div className="flex flex-wrap gap-2">
             <Button size="sm" disabled={busy} onClick={() => void save()}>{busy ? "Salvando..." : "Salvar valores desta ficha"}</Button>
