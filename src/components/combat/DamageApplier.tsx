@@ -129,6 +129,9 @@ export function DamageApplier({ target, battleId = null, sources = [] }: {
         : damageKindName;
       const damageDescription = damageKind === "hybrid" ? `dano híbrido (${typeName})` : damageKind === "magical" ? `dano mágico (${typeName})` : damageKind === "true" ? "dano verdadeiro" : "dano físico";
       const sourceName = sources.find((source) => source.id === sourceCharacterId)?.name;
+      const hitSummary = result.final_damage_by_hit?.length
+        ? " Dano final por golpe: " + result.final_damage_by_hit.join(", ") + "."
+        : "";
       const fixedModifier = Number(result.damage_fixed_modifier ?? 0);
       const percentModifier = Number(result.damage_percent_modifier ?? 0);
       const signed = (value: number) => `${value >= 0 ? "+" : ""}${value}`;
@@ -158,9 +161,13 @@ export function DamageApplier({ target, battleId = null, sources = [] }: {
               + reductionPart(`Mitigação da metade mágica (${typeName}, grau ${magicLevel})`, magicalReductionFixed, magicalReductionPercent)
             : "";
       toast.success(
-        `${target.name}: ${result.hits} golpe(s) de ${damageDescription}; ${defenseText}; ${result.total_damage} de dano total. HP: ${result.hp_before} → ${result.hp_after}.${sourceSummary}${reductionSummary}`,
+        `${target.name}: ${result.hits} golpe(s) de ${damageDescription}; ${defenseText}; ${result.total_damage} de dano total. HP: ${result.hp_before} → ${result.hp_after}.${sourceSummary}${reductionSummary}${hitSummary}`,
         { duration: 8000 },
       );
+      const hookErrors = result.custom_script_hooks?.errors ?? [];
+      if (hookErrors.length > 0) {
+        toast.error("Dano aplicado, mas houve falha em script customizado: " + hookErrors[0], { duration: 8000 });
+      }
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["battles"] }),
         qc.invalidateQueries({ queryKey: ["character", target.id] }),
