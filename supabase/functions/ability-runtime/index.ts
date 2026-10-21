@@ -59,6 +59,36 @@ function resourceField(resource: ScriptResource): "hp" | "mana" | "body" | "sani
   return resource;
 }
 
+async function characterHasHealingBlock(
+  service: ReturnType<typeof createClient>,
+  characterId: string,
+  battleId: string | null,
+): Promise<boolean> {
+  let query = service.from("battle_effects")
+    .select("id")
+    .eq("character_id", characterId)
+    .eq("effect_type", "healing_blocked")
+    .gt("duration", 0);
+  if (battleId) {
+    query = query.or(`battle_id.is.null,battle_id.eq.${battleId}`);
+  } else {
+    query = query.is("battle_id", null);
+  }
+  const { data: activeEffects, error: effectsError } = await query.limit(1);
+  if (effectsError) throw effectsError;
+  if ((activeEffects ?? []).length > 0) return true;
+
+  const { data: assignments, error: assignmentsError } = await service
+    .from("character_abilities")
+    .select("passive_effects")
+    .eq("character_id", characterId);
+  if (assignmentsError) throw assignmentsError;
+  return (assignments ?? []).some((assignment) =>
+    Array.isArray(assignment.passive_effects) &&
+    assignment.passive_effects.some((effect) => asObject(effect).effect_type === "healing_blocked")
+  );
+}
+
 async function loadCharacter(service: ReturnType<typeof createClient>, id: string | null): Promise<CharacterRow | null> {
   if (!id) return null;
   const { data, error } = await service
@@ -194,6 +224,22 @@ function makeApi(
         });
         if (maximumError) throw maximumError;
         maximum = Math.max(0, Number(resourceMax ?? 0));
+      }
+
+      let proposedValue: number;
+      if (input.operacao === "somar") proposedValue = current + amount;
+      else if (input.operacao === "subtrair") proposedValue = current - amount;
+      else if (input.operacao === "definir") proposedValue = amount;
+      else throw new Error("Operação de recurso inválida.");
+
+      if (proposedValue > current && await characterHasHealingBlock(service, character.id, context.batalha?.id ?? null)) {
+        registrarLog("Recuperação bloqueada por Bloqueio de Cura", {
+          personagem: character.id,
+          recurso: input.recurso,
+          valorAtual: current,
+          valorTentado: proposedValue,
+        });
+        return;
       }
 
       if (field === "hp" && input.operacao !== "definir") {
