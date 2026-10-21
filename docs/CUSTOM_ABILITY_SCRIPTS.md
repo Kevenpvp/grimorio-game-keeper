@@ -4,12 +4,14 @@ Os scripts ficam em `supabase/functions/ability-runtime/scripts/` e são executa
 
 ## Eventos disponíveis
 
-Cada arquivo exporta um objeto com qualquer subconjunto dos quatro métodos abaixo. Um script pode implementar somente os eventos de que precisa.
+Cada arquivo exporta um objeto com qualquer subconjunto dos seis métodos abaixo. Um script pode implementar somente os eventos de que precisa.
 
 - `"turno_avançou"(contexto, api)`: disparado quando o turno individual de um personagem avança. No turno geral, recebe um evento para cada personagem participante cujo contador individual foi avançado.
 - `"habilidade_ativada"(contexto, api)`: disparado após a habilidade atribuída que seleciona esse script ser ativada com sucesso.
 - `"efeito_aplicado_no_caster"(contexto, api)`: disparado quando um efeito é aplicado ao personagem que possui a habilidade com script configurado.
 - `"efeito_removido_no_caster"(contexto, api)`: disparado quando um efeito é removido desse personagem.
+- `"recebeu_dano"(contexto, api)`: chamado durante a aplicação de dano, depois de o dano causado ter sido calculado e modificado. O Caster é quem recebeu o dano e `contexto.alvo` é a origem, se houver.
+- `"causou_dano"(contexto, api)`: chamado durante a aplicação de dano, após defesa e mitigação normais. O Caster é a origem do dano e pode alterar o dano final antes de a operação terminar.
 
 ### Argumento `contexto`
 
@@ -22,6 +24,9 @@ Cada arquivo exporta um objeto com qualquer subconjunto dos quatro métodos abai
 - `contexto.turno`: `individual` e `geral` quando conhecidos.
 - `contexto.efeito`: snapshot do efeito relacionado, ou `null`.
 - `contexto.dados`: payload adicional salvo com o evento, por exemplo o custo de Mana ou o efeito completo.
+- `contexto.atributos`: valores extras configurados pelo mestre na habilidade, indexados pela chave API. Os valores podem ser números, strings ou booleanos.
+- `contexto.estado`: estado persistente daquela habilidade na ficha do personagem; use os métodos da API para atualizá-lo.
+- `contexto.dano`: presente em `recebeu_dano` e `causou_dano`. Contém `origemId`, `personagemAtingidoId`, `categoria`, `tipoDanoId`, `grauMagia`, `danoBrutoPorGolpe`, `danoFinalPorGolpe`, `danoFinalTotal`, `hpAntes` e `hpDepois`.
 
 ## Métodos permitidos em `api`
 
@@ -57,9 +62,20 @@ const efeitoId = await api.aplicarEfeito({
 });
 
 await api.removerEfeito({ efeitoId });
+
+// Somente durante "causou_dano": altera os valores finais após defesa/mitigação.
+await api.modificarDanoFinal({ valoresPorGolpe: [20, 35, 40] });
 ```
 
-`alterarRecurso` respeita os limites do recurso (HP/Mana até o máximo calculado; Corpo/Sanidade entre 0 e 100). Modificações de HP por soma/subtração e alterações numéricas de estado usam operações atômicas no banco. `consultarRecurso` retorna valor atual e máximo. `ajustarEstadoNumerico` soma ou subtrai uma chave numérica do estado sem perder incrementos concorrentes. `aplicarEfeito` usa os mesmos tipos e restrições de efeito do combate; duração e quantidade são validadas. `removerEfeito` só pode remover um efeito no Caster ou no Alvo do evento e, se estiver numa batalha, não pode remover de outra batalha.
+`alterarRecurso` respeita os limites do recurso (HP/Mana até o máximo calculado; Corpo/Sanidade entre 0 e 100). Modificações de HP por soma/subtração e alterações numéricas de estado usam operações atômicas no banco. `consultarRecurso` retorna valor atual e máximo. `ajustarEstadoNumerico` soma ou subtrai uma chave numérica do estado sem perder incrementos concorrentes. `modificarDanoFinal` só funciona durante `causou_dano`, deve enviar um valor para cada golpe e limita cada golpe a 0–1.000.000 após defesa e mitigação. `aplicarEfeito` usa os mesmos tipos e restrições de efeito do combate; duração e quantidade são validadas. `removerEfeito` só pode remover um efeito no Caster ou no Alvo do evento e, se estiver numa batalha, não pode remover de outra batalha.
+
+## Exemplo: Demônio Interno
+
+O script pronto está em [`scripts/demonio-interno.ts`](../supabase/functions/ability-runtime/scripts/demonio-interno.ts) e o registro usa a chave `demonio_interno`.
+
+Ele acumula o dano final recebido em `contexto.estado.dano_superaquecimento`. Quando o personagem causa dano depois disso, calcula uma parcela do superaquecimento de acordo com `contexto.atributos.porcentagem_maxima_dano_refletido`, acrescenta essa parcela ao último golpe após as defesas/mitigações, paga o custo em HP e desconta a quantidade refletida do acúmulo. O custo usa `contexto.atributos.percentual_hp_perdido_por_refletir` como porcentagem do HP **máximo** do Caster.
+
+Os dois atributos vêm pré-configurados: **Porcentagem máxima de dano refletido** (50) e **% de HP que perde para refletir** (10). É possível ajustar os valores na página Habilidades.
 
 ## Como adicionar um script
 
