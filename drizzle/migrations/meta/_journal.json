@@ -232,6 +232,13 @@
       "when": 1792674000000,
       "tag": "0032_condition_attribute_scaling",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1792677600000,
+      "tag": "0033_ability_targets_healing_and_periodic_heal",
+      "breakpoints": true
     }
   ]
 }
