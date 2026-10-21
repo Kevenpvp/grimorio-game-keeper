@@ -377,8 +377,7 @@ export function AbilityEffectsEditor({
                     </label>
                   )}
                   <p className="text-xs text-muted-foreground">
-                    “Valor da cura” é a soma dos valores de recuperação configurados no feitiço. O dano mágico respeita defesa e mitigação;
-                    se a própria cura não tiver tipo e nível definidos, o dano revertido será dano verdadeiro.
+                    “Valor da cura” é a soma dos valores de recuperação configurados no feitiço. O dano convertido é dano verdadeiro, então ignora Defesa e Defesa Mágica; Invencível continua bloqueando esse dano. O tipo e o nível escolhidos acima servem apenas para filtrar quais curas ativam a reversão.
                   </p>
                 </fieldset>
               )}
