@@ -22,6 +22,8 @@ export interface AbilityDamageContext {
   categoria: "physical" | "magical" | "hybrid" | "true";
   tipoDanoId: string | null;
   grauMagia: "baixa" | "media" | "alta" | null;
+  /** True when the damage application was configured as a critical hit. */
+  critico?: boolean;
   danoBrutoPorGolpe: number[];
   danoFinalPorGolpe: number[];
   danoFinalTotal: number;
