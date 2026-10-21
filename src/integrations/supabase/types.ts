@@ -127,6 +127,8 @@ export type Database = {
           name: string
           polarity: string
           source_character_ability_id: string | null
+          source_race_id: string | null
+          source_race_effect_index: number | null
           target_character_id: string | null
           until_combat_end: boolean
           value_mode: string
@@ -153,6 +155,8 @@ export type Database = {
           name: string
           polarity?: string
           source_character_ability_id?: string | null
+          source_race_id?: string | null
+          source_race_effect_index?: number | null
           target_character_id?: string | null
           until_combat_end?: boolean
           value_mode?: string
@@ -179,6 +183,8 @@ export type Database = {
           name?: string
           polarity?: string
           source_character_ability_id?: string | null
+          source_race_id?: string | null
+          source_race_effect_index?: number | null
           target_character_id?: string | null
           until_combat_end?: boolean
           value_mode?: string
@@ -203,6 +209,13 @@ export type Database = {
             columns: ["source_character_ability_id"]
             isOneToOne: false
             referencedRelation: "character_abilities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "battle_effects_source_race_id_fkey"
+            columns: ["source_race_id"]
+            isOneToOne: false
+            referencedRelation: "races"
             referencedColumns: ["id"]
           },
           {
@@ -631,6 +644,7 @@ export type Database = {
           description: string | null
           id: string
           modifiers: Json
+          starting_effects: Json
           name: string
         }
         Insert: {
@@ -640,6 +654,7 @@ export type Database = {
           description?: string | null
           id?: string
           modifiers?: Json
+          starting_effects?: Json
           name: string
         }
         Update: {
@@ -649,6 +664,7 @@ export type Database = {
           description?: string | null
           id?: string
           modifiers?: Json
+          starting_effects?: Json
           name?: string
         }
         Relationships: []
