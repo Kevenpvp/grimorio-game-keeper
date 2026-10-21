@@ -156,7 +156,7 @@ function useLiveBattles(isMaster: boolean, userId: string | undefined) {
     return () => { void supabase.removeChannel(ch); };
   }, [qc]);
   return useQuery({
-    queryKey: ["battles"],
+    queryKey: ["battles", userId, isMaster],
     enabled: !!userId,
     queryFn: async () => {
       const masterSelection = "*, battle_participants(sort_order,turn_count, characters(id,name,player_name,photo_path,race_id,virtue_id,owner_id,race_physical_allocations,virtue_physical_allocations,race_physical_points_granted,virtue_physical_points_granted,body,sanity,character_attributes(attribute_key,current_value,max_value,points,bonus)))";
@@ -367,7 +367,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
       if (Number.isFinite(confirmedTurn)) {
         // Stop an older Realtime-triggered read from overwriting this newly confirmed counter.
         await qc.cancelQueries({ queryKey: ["battles"] });
-        qc.setQueryData<BattlesData>(["battles"], (current) => {
+        qc.setQueryData<BattlesData>(["battles", userId, isMaster], (current) => {
           if (!current) return current;
           return current.map((cachedBattle) => {
             if (cachedBattle.id !== battle.id) return cachedBattle;
