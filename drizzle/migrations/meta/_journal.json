@@ -344,6 +344,13 @@
       "when": 1792785600003,
       "tag": "0048_magic_healing_reversal",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1792785600004,
+      "tag": "0049_preserve_permanent_racial_effects",
+      "breakpoints": true
     }
   ]
 }
