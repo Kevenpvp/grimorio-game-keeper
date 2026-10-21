@@ -137,17 +137,17 @@ function scheduleCombatRefresh(queryClient: QueryClient, ...queryKeys: QueryKey[
 function useLiveBattles(isMaster: boolean, userId: string | undefined) {
   const qc = useQueryClient();
   useEffect(() => {
-    const refreshBattles = () => scheduleCombatRefresh(qc, ["battles"]);
+    const refreshBattles = () => scheduleCombatRefresh(qc, ["battles"], ["battle-character-public-states"]);
     const ch = supabase
       .channel("battles-live")
       .on("postgres_changes", { event: "*", schema: "public", table: "battles" }, refreshBattles)
       .on("postgres_changes", { event: "*", schema: "public", table: "battle_participants" }, refreshBattles)
       .on("postgres_changes", { event: "*", schema: "public", table: "character_attributes" }, refreshBattles)
       .on("postgres_changes", { event: "*", schema: "public", table: "battle_effects" }, () => {
-        scheduleCombatRefresh(qc, ["battles"], ["battle-effects"], ["character-active-effects"]);
+        scheduleCombatRefresh(qc, ["battles"], ["battle-effects"], ["character-active-effects"], ["battle-character-public-states"]);
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "character_abilities" }, () => {
-        scheduleCombatRefresh(qc, ["character-abilities"], ["character-abilities-battle"]);
+        scheduleCombatRefresh(qc, ["character-abilities"], ["character-abilities-battle"], ["battle-character-public-states"]);
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "abilities" }, () => {
         scheduleCombatRefresh(qc, ["abilities"]);
@@ -407,6 +407,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
         ["battle-effects"],
         ["character-active-effects"],
         ["character-abilities-battle"],
+        ["battle-character-public-states"],
       );
     } finally {
       setAdvancingTurnKeys((current) => {
