@@ -34,6 +34,7 @@ export function AbilityEffectsEditor({
   allowPeriodicHealing = true,
   allowedTypes,
   allowPermanentMagicProhibition = false,
+  permanentNote,
 }: {
   effects: AbilityEffectDefinition[];
   onChange: (effects: AbilityEffectDefinition[]) => void;
@@ -50,6 +51,8 @@ export function AbilityEffectsEditor({
   allowedTypes?: AbilityEffectType[];
   /** Magic prohibition can be permanent when tied to a race, even though passive abilities omit it. */
   allowPermanentMagicProhibition?: boolean;
+  /** Customize the permanent-effect note for non-ability owners such as races. */
+  permanentNote?: string;
 }) {
   const isPermanent = permanent ?? isPassive ?? false;
   const { data: damageTypes = [] } = useDamageTypes();
@@ -479,7 +482,7 @@ export function AbilityEffectsEditor({
                   )}
                 </>
               )}
-              {isPermanent && <p className="self-end text-xs text-muted-foreground">Efeito permanente enquanto a habilidade estiver atribuída.</p>}
+              {isPermanent && <p className="self-end text-xs text-muted-foreground">{permanentNote ?? "Efeito permanente enquanto a habilidade estiver atribuída."}</p>}
               {isMagicProhibition && <p className="self-end text-xs text-amber-500 sm:col-span-2">Debuff: impede a ativação de habilidades mágicas ou que consomem Mana enquanto durar.</p>}
               {isNoMana && <p className="self-end text-xs text-amber-500 sm:col-span-2">Debuff: zera a Mana atual e máxima enquanto durar e bloqueia habilidades mágicas ou que gastem Mana. Não é possível mudar sua polaridade.</p>}
               {effect.effect_type === "invincible" && <p className="self-end text-xs text-amber-500 sm:col-span-2">Buff: bloqueia todo dano recebido enquanto o efeito estiver ativo.</p>}
