@@ -9,7 +9,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { parseAbilityEffects, useAbilities, type Ability, type AbilityEffectDefinition } from "@/lib/abilities";
-import { CUSTOM_ABILITY_SCRIPTS } from "@/lib/custom-ability-scripts";
+import {
+  CUSTOM_ABILITY_SCRIPTS,
+  DEMONIO_INTERNO_DEFAULT_ATTRIBUTES,
+  customAttributeKey,
+  parseCustomAbilityAttributes,
+  type CustomAbilityAttribute,
+} from "@/lib/custom-ability-scripts";
 import { useDefs, useMe } from "@/lib/sheets";
 import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
 import type { Json } from "@/integrations/supabase/types";
@@ -41,7 +47,7 @@ function HabilidadesPage() {
 
   async function create() {
     const { data, error } = await supabase.from("abilities").insert({
-      name: "Nova habilidade", description: "", is_passive: false, can_activate: true, is_magical: true, self_target_only: false, cooldown_turns: 1, mana_cost: 0, effects: [], passive_effects: [], end_effects: [], custom_script_key: null,
+      name: "Nova habilidade", description: "", is_passive: false, can_activate: true, is_magical: true, self_target_only: false, cooldown_turns: 1, mana_cost: 0, effects: [], passive_effects: [], end_effects: [], custom_script_key: null, custom_attributes: [],
     }).select("id").single();
     if (error) { toast.error(error.message); return; }
     setSearch("");
@@ -88,6 +94,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
   const [name, setName] = useState(ability.name);
   const [description, setDescription] = useState(ability.description ?? "");
   const [customScriptKey, setCustomScriptKey] = useState(ability.custom_script_key ?? "");
+  const [customAttributes, setCustomAttributes] = useState<CustomAbilityAttribute[]>(() => parseCustomAbilityAttributes(ability.custom_attributes));
   const [canActivate, setCanActivate] = useState(ability.can_activate);
   const [isMagical, setIsMagical] = useState(ability.is_magical);
   const [selfTargetOnly, setSelfTargetOnly] = useState(ability.self_target_only);
@@ -102,6 +109,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
     setName(ability.name);
     setDescription(ability.description ?? "");
     setCustomScriptKey(ability.custom_script_key ?? "");
+    setCustomAttributes(parseCustomAbilityAttributes(ability.custom_attributes));
     setCanActivate(ability.can_activate);
     setIsMagical(ability.is_magical);
     setSelfTargetOnly(ability.self_target_only);
@@ -155,6 +163,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
       name: name.trim(),
       description: description.trim() || null,
       custom_script_key: customScriptKey || null,
+      custom_attributes: customAttributes as unknown as Json,
       can_activate: canActivate,
       is_magical: isMagical,
       self_target_only: canActivate && selfTargetOnly,
@@ -218,7 +227,13 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
         <select
           className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
           value={customScriptKey}
-          onChange={(e) => setCustomScriptKey(e.target.value)}
+          onChange={(e) => {
+            const key = e.target.value;
+            setCustomScriptKey(key);
+            if (key === "demonio_interno" && customAttributes.length === 0) {
+              setCustomAttributes(DEMONIO_INTERNO_DEFAULT_ATTRIBUTES.map((attribute) => ({ ...attribute })));
+            }
+          }}
         >
           <option value="">Nenhum script personalizado</option>
           {CUSTOM_ABILITY_SCRIPTS.map((script) => (
@@ -228,6 +243,69 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
         <p className="text-xs text-muted-foreground">
           Os scripts são executados no servidor quando os eventos da habilidade acontecem. Para adicionar um script, crie o arquivo na pasta supabase/functions/ability-runtime/scripts e registre a chave no registry e nesta lista.
         </p>
+      </div>
+      <div className="space-y-3 rounded-md border border-border p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <Label>Atributos extras da habilidade</Label>
+            <p className="text-xs text-muted-foreground">Valores de configuração acessíveis no script por <code>contexto.atributos.chave</code>. Aceita número, texto e booleano.</p>
+          </div>
+          <Button type="button" size="sm" variant="outline" onClick={() => setCustomAttributes((current) => [...current, {
+            key: customAttributeKey("", current.length),
+            name: "",
+            type: "number",
+            value: 0,
+          }])}>
+            <Plus className="mr-1 h-4 w-4" /> Adicionar atributo
+          </Button>
+        </div>
+        {customAttributes.length === 0 && <p className="text-xs text-muted-foreground">Nenhum atributo extra configurado.</p>}
+        {customAttributes.map((attribute, index) => (
+          <div key={index} className="grid gap-2 rounded-md border border-border/70 p-3 sm:grid-cols-[minmax(0,1fr)_130px_minmax(0,1fr)_auto] sm:items-end">
+            <div className="space-y-1">
+              <Label>Nome do atributo</Label>
+              <Input value={attribute.name} placeholder="Porcentagem máxima de dano refletido" onChange={(e) => {
+                const name = e.target.value;
+                setCustomAttributes((current) => current.map((item, itemIndex) => {
+                  if (itemIndex !== index) return item;
+                  const baseKey = customAttributeKey(name, index);
+                  const duplicate = current.some((other, otherIndex) => otherIndex !== index && other.key === baseKey);
+                  return { ...item, name, key: duplicate ? `${baseKey}_${index + 1}` : baseKey };
+                }));
+              }} />
+              <p className="text-[11px] text-muted-foreground">Chave API: <code>{attribute.key}</code></p>
+            </div>
+            <div className="space-y-1">
+              <Label>Tipo</Label>
+              <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={attribute.type} onChange={(e) => {
+                const type = e.target.value as CustomAbilityAttribute["type"];
+                const value = type === "number" ? 0 : type === "boolean" ? false : "";
+                setCustomAttributes((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, type, value } : item));
+              }}>
+                <option value="number">Número</option>
+                <option value="string">Texto (string)</option>
+                <option value="boolean">Booleano</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <Label>Valor padrão</Label>
+              {attribute.type === "boolean" ? (
+                <label className="flex h-9 items-center gap-2 rounded-md border border-input px-3 text-sm">
+                  <input type="checkbox" checked={attribute.value === true} onChange={(e) => setCustomAttributes((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, value: e.target.checked } : item))} />
+                  {attribute.value === true ? "Verdadeiro" : "Falso"}
+                </label>
+              ) : (
+                <Input type={attribute.type === "number" ? "number" : "text"} value={String(attribute.value)} onChange={(e) => setCustomAttributes((current) => current.map((item, itemIndex) => {
+                  if (itemIndex !== index) return item;
+                  return { ...item, value: attribute.type === "number" ? (e.target.value === "" ? 0 : Number(e.target.value)) : e.target.value };
+                }))} />
+              )}
+            </div>
+            <Button type="button" variant="ghost" size="icon" aria-label={`Remover atributo ${attribute.name || index + 1}`} onClick={() => setCustomAttributes((current) => current.filter((_, itemIndex) => itemIndex !== index))}>
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        ))}
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         {canActivate && <div className="space-y-1.5"><Label>Cooldown (turnos)</Label><Input type="number" min="1" value={cooldown} onChange={(e) => setCooldown(e.target.value)} /></div>}
