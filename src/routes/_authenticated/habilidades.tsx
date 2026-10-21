@@ -118,11 +118,28 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
       toast.error("Uma habilidade ativável precisa ter cooldown de pelo menos 1 turno. Marque como não ativável se não puder ser usada.");
       return;
     }
-    if (canActivate && endEffects.length > 0 && effects.length === 0) {
-      toast.error("Configure pelo menos um efeito ao ativar para que o sistema detecte quando a habilidade acaba.");
+    const canTriggerEndEffects = effects.some((effect) =>
+      effect.effect_type !== "healing" || effect.healing_timing === "per_turn"
+    );
+    if (canActivate && endEffects.length > 0 && !canTriggerEndEffects) {
+      toast.error("Efeitos de encerramento precisam de pelo menos um efeito ativo com duração. Uma cura instantânea sozinha não tem duração para encerrar.");
       return;
     }
     const allConfiguredEffects = [...effects, ...passiveEffects, ...endEffects];
+    const hasInvalidHealing = allConfiguredEffects.some((effect) =>
+      effect.effect_type === "healing" &&
+      !effect.healing_hp_enabled &&
+      !effect.healing_mana_enabled &&
+      !effect.healing_body_enabled &&
+      !effect.healing_sanity_enabled &&
+      !effect.healing_remove_debuffs &&
+      !(effect.healing_reduce_debuff_turns_fixed && effect.healing_reduce_debuff_turns_fixed > 0) &&
+      !(effect.healing_reduce_debuff_turns_percent && effect.healing_reduce_debuff_turns_percent > 0)
+    );
+    if (hasInvalidHealing) {
+      toast.error("Configure pelo menos uma ação em cada efeito de cura.");
+      return;
+    }
     if (allConfiguredEffects.some((effect) => !effect.name.trim() || (
       ["status", "regeneration", "mana_regeneration", "mana_used", "damage_dealt"].includes(effect.effect_type) &&
       (!Number.isFinite(effect.amount) || effect.amount < 0)
