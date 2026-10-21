@@ -32,7 +32,7 @@ export const Route = createFileRoute("/_authenticated/combate")({
 });
 
 type Attr = { attribute_key: string; current_value: number; max_value: number; points: number; bonus: number };
-type BattleEffect = { id: string; battle_id: string | null; character_id: string; name: string; effect_type: 'status' | 'regeneration' | 'mana_used' | 'no_regen_hp' | 'no_regen_mana' | 'magic_prohibition' | 'no_mana' | 'stun' | 'damage_dealt' | 'damage_reduction' | 'healing'; attribute_key: string | null; polarity: 'buff' | 'debuff'; value_mode: 'percent' | 'fixed'; amount: number; duration: number; duration_scope: 'individual' | 'global'; effect_data?: Json; damage_scope?: 'any' | 'physical' | 'magical'; damage_reduction_scope?: 'physical' | 'magical'; damage_reduction_type_id?: string | null; damage_reduction_magic_level?: 'baixa' | 'media' | 'alta' | null; damage_reduction_type_ids?: string[] | null; damage_reduction_magic_levels?: ('baixa' | 'media' | 'alta')[] | null; source_character_ability_id?: string | null; effect_group_id?: string | null; is_end_effect?: boolean };
+type BattleEffect = { id: string; battle_id: string | null; character_id: string; name: string; effect_type: 'status' | 'regeneration' | 'mana_used' | 'no_regen_hp' | 'no_regen_mana' | 'magic_prohibition' | 'no_mana' | 'stun' | 'damage_dealt' | 'damage_reduction' | 'healing' | 'invincible' | 'healing_blocked'; attribute_key: string | null; polarity: 'buff' | 'debuff'; value_mode: 'percent' | 'fixed'; amount: number; duration: number; duration_scope: 'individual' | 'global'; until_combat_end: boolean; effect_data?: Json; damage_scope?: 'any' | 'physical' | 'magical'; damage_reduction_scope?: 'physical' | 'magical'; damage_reduction_type_id?: string | null; damage_reduction_magic_level?: 'baixa' | 'media' | 'alta' | null; damage_reduction_type_ids?: string[] | null; damage_reduction_magic_levels?: ('baixa' | 'media' | 'alta')[] | null; source_character_ability_id?: string | null; effect_group_id?: string | null; is_end_effect?: boolean };
 function damageReductionSummary(effect: BattleEffect, damageTypes: { id: string; name: string }[]) {
   const selectedTypeIds = effect.damage_reduction_type_ids ?? (effect.damage_reduction_type_id ? [effect.damage_reduction_type_id] : []);
   const selectedLevels = effect.damage_reduction_magic_levels ?? (effect.damage_reduction_magic_level ? [effect.damage_reduction_magic_level] : []);
@@ -573,6 +573,7 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
   const { data: damageTypes = [] } = useDamageTypes();
   const [effectAmount, setEffectAmount] = useState("10");
   const [effectDuration, setEffectDuration] = useState("2");
+  const [effectUntilCombatEnd, setEffectUntilCombatEnd] = useState(false);
   const [expandedEffectId, setExpandedEffectId] = useState<string | null>(null);
 
 
@@ -737,14 +738,14 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
             const details = [
               effect.effect_type === "status" ? `${effect.polarity === "buff" ? "Buff" : "Debuff"} de ${defs.find(d => d.key === effect.attribute_key)?.label ?? effect.attribute_key} (${effect.value_mode === "percent" ? `${effect.polarity === "debuff" ? "-" : "+"}${effect.amount}%` : `${effect.polarity === "debuff" ? "-" : "+"}${effect.amount} pontos`})` :
               effect.effect_type === "regeneration" ? `${effect.polarity === "buff" ? "Buff" : "Debuff"} de regeneração de ${effect.attribute_key === "hp" ? "HP" : "Mana"}: ${effect.value_mode === "percent" ? `${effect.polarity === "debuff" ? "-" : "+"}${effect.amount}%` : `${effect.polarity === "debuff" ? "-" : "+"}${effect.amount} fixos`}` :
-              effect.effect_type === "healing" ? periodicHealingSummary(effect) : effect.effect_type === "no_regen_hp" ? "Impede regeneração de HP" :
+              effect.effect_type === "healing" ? periodicHealingSummary(effect) : effect.effect_type === "invincible" ? "Invencível: não recebe nenhum dano enquanto estiver ativo" : effect.effect_type === "healing_blocked" ? "Bloqueio de Cura: impede receber curas de habilidades" : effect.effect_type === "no_regen_hp" ? "Impede regeneração de HP" :
               effect.effect_type === "no_regen_mana" ? "Impede regeneração de Mana" : effect.effect_type === "no_mana" ? "Sem Mana: Mana zerada e habilidades mágicas/que usam Mana bloqueadas" : effect.effect_type === "damage_reduction" ? damageReductionSummary(effect, damageTypes) : effect.effect_type === "mana_used" ? `Mana usada ${effect.polarity === "buff" ? "−" : "+"}${effect.value_mode === "percent" ? `${effect.amount}%` : `${effect.amount} Mana`}` : effect.effect_type === "damage_dealt" ? `${effect.polarity === "buff" ? "Buff" : "Debuff"} de dano ${effect.damage_scope === "physical" ? "físico" : effect.damage_scope === "magical" ? "mágico" : "qualquer dano"}: ${effect.polarity === "debuff" ? "-" : "+"}${effect.value_mode === "percent" ? `${effect.amount}%` : `${effect.amount} de dano`}` : effect.effect_type === "magic_prohibition" ? "Proibição de magia: não pode usar habilidades que consomem Mana" : "Stun (apenas visual)"
             ];
             const expanded = expandedEffectId === effect.id;
             return <div key={effect.id} className="w-full rounded-md border border-border bg-muted/30 p-2">
               <div className="flex items-start gap-2">
                 <button type="button" aria-expanded={expanded} onClick={() => setExpandedEffectId(expanded ? null : effect.id)} className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded px-1 py-1 text-left text-xs hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold">
-                  <span className="min-w-0"><span className="font-medium">{effect.name}</span><span className="ml-2 text-muted-foreground">({effect.duration} turno(s))</span></span>
+                  <span className="min-w-0"><span className="font-medium">{effect.name}</span><span className="ml-2 text-muted-foreground">({effect.until_combat_end ? "até o fim do combate" : `${effect.duration} turno(s)`})</span></span>
                   <span aria-hidden="true" className="shrink-0 text-muted-foreground">{expanded ? "−" : "+"}</span>
                 </button>
                 <button type="button" aria-label={`Remover efeito ${effect.name}`} title="Remover efeito" onClick={() => onRemoveEffect(effect.id)} className="rounded px-2 py-1 text-muted-foreground hover:bg-destructive/15 hover:text-destructive"><span className="text-sm leading-none">×</span></button>
@@ -752,15 +753,15 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
               {expanded && <div className="mt-2 border-t border-border pt-2 text-xs" role="status">
                 <div className="font-semibold">{effect.name}</div>
                 <div className="mt-1">{details}</div>
-                <div className="mt-1 text-muted-foreground">Duração restante: {effect.duration} turno(s). Diminui quando o turno individual deste personagem avança ou no avanço do turno geral.</div>
+                <div className="mt-1 text-muted-foreground">{effect.until_combat_end ? "Permanece ativo até o combate ser encerrado." : `Duração restante: ${effect.duration} turno(s). Diminui quando o turno individual deste personagem avança ou no avanço do turno geral.`}</div>
               </div>}
             </div>;
           })}
         </div>}
         <Input placeholder="Nome do efeito" value={effectName} onChange={e => setEffectName(e.target.value)} />
         <div className="grid grid-cols-2 gap-2">
-          <select className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={effectType} onChange={e => { const type = e.target.value as BattleEffect["effect_type"]; setEffectType(type); if(type === "regeneration") setEffectAttr("hp"); if(type === "magic_prohibition" || type === "no_mana") setEffectPolarity("debuff"); if(type === "damage_reduction") { setEffectPolarity("buff"); setReductionScope("physical"); setReductionTypeIds(damageTypes[0] ? [damageTypes[0].id] : []); setReductionMagicLevels(["baixa"]); } }}>
-            <option value="status">Buff/debuff de status</option><option value="regeneration">Buff/debuff de regeneração</option><option value="no_regen_hp">Não regenera HP</option><option value="no_regen_mana">Não regenera Mana</option><option value="no_mana">Sem Mana (debuff)</option><option value="damage_dealt">Dano Causado</option><option value="damage_reduction">Mitigação de Dano</option><option value="magic_prohibition">Proibição de magia (debuff)</option><option value="stun">Stun (visual)</option>
+          <select className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={effectType} onChange={e => { const type = e.target.value as BattleEffect["effect_type"]; setEffectType(type); if(type === "regeneration") setEffectAttr("hp"); if(type === "magic_prohibition" || type === "no_mana" || type === "healing_blocked") setEffectPolarity("debuff"); if(type === "invincible" || type === "damage_reduction") { setEffectPolarity("buff"); setReductionScope("physical"); setReductionTypeIds(damageTypes[0] ? [damageTypes[0].id] : []); setReductionMagicLevels(["baixa"]); } }}>
+            <option value="status">Buff/debuff de status</option><option value="regeneration">Buff/debuff de regeneração</option><option value="no_regen_hp">Não regenera HP</option><option value="no_regen_mana">Não regenera Mana</option><option value="no_mana">Sem Mana (debuff)</option><option value="damage_dealt">Dano Causado</option><option value="damage_reduction">Mitigação de Dano</option><option value="magic_prohibition">Proibição de magia (debuff)</option><option value="invincible">Invencível — não recebe dano</option><option value="healing_blocked">Bloqueio de Cura (debuff)</option><option value="stun">Stun (visual)</option>
           </select>
           {(effectType === "status" || effectType === "regeneration") && <select className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={effectAttr} onChange={e => setEffectAttr(e.target.value)}>{(effectType === "regeneration" ? [{key:"hp",label:"HP"},{key:"mana",label:"Mana"}] : defs.map(d => ({key:d.key,label:d.key === "hp" ? "HP máximo" : d.key === "mana" ? "Mana máxima" : d.label}))).map(d => <option key={d.key} value={d.key}>{d.label}</option>)}</select>}
           {effectType === "damage_dealt" && <label className="col-span-2 space-y-1 text-xs font-medium"><span>Tipo de dano afetado</span><select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={effectDamageScope} onChange={e => setEffectDamageScope(e.target.value as "any" | "physical" | "magical")}><option value="physical">Físico</option><option value="magical">Mágico</option><option value="any">Qualquer dano</option></select></label>}
@@ -805,15 +806,16 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
           </>}
           {(effectType === "status" || effectType === "regeneration" || effectType === "damage_dealt" || effectType === "damage_reduction") && <>{effectType !== "damage_reduction" && <select className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={effectPolarity} onChange={e => setEffectPolarity(e.target.value as "buff" | "debuff")}><option value="buff">Buff</option><option value="debuff">Debuff</option></select>}<select className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={effectMode} onChange={e => setEffectMode(e.target.value as "percent" | "fixed")}><option value="percent">Porcentagem</option><option value="fixed">Pontos fixos</option></select></>}
           {(effectType === "status" || effectType === "regeneration" || effectType === "damage_dealt" || effectType === "damage_reduction") && <label className="col-span-2 space-y-1 text-xs font-medium"><span>Valor do efeito ({effectMode === "percent" ? "%" : effectType === "damage_dealt" ? "dano fixo" : effectType === "damage_reduction" ? "dano reduzido fixo" : "pontos fixos"})</span><Input aria-label="Valor do efeito em porcentagem ou pontos fixos" type="number" min="0" value={effectAmount} onChange={e => setEffectAmount(e.target.value)} /></label>}
-          <label className="col-span-2 space-y-1 text-xs font-medium"><span>Duração (quantos turnos)</span><Input aria-label="Duração em turnos" type="number" min="1" value={effectDuration} onChange={e => setEffectDuration(e.target.value)} /></label>
-          <p className="col-span-2 text-xs text-muted-foreground">Ao avançar um turno individual, só os efeitos desse personagem perdem 1 turno; ao avançar o turno geral, os efeitos de todos os personagens perdem 1 turno.</p>
+          <label className="col-span-2 space-y-1 text-xs font-medium"><span>Duração do efeito</span><select aria-label="Duração do efeito" className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={effectUntilCombatEnd ? "until_combat_end" : "turns"} onChange={e => setEffectUntilCombatEnd(e.target.value === "until_combat_end")}><option value="turns">Por turnos</option><option value="until_combat_end">Até o fim do combate</option></select></label>
+          {!effectUntilCombatEnd && <label className="col-span-2 space-y-1 text-xs font-medium"><span>Duração (quantos turnos)</span><Input aria-label="Duração em turnos" type="number" min="1" value={effectDuration} onChange={e => setEffectDuration(e.target.value)} /></label>}
+          <p className="col-span-2 text-xs text-muted-foreground">Ao avançar um turno individual, só os efeitos desse personagem perdem 1 turno; ao avançar o turno geral, os efeitos dos personagens perdem 1 turno. Efeitos configurados até o fim do combate não perdem duração por turno.</p>
         </div>
         <Button size="sm" onClick={() => {
-          const duration = Math.floor(Number(effectDuration));
+          const duration = effectUntilCombatEnd ? 1 : Math.floor(Number(effectDuration));
           const amount = Number(effectAmount);
           const needsAttribute = effectType === "status" || effectType === "regeneration";
           const needsAmount = needsAttribute || effectType === "damage_dealt" || effectType === "damage_reduction";
-          if (!effectName.trim() || duration < 1 || !Number.isFinite(duration) || (needsAmount && (!Number.isFinite(amount) || amount < 0))) {
+          if (!effectName.trim() || (!effectUntilCombatEnd && (duration < 1 || !Number.isFinite(duration))) || (needsAmount && (!Number.isFinite(amount) || amount < 0))) {
             toast.error("Preencha o nome, uma duração e um valor válidos.");
             return;
           }
@@ -831,13 +833,15 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
             damage_reduction_magic_level: null,
             damage_reduction_type_ids: effectType === "damage_reduction" && reductionScope === "magical" ? reductionTypeIds : null,
             damage_reduction_magic_levels: effectType === "damage_reduction" && reductionScope === "magical" ? reductionMagicLevels : null,
-            polarity: effectType === "magic_prohibition" || effectType === "no_mana" ? "debuff" : effectType === "damage_reduction" ? "buff" : effectPolarity,
+            polarity: effectType === "magic_prohibition" || effectType === "no_mana" || effectType === "healing_blocked" ? "debuff" : effectType === "damage_reduction" || effectType === "invincible" ? "buff" : effectPolarity,
             value_mode: effectType === "magic_prohibition" || effectType === "no_mana" ? "fixed" : effectMode,
             amount: needsAmount ? amount : 0,
             duration,
+            until_combat_end: effectUntilCombatEnd,
             duration_scope: "global",
           });
           setEffectName("");
+          setEffectUntilCombatEnd(false);
         }}><Plus className="mr-1 h-3 w-3" /> Aplicar efeito</Button>
         </div>
       </details>
