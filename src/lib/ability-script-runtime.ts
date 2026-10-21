@@ -1,17 +1,20 @@
 import { supabase } from "@/integrations/supabase/client";
 
-const dispatchesInFlight = new Map<string, Promise<void>>();
+let dispatchInFlight: Promise<void> | null = null;
+let dispatchRequestedAgain = false;
 
 /**
  * Ask the authenticated master-only Edge Function to drain the server-side ability event queue.
- * Database triggers are the source of events; this is only the dispatcher.
+ * Database triggers are the source of events; this is only the dispatcher. Calls are serialized
+ * so overlapping Realtime notifications cannot run event batches concurrently.
  */
 export function dispatchCustomAbilityScriptEvents(battleId?: string | null): Promise<void> {
-  const key = battleId ?? "*";
-  const existing = dispatchesInFlight.get(key);
-  if (existing) return existing;
+  if (dispatchInFlight) {
+    dispatchRequestedAgain = true;
+    return dispatchInFlight;
+  }
 
-  const dispatch = (async () => {
+  dispatchInFlight = (async () => {
     const { data, error } = await supabase.functions.invoke("ability-runtime", {
       body: { battle_id: battleId ?? null },
     });
@@ -24,9 +27,14 @@ export function dispatchCustomAbilityScriptEvents(battleId?: string | null): Pro
       console.error("A fila de scripts customizados requer atenção.", data);
     }
   })().finally(() => {
-    dispatchesInFlight.delete(key);
+    dispatchInFlight = null;
+    if (dispatchRequestedAgain) {
+      dispatchRequestedAgain = false;
+      // Drain globally so requests that arrived while a battle-scoped dispatch was active
+      // do not leave other battles' events waiting indefinitely.
+      void dispatchCustomAbilityScriptEvents(null);
+    }
   });
 
-  dispatchesInFlight.set(key, dispatch);
-  return dispatch;
+  return dispatchInFlight;
 }
