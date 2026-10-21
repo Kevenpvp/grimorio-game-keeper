@@ -42,7 +42,9 @@ function effectSummary(effect: AbilityEffectDefinition, defs: NonNullable<Return
     if ((effect.healing_reduce_debuff_turns_percent ?? 0) > 0) parts.push(`reduz duração em ${effect.healing_reduce_debuff_turns_percent}%`);
     const damageName = damageTypes.find((type) => type.id === effect.healing_damage_type_id)?.name;
     const magic = damageName ? ` · tipo mágico: ${damageName}, grau ${effect.healing_magic_level ?? "não definido"}` : "";
-    const timing = effect.healing_timing === "per_turn" ? `cura por rodada (${effect.duration} turnos)` : "cura instantânea";
+    const timing = effect.healing_timing === "per_turn"
+      ? effect.until_combat_end ? "cura por rodada até o fim do combate" : `cura por rodada (${effect.duration} turnos)`
+      : "cura instantânea";
     return `${effect.name}: ${timing}; ${parts.join(", ") || "sem opções configuradas"}${magic}`;
   }
   if (effect.effect_type === "damage_reduction") {
@@ -197,7 +199,7 @@ export function CharacterAbilitiesPanel({
                 {ability.can_activate && ability.effects.length > 0 && (
                   <div className="mt-2 space-y-1 border-t border-border pt-2 text-xs text-muted-foreground">
                     <div className="font-semibold">Efeitos ao ativar</div>
-                    {ability.effects.map((effect, index) => <div key={index}>{effectSummary(effect, defs ?? [], damageTypes)} · Destino: {effect.target_scope === "caster" ? "Caster" : effect.target_scope === "both" ? "Ambos" : "Alvo"}{effect.effect_type === "healing" && effect.healing_timing !== "per_turn" ? "" : ` · ${effect.duration} turno(s)`}</div>)}
+                    {ability.effects.map((effect, index) => <div key={index}>{effectSummary(effect, defs ?? [], damageTypes)} · Destino: {effect.target_scope === "caster" ? "Caster" : effect.target_scope === "both" ? "Ambos" : "Alvo"}{effect.effect_type === "healing" && effect.healing_timing !== "per_turn" ? "" : ` · ${effect.until_combat_end ? "até o fim do combate" : `${effect.duration} turno(s)`}`}</div>)}
                   </div>
                 )}
                 {ability.passive_effects.length > 0 && (
@@ -209,7 +211,7 @@ export function CharacterAbilitiesPanel({
                 {ability.end_effects.length > 0 && ability.can_activate && (
                   <div className="mt-2 space-y-1 border-t border-border pt-2 text-xs text-muted-foreground">
                     <div className="font-semibold text-gold">Efeitos quando a habilidade acaba</div>
-                    {ability.end_effects.map((effect, index) => <div key={index}>{effectSummary(effect, defs ?? [], damageTypes)} · Destino: {effect.target_scope === "caster" ? "Caster" : effect.target_scope === "both" ? "Ambos" : "Alvo"}{effect.effect_type === "healing" && effect.healing_timing !== "per_turn" ? "" : ` · ${effect.duration} turno(s)`}</div>)}
+                    {ability.end_effects.map((effect, index) => <div key={index}>{effectSummary(effect, defs ?? [], damageTypes)} · Destino: {effect.target_scope === "caster" ? "Caster" : effect.target_scope === "both" ? "Ambos" : "Alvo"}{effect.effect_type === "healing" && effect.healing_timing !== "per_turn" ? "" : ` · ${effect.until_combat_end ? "até o fim do combate" : `${effect.duration} turno(s)`}`}</div>)}
                   </div>
                 )}
               </article>
