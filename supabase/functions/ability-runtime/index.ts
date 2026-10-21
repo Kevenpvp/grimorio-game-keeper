@@ -29,6 +29,7 @@ type QueuedAbilityEvent = {
   effect_id: string | null;
   payload: Record<string, unknown>;
   attempts: number;
+  queue_order: number | string;
 };
 
 type CharacterRow = { id: string; name: string; player_name?: string | null; body?: number; sanity?: number };
@@ -340,6 +341,7 @@ Deno.serve(async (request) => {
     }
 
     const queue = (events ?? []) as QueuedAbilityEvent[];
+    queue.sort((left, right) => Number(left.queue_order) - Number(right.queue_order));
     if (queue.length === 0) break;
     if (round === 4 && queue.length === 50) pendingLimitReached = true;
 
