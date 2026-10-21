@@ -295,6 +295,13 @@
       "when": 1792778400000,
       "tag": "0041_custom_ability_attributes_and_damage_hooks",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1792779000000,
+      "tag": "0042_seed_demonio_interno_script",
+      "breakpoints": true
     }
   ]
 }
