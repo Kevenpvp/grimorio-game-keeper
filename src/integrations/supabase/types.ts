@@ -128,6 +128,7 @@ export type Database = {
           polarity: string
           source_character_ability_id: string | null
           target_character_id: string | null
+          until_combat_end: boolean
           value_mode: string
         }
         Insert: {
@@ -153,6 +154,7 @@ export type Database = {
           polarity?: string
           source_character_ability_id?: string | null
           target_character_id?: string | null
+          until_combat_end?: boolean
           value_mode?: string
         }
         Update: {
@@ -178,6 +180,7 @@ export type Database = {
           polarity?: string
           source_character_ability_id?: string | null
           target_character_id?: string | null
+          until_combat_end?: boolean
           value_mode?: string
         }
         Relationships: [
