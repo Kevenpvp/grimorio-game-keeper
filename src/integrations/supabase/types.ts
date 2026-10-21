@@ -19,6 +19,7 @@ export type Database = {
           can_activate: boolean
           cooldown_turns: number
           created_at: string
+          custom_script_key: string | null
           description: string | null
           effects: Json
           end_effects: Json
@@ -34,6 +35,7 @@ export type Database = {
           can_activate?: boolean
           cooldown_turns?: number
           created_at?: string
+          custom_script_key?: string | null
           description?: string | null
           effects?: Json
           end_effects?: Json
@@ -49,6 +51,7 @@ export type Database = {
           can_activate?: boolean
           cooldown_turns?: number
           created_at?: string
+          custom_script_key?: string | null
           description?: string | null
           effects?: Json
           end_effects?: Json
