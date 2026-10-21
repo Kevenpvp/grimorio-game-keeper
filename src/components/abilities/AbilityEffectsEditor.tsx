@@ -71,6 +71,7 @@ export function AbilityEffectsEditor({
       damage_reduction_type_ids: damageTypes[0] ? [damageTypes[0].id] : [],
       damage_reduction_magic_levels: ["baixa"],
       target_scope: "target",
+      apply_both_on_activation: false,
       healing_timing: "instant",
       healing_hp_enabled: false,
       healing_hp_mode: "fixed",
@@ -172,8 +173,15 @@ export function AbilityEffectsEditor({
                     onChange={(e) => patch(index, { target_scope: e.target.value as "caster" | "target" | "both" })}>
                     <option value="caster">Caster (quem usa)</option>
                     <option value="target">Alvo</option>
-                    <option value="both">Ambos (Caster + Alvo)</option>
+                    <option value="both">Ambos (vale para Caster ou Alvo)</option>
                   </select>
+                </label>
+              )}
+              {!isPermanent && (
+                <label className="flex items-center gap-2 text-xs font-medium sm:col-span-2">
+                  <input type="checkbox" checked={effect.apply_both_on_activation ?? false}
+                    onChange={(e) => patch(index, { apply_both_on_activation: e.target.checked })} />
+                  Aplicar em ambos ao ativar (Caster e Alvo)
                 </label>
               )}
               {isDamageDealt && (
