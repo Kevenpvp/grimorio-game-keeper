@@ -113,6 +113,7 @@ export type Database = {
           damage_scope: string
           duration: number
           duration_scope: string
+          effect_data: Json
           effect_group_id: string | null
           is_end_effect: boolean
           effect_type: string
@@ -120,6 +121,7 @@ export type Database = {
           name: string
           polarity: string
           source_character_ability_id: string | null
+          target_character_id: string | null
           value_mode: string
         }
         Insert: {
@@ -136,6 +138,7 @@ export type Database = {
           damage_scope?: string
           duration: number
           duration_scope?: string
+          effect_data?: Json
           effect_group_id?: string | null
           is_end_effect?: boolean
           effect_type: string
@@ -143,6 +146,7 @@ export type Database = {
           name: string
           polarity?: string
           source_character_ability_id?: string | null
+          target_character_id?: string | null
           value_mode?: string
         }
         Update: {
@@ -159,6 +163,7 @@ export type Database = {
           damage_scope?: string
           duration?: number
           duration_scope?: string
+          effect_data?: Json
           effect_group_id?: string | null
           is_end_effect?: boolean
           effect_type?: string
@@ -166,6 +171,7 @@ export type Database = {
           name?: string
           polarity?: string
           source_character_ability_id?: string | null
+          target_character_id?: string | null
           value_mode?: string
         }
         Relationships: [
@@ -188,6 +194,13 @@ export type Database = {
             columns: ["source_character_ability_id"]
             isOneToOne: false
             referencedRelation: "character_abilities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "battle_effects_target_character_id_fkey"
+            columns: ["target_character_id"]
+            isOneToOne: false
+            referencedRelation: "characters"
             referencedColumns: ["id"]
           },
           {
