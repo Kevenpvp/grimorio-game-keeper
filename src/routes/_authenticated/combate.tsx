@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
+import { dispatchCustomAbilityScriptEvents } from "@/lib/ability-script-runtime";
 
 import { computeValue, conditionAdjustedValue, physicalAttributePoints, traitMods, useDefs, useMe, useRaces, useVirtues, type AttributeDef } from "@/lib/sheets";
 import { Portrait } from "@/components/sheet/CharacterSheetView";
@@ -141,10 +142,14 @@ function useLiveBattles(isMaster: boolean, userId: string | undefined) {
     const ch = supabase
       .channel("battles-live")
       .on("postgres_changes", { event: "*", schema: "public", table: "battles" }, refreshBattles)
-      .on("postgres_changes", { event: "*", schema: "public", table: "battle_participants" }, refreshBattles)
+      .on("postgres_changes", { event: "*", schema: "public", table: "battle_participants" }, () => {
+        refreshBattles();
+        if (isMaster) void dispatchCustomAbilityScriptEvents();
+      })
       .on("postgres_changes", { event: "*", schema: "public", table: "character_attributes" }, refreshBattles)
       .on("postgres_changes", { event: "*", schema: "public", table: "battle_effects" }, () => {
         scheduleCombatRefresh(qc, ["battles"], ["battle-effects"], ["character-active-effects"], ["battle-character-public-states"]);
+        if (isMaster) void dispatchCustomAbilityScriptEvents();
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "character_abilities" }, () => {
         scheduleCombatRefresh(qc, ["character-abilities"], ["character-abilities-battle"], ["battle-character-public-states"]);
@@ -154,7 +159,7 @@ function useLiveBattles(isMaster: boolean, userId: string | undefined) {
       })
       .subscribe();
     return () => { void supabase.removeChannel(ch); };
-  }, [qc]);
+  }, [qc, isMaster]);
   return useQuery({
     queryKey: ["battles", userId, isMaster],
     enabled: !!userId,
@@ -362,6 +367,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
         toast.error("Não foi possível avançar o turno: " + error.message);
         return;
       }
+      void dispatchCustomAbilityScriptEvents(battle.id);
 
       const confirmedTurn = Number(nextTurn);
       if (Number.isFinite(confirmedTurn)) {
