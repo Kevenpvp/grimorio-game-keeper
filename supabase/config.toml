@@ -1,1 +1,4 @@
 project_id = "nfxgnhbekkvcjhdcmmmi"
+
+[functions.ability-runtime]
+verify_jwt = true
