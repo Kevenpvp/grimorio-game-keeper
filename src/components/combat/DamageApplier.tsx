@@ -87,7 +87,20 @@ export function DamageApplier({ target, battleId = null, sources = [] }: {
         },
       });
       if (error) {
-        toast.error(error.message);
+        let message = error.message;
+        const errorContext = (error as { context?: unknown }).context;
+        if (errorContext instanceof Response) {
+          try {
+            const responseBody = await errorContext.clone().json() as { error?: unknown; message?: unknown };
+            const serverMessage = typeof responseBody.error === "string"
+              ? responseBody.error
+              : typeof responseBody.message === "string" ? responseBody.message : null;
+            if (serverMessage) message = serverMessage;
+          } catch {
+            // Keep the SDK message if the error response has no JSON body.
+          }
+        }
+        toast.error(message, { duration: 10000 });
         return;
       }
 
