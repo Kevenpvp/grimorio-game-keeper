@@ -190,7 +190,7 @@ export function CharacterAbilitiesPanel({
                 {ability.can_activate && ability.effects.length > 0 && (
                   <div className="mt-2 space-y-1 border-t border-border pt-2 text-xs text-muted-foreground">
                     <div className="font-semibold">Efeitos ao ativar</div>
-                    {ability.effects.map((effect, index) => <div key={index}>{effectSummary(effect, defs ?? [], damageTypes)} · Destino: {effect.target_scope === "caster" ? "Caster" : "Alvo"}{effect.effect_type === "healing" && effect.healing_timing !== "per_turn" ? "" : ` · ${effect.duration} turno(s)`}</div>)}
+                    {ability.effects.map((effect, index) => <div key={index}>{effectSummary(effect, defs ?? [], damageTypes)} · Destino: {effect.target_scope === "caster" ? "Caster" : effect.target_scope === "both" ? "Ambos" : "Alvo"}{effect.effect_type === "healing" && effect.healing_timing !== "per_turn" ? "" : ` · ${effect.duration} turno(s)`}</div>)}
                   </div>
                 )}
                 {ability.passive_effects.length > 0 && (
@@ -202,7 +202,7 @@ export function CharacterAbilitiesPanel({
                 {ability.end_effects.length > 0 && ability.can_activate && (
                   <div className="mt-2 space-y-1 border-t border-border pt-2 text-xs text-muted-foreground">
                     <div className="font-semibold text-gold">Efeitos quando a habilidade acaba</div>
-                    {ability.end_effects.map((effect, index) => <div key={index}>{effectSummary(effect, defs ?? [], damageTypes)} · Destino: {effect.target_scope === "caster" ? "Caster" : "Alvo"}{effect.effect_type === "healing" && effect.healing_timing !== "per_turn" ? "" : ` · ${effect.duration} turno(s)`}</div>)}
+                    {ability.end_effects.map((effect, index) => <div key={index}>{effectSummary(effect, defs ?? [], damageTypes)} · Destino: {effect.target_scope === "caster" ? "Caster" : effect.target_scope === "both" ? "Ambos" : "Alvo"}{effect.effect_type === "healing" && effect.healing_timing !== "per_turn" ? "" : ` · ${effect.duration} turno(s)`}</div>)}
                   </div>
                 )}
               </article>
