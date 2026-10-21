@@ -14,9 +14,11 @@ const demonioInterno: AbilityScript = {
     const damageReceived = Math.max(0, Math.floor(context.dano?.danoFinalTotal ?? 0));
     if (damageReceived <= 0) return;
 
-    const currentHeat = Math.max(0, Number(context.estado.dano_superaquecimento ?? 0) || 0);
-    const nextHeat = currentHeat + damageReceived;
-    await api.atualizarEstado({ dano_superaquecimento: nextHeat });
+    const nextHeat = await api.ajustarEstadoNumerico({
+      chave: "dano_superaquecimento",
+      delta: damageReceived,
+      minimo: 0,
+    });
     api.registrarLog("Demônio Interno acumulou superaquecimento", {
       danoRecebido: damageReceived,
       superaquecimentoTotal: nextHeat,
@@ -41,11 +43,14 @@ const demonioInterno: AbilityScript = {
     // This is appended after the normal defense and mitigation calculation, so it is true bonus damage.
     const updatedHitValues = [...hitValues];
     const lastHit = updatedHitValues.length - 1;
-    updatedHitValues[lastHit] = Math.min(1_000_000, updatedHitValues[lastHit] + reflectedDamage);
+    const actualReflection = Math.min(reflectedDamage, Math.max(0, 1_000_000 - updatedHitValues[lastHit]));
+    if (actualReflection <= 0) return;
+    updatedHitValues[lastHit] += actualReflection;
     await api.modificarDanoFinal({ valoresPorGolpe: updatedHitValues });
 
-    // Cost is a percentage of the reflected amount, rounded up to at least a whole HP when non-zero.
-    const hpCost = Math.ceil(reflectedDamage * hpCostPercent / 100);
+    // The configured HP penalty is a percentage of the Caster's maximum HP.
+    const casterHp = await api.consultarRecurso({ personagem: "caster", recurso: "hp" });
+    const hpCost = Math.ceil(casterHp.maximo * hpCostPercent / 100);
     if (hpCost > 0) {
       await api.alterarRecurso({
         personagem: "caster",
@@ -55,13 +60,16 @@ const demonioInterno: AbilityScript = {
       });
     }
 
-    await api.atualizarEstado({
-      dano_superaquecimento: Math.max(0, storedHeat - reflectedDamage),
+    const remainingHeat = await api.ajustarEstadoNumerico({
+      chave: "dano_superaquecimento",
+      delta: -actualReflection,
+      minimo: 0,
     });
     api.registrarLog("Demônio Interno refletiu superaquecimento como dano adicional", {
-      danoRefletido: reflectedDamage,
+      danoRefletido: actualReflection,
       custoHp: hpCost,
-      superaquecimentoRestante: Math.max(0, storedHeat - reflectedDamage),
+      hpMaximoUsadoNoCalculo: casterHp.maximo,
+      superaquecimentoRestante: remainingHeat,
     });
   },
 };
