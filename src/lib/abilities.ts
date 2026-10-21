@@ -200,10 +200,10 @@ export type ActiveCharacterEffect = {
   damage_reduction_magic_levels?: DamageMagicLevel[] | null;
 };
 
-export function useCharacterActiveEffects(characterId: string | undefined) {
+export function useCharacterActiveEffects(characterId: string | undefined, enabled = true) {
   return useQuery({
     queryKey: ["character-active-effects", characterId],
-    enabled: !!characterId,
+    enabled: !!characterId && enabled,
     queryFn: async () => {
       const [standaloneResult, participantsResult] = await Promise.all([
         supabase.from("battle_effects").select("*").eq("character_id", characterId!).is("battle_id", null),
