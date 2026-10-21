@@ -75,6 +75,10 @@ export interface AbilityScriptApi {
     quantidade: number;
   }): Promise<void>;
   atualizarEstado(patch: Record<string, unknown>): Promise<void>;
+  /** Atomically adjust a numeric per-ability state value and enforce a lower bound. */
+  ajustarEstadoNumerico(input: { chave: string; delta: number; minimo?: number }): Promise<number>;
+  /** Read current and maximum resource values for the Caster or Alvo. */
+  consultarRecurso(input: { personagem: ScriptTarget; recurso: ScriptResource }): Promise<{ atual: number; maximo: number }>;
   /** Only valid during causou_dano; changes the post-defense and post-mitigation damage by hit. */
   modificarDanoFinal(input: { valoresPorGolpe: number[] }): Promise<void>;
   aplicarEfeito(input: {
