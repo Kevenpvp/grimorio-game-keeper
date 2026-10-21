@@ -97,6 +97,7 @@ async function buildContext(service: ReturnType<typeof createClient>, event: Que
   const individualTurn = Number(payload.turn_count);
 
   return {
+    idEvento: event.id,
     evento: event.event_type,
     habilidade: {
       id: event.ability_id ?? ability?.id ?? assignment?.ability_id ?? null,
@@ -120,6 +121,17 @@ function makeApi(
   service: ReturnType<typeof createClient>,
   context: AbilityScriptContext,
 ): AbilityScriptApi {
+  const registrarLog = (message: string, details?: unknown) => {
+    console.info("[ability-script]", JSON.stringify({
+      eventId: context.idEvento,
+      script: context.habilidade.scriptKey,
+      evento: context.evento,
+      personagem: context.caster.id,
+      mensagem: String(message).slice(0, 2_000),
+      detalhes: details ?? null,
+    }));
+  };
+
   const resolveTarget = (target: ScriptTarget) => {
     const character = target === "caster" ? context.caster : context.alvo;
     if (!character) throw new Error("Este evento não tem um alvo selecionado.");
@@ -127,15 +139,7 @@ function makeApi(
   };
 
   return {
-    registrarLog(message, details) {
-      console.info("[ability-script]", JSON.stringify({
-        script: context.habilidade.scriptKey,
-        evento: context.evento,
-        personagem: context.caster.id,
-        mensagem: String(message).slice(0, 2_000),
-        detalhes: details ?? null,
-      }));
-    },
+    registrarLog,
 
     async alterarRecurso(input: {
       personagem: ScriptTarget;
@@ -195,7 +199,7 @@ function makeApi(
         if (error) throw error;
       }
 
-      this.registrarLog(`${input.recurso}: ${current} → ${next}`, {
+      registrarLog(`${input.recurso}: ${current} → ${next}`, {
         personagem: character.id,
         operacao: input.operacao,
       });
@@ -245,7 +249,7 @@ function makeApi(
 
       const { data, error } = await service.from("battle_effects").insert(effectRow).select("id").single();
       if (error) throw error;
-      this.registrarLog(`Efeito aplicado: ${effectRow.name}`, { personagem: character.id, effectId: data.id });
+      registrarLog(`Efeito aplicado: ${effectRow.name}`, { personagem: character.id, effectId: data.id });
       return data.id as string;
     },
 
@@ -271,7 +275,7 @@ function makeApi(
 
       const { error } = await service.from("battle_effects").delete().eq("id", input.efeitoId);
       if (error) throw error;
-      this.registrarLog("Efeito removido", { effectId: input.efeitoId });
+      registrarLog("Efeito removido", { effectId: input.efeitoId });
       return true;
     },
   };
@@ -362,7 +366,9 @@ Deno.serve(async (request) => {
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         console.error("Custom ability script failed:", event.id, event.script_key, event.event_type, message);
-        const nextStatus = event.attempts >= 5 ? "failed" : "pending";
+        // Do not immediately replay a script which may already have performed a partial action.
+        // Crashed workers can still be reclaimed from stale 'processing' after five minutes.
+        const nextStatus = "failed";
         const { error: updateError } = await service.from("ability_script_events")
           .update({ status: nextStatus, locked_at: null, error_message: message.slice(0, 2_000) })
           .eq("id", event.id);
