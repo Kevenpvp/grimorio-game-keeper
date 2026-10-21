@@ -7,14 +7,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { dispatchCustomAbilityScriptEvents } from "@/lib/ability-script-runtime";
-import { useDefs } from "@/lib/sheets";
+import { useDefs, useRaces } from "@/lib/sheets";
 import { parseAbilityEffects, useAbilities, useCharacterAbilities, useCharacterActiveEffects, useDamageTypes, type Ability, type AbilityEffectDefinition, type CharacterAbility } from "@/lib/abilities";
 import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
 import type { Json } from "@/integrations/supabase/types";
 
 type TargetOption = { id: string; name: string };
 
-function effectSummary(effect: AbilityEffectDefinition, defs: NonNullable<ReturnType<typeof useDefs>["data"]>, damageTypes: NonNullable<ReturnType<typeof useDamageTypes>["data"]>) {
+function effectSummary(effect: AbilityEffectDefinition, defs: NonNullable<ReturnType<typeof useDefs>["data"]>, damageTypes: NonNullable<ReturnType<typeof useDamageTypes>["data"]>, races: NonNullable<ReturnType<typeof useRaces>["data"]>) {
   const amount = effect.value_mode === "percent" ? `${effect.amount}%` : effect.effect_type === "damage_dealt" ? String(effect.amount) : (effect.effect_type === "mana_regeneration" || effect.effect_type === "mana_used") ? `${effect.amount} Mana` : `${effect.amount} pontos`;
   const polarity = effect.polarity === "buff" ? "+" : "−";
   if (effect.effect_type === "status") return `${effect.name}: ${polarity}${amount} em ${defs.find((d) => d.key === effect.attribute_key)?.label ?? effect.attribute_key}`;
@@ -46,6 +46,26 @@ function effectSummary(effect: AbilityEffectDefinition, defs: NonNullable<Return
       ? effect.until_combat_end ? "cura por rodada até o fim do combate" : `cura por rodada (${effect.duration} turnos)`
       : "cura instantânea";
     return `${effect.name}: ${timing}; ${parts.join(", ") || "sem opções configuradas"}${magic}`;
+  }
+  if (effect.effect_type === "damage_received") {
+    const amountText = effect.value_mode === "percent" ? `${effect.amount}%` : `${effect.amount} fixos`;
+    const scope = effect.damage_received_scope ?? "any";
+    if (scope === "magical") {
+      const selectedTypeIds = effect.damage_received_type_ids ?? [];
+      const selectedLevels = effect.damage_received_magic_levels ?? [];
+      const typeNames = selectedTypeIds.length === 0
+        ? "todos os tipos"
+        : selectedTypeIds.map((id) => damageTypes.find((type) => type.id === id)?.name ?? "tipo removido").join(", ");
+      const levels = selectedLevels.length === 0
+        ? "qualquer nível"
+        : selectedLevels.map((level) => level === "baixa" ? "baixo" : level === "media" ? "médio" : "alto").join(", ");
+      return `${effect.name}: aumenta dano mágico recebido (${typeNames}; nível ${levels}) em ${amountText}`;
+    }
+    if (scope === "race") {
+      const raceName = races.find((race) => race.id === effect.damage_received_race_id)?.name ?? "raça não selecionada";
+      return `${effect.name}: recebe ${amountText} a mais de qualquer dano causado pela raça ${raceName}`;
+    }
+    return `${effect.name}: aumenta dano ${scope === "physical" ? "físico" : "de qualquer tipo"} recebido em ${amountText}`;
   }
   if (effect.effect_type === "damage_reduction") {
     const selectedTypeIds = effect.damage_reduction_type_ids ?? (effect.damage_reduction_type_id ? [effect.damage_reduction_type_id] : []);
@@ -103,6 +123,7 @@ export function CharacterAbilitiesPanel({
   const { data: activeEffects = [] } = useCharacterActiveEffects(characterId, showActiveEffects);
   const { data: defs } = useDefs();
   const { data: damageTypes = [] } = useDamageTypes();
+  const { data: races = [] } = useRaces();
   const [targetId, setTargetId] = useState(characterId);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(true);
@@ -216,7 +237,7 @@ export function CharacterAbilitiesPanel({
                 {ability.can_activate && ability.effects.length > 0 && (
                   <div className="mt-2 space-y-1 border-t border-border pt-2 text-xs text-muted-foreground">
                     <div className="font-semibold">Efeitos ao ativar</div>
-                    {ability.effects.map((effect, index) => <div key={index}>{effectSummary(effect, defs ?? [], damageTypes)} · Destino: {effect.target_scope === "caster" ? "Caster" : effect.target_scope === "both" ? "Ambos" : "Alvo"}{effect.effect_type === "healing" && effect.healing_timing !== "per_turn" ? "" : ` · ${effect.until_combat_end ? "até o fim do combate" : `${effect.duration} turno(s)`}`}</div>)}
+                    {ability.effects.map((effect, index) => <div key={index}>{effectSummary(effect, defs ?? [], damageTypes, races)} · Destino: {effect.target_scope === "caster" ? "Caster" : effect.target_scope === "both" ? "Ambos" : "Alvo"}{effect.effect_type === "healing" && effect.healing_timing !== "per_turn" ? "" : ` · ${effect.until_combat_end ? "até o fim do combate" : `${effect.duration} turno(s)`}`}</div>)}
                   </div>
                 )}
                 {ability.passive_effects.length > 0 && (
