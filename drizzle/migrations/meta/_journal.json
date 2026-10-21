@@ -253,6 +253,13 @@
       "when": 1792760000000,
       "tag": "0035_effect_recipient_semantics_and_individual_effect_turns",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1792760400000,
+      "tag": "0036_restore_periodic_healing_and_scope_turns",
+      "breakpoints": true
     }
   ]
 }
