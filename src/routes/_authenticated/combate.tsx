@@ -102,7 +102,7 @@ const dice = (m: number) => `1d20+${m}`;
 function healthCondition(current: number, maximum: number) {
   if (current <= 0) return "Morto";
   const ratio = current / Math.max(1, maximum);
-  if (ratio > 0.7) return "Saudável";
+  if (ratio >= 0.7) return "Saudável";
   if (ratio > 0.3) return "Machucado";
   return "Crítico";
 }
@@ -110,7 +110,7 @@ function healthCondition(current: number, maximum: number) {
 function manaCondition(current: number, maximum: number) {
   if (current <= 0 || maximum <= 0) return "Sem Mana";
   const ratio = current / maximum;
-  if (ratio > 0.7) return "Cheia";
+  if (ratio >= 0.7) return "Cheia";
   if (ratio > 0.3) return "Mediana";
   return "Acabando";
 }
