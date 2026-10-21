@@ -27,6 +27,7 @@ export function DamageApplier({ target, battleId = null, sources = [] }: {
   const [damageTypeId, setDamageTypeId] = useState("");
   const [magicLevel, setMagicLevel] = useState<MagicLevel>("baixa");
   const [sourceCharacterId, setSourceCharacterId] = useState("");
+  const [criticalDamage, setCriticalDamage] = useState(false);
   const [applyingDamage, setApplyingDamage] = useState(false);
 
   const { data: damageTypes = [], isLoading: loadingTypes, error: typesError } = useQuery({
@@ -71,6 +72,7 @@ export function DamageApplier({ target, battleId = null, sources = [] }: {
       return;
     }
 
+    const criticalDamageForThisHit = criticalDamage;
     setApplyingDamage(true);
     try {
       const { data: runtimeResponse, error } = await supabase.functions.invoke("ability-runtime", {
@@ -84,6 +86,7 @@ export function DamageApplier({ target, battleId = null, sources = [] }: {
           _damage_values: values,
           _magic_level: needsMagic ? magicLevel : null,
           _source_character_id: sourceCharacterId || null,
+          _critical_damage: criticalDamageForThisHit,
         },
       });
       if (error) {
@@ -126,6 +129,7 @@ export function DamageApplier({ target, battleId = null, sources = [] }: {
         physical_reduction_percent?: number;
         magical_reduction_fixed?: number;
         magical_reduction_percent?: number;
+        critical_damage?: boolean;
       } } | null)?.damage_result;
       if (!result) {
         toast.error("O servidor não retornou o resultado do dano.");
@@ -173,8 +177,9 @@ export function DamageApplier({ target, battleId = null, sources = [] }: {
             ? reductionPart("Mitigação da metade física", physicalReductionFixed, physicalReductionPercent)
               + reductionPart(`Mitigação da metade mágica (${typeName}, grau ${magicLevel})`, magicalReductionFixed, magicalReductionPercent)
             : "";
+      const criticalSummary = result.critical_damage === true ? " ⚔️ DANO CRÍTICO ×2 aplicado." : "";
       toast.success(
-        `${target.name}: ${result.hits} golpe(s) de ${damageDescription}; ${defenseText}; ${result.total_damage} de dano total. HP: ${result.hp_before} → ${result.hp_after}.${sourceSummary}${reductionSummary}${hitSummary}`,
+        `${criticalSummary} ${target.name}: ${result.hits} golpe(s) de ${damageDescription}; ${defenseText}; ${result.total_damage} de dano total. HP: ${result.hp_before} → ${result.hp_after}.${sourceSummary}${reductionSummary}${hitSummary}`,
         { duration: 8000 },
       );
       const hookErrors = result.custom_script_hooks?.errors ?? [];
@@ -189,6 +194,7 @@ export function DamageApplier({ target, battleId = null, sources = [] }: {
       ]);
     } finally {
       setApplyingDamage(false);
+      setCriticalDamage(false);
     }
   }
 
@@ -270,6 +276,21 @@ export function DamageApplier({ target, battleId = null, sources = [] }: {
           <Input value={damageList} onChange={(e) => setDamageList(e.target.value)} placeholder="50, 35, 45, 86, 20, 10, 50" />
         </div>
       )}
+      <label className="flex cursor-pointer items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
+        <input
+          type="checkbox"
+          className="mt-1"
+          checked={criticalDamage}
+          disabled={applyingDamage}
+          onChange={(e) => setCriticalDamage(e.target.checked)}
+        />
+        <span>
+          <span className="block font-semibold text-amber-500">Dano Crítico — ×2 de dano final</span>
+          <span className="mt-0.5 block text-xs text-muted-foreground">
+            Dobra o dano após defesa, mitigação e modificadores normais. A opção é desmarcada automaticamente ao terminar a aplicação.
+          </span>
+        </span>
+      </label>
       <Button disabled={applyingDamage || (needsMagic && (!damageTypeId || damageTypes.length === 0))}
         onClick={() => void applyDamage()}>
         {damageKind === "physical" ? <Shield className="mr-1 h-4 w-4" /> :
