@@ -13,6 +13,7 @@ Cada arquivo exporta um objeto com qualquer subconjunto dos quatro métodos abai
 
 ### Argumento `contexto`
 
+- `contexto.idEvento`: identificador estável do evento, útil para logs e para evitar ações duplicadas em lógica customizada.
 - `contexto.evento`: nome do evento.
 - `contexto.habilidade`: `id`, `idNaFicha`, `nome` e `scriptKey`.
 - `contexto.caster`: `id`, `nome` e `nomeJogador` do personagem dono da habilidade.
@@ -69,4 +70,4 @@ As variáveis padrão da Edge Function do Supabase `SUPABASE_URL`, `SUPABASE_ANO
 
 ## Boas práticas
 
-Scripts são código confiável revisado no repositório. Não aceite nem execute o texto JavaScript digitado no banco ou por jogadores. Evite um script de efeito aplicado que sempre aplique outro efeito semelhante: isso pode criar uma cadeia de eventos. O runtime limita cada execução a cinco lotes de eventos; eventos que falharem ficam registrados na tabela `ability_script_events` para diagnóstico.
+Scripts são código confiável revisado no repositório. Não aceite nem execute o texto JavaScript digitado no banco ou por jogadores. Evite um script de efeito aplicado que sempre aplique outro efeito semelhante: isso pode criar uma cadeia de eventos. O runtime limita cada execução a cinco lotes de eventos; eventos que falharem ficam registrados como `failed` na tabela `ability_script_events` para diagnóstico. Como os scripts podem fazer várias ações, use `contexto.idEvento` para desenvolver lógica idempotente quando necessário.
