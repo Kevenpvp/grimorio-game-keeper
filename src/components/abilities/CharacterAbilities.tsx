@@ -78,7 +78,7 @@ export function CharacterAbilitiesPanel({
 }) {
   const qc = useQueryClient();
   const { data: loadout, isLoading } = useCharacterAbilities(characterId);
-  const { data: activeEffects = [] } = useCharacterActiveEffects(characterId);
+  const { data: activeEffects = [] } = useCharacterActiveEffects(characterId, showActiveEffects);
   const { data: defs } = useDefs();
   const { data: damageTypes = [] } = useDamageTypes();
   const [targetId, setTargetId] = useState(characterId);
