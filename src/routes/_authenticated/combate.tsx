@@ -99,22 +99,6 @@ function totalOf(def: AttributeDef, a: Attr | undefined, mods: Record<string, nu
 const diceMod = (mine: number, theirs: number) => Math.max(0, Math.floor((mine - theirs) / 10));
 const dice = (m: number) => `1d20+${m}`;
 
-function healthCondition(current: number, maximum: number) {
-  if (current <= 0) return "Morto";
-  const ratio = current / Math.max(1, maximum);
-  if (ratio >= 0.7) return "Saudável";
-  if (ratio > 0.3) return "Machucado";
-  return "Crítico";
-}
-
-function manaCondition(current: number, maximum: number) {
-  if (current <= 0 || maximum <= 0) return "Sem Mana";
-  const ratio = current / maximum;
-  if (ratio >= 0.7) return "Cheia";
-  if (ratio > 0.3) return "Mediana";
-  return "Acabando";
-}
-
 function HiddenResourceState({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded border border-border p-2 text-xs">
@@ -150,7 +134,7 @@ function scheduleCombatRefresh(queryClient: QueryClient, ...queryKeys: QueryKey[
   }, 150);
 }
 
-function useLiveBattles() {
+function useLiveBattles(isMaster: boolean, userId: string | undefined) {
   const qc = useQueryClient();
   useEffect(() => {
     const refreshBattles = () => scheduleCombatRefresh(qc, ["battles"]);
@@ -173,22 +157,55 @@ function useLiveBattles() {
   }, [qc]);
   return useQuery({
     queryKey: ["battles"],
+    enabled: !!userId,
     queryFn: async () => {
+      const masterSelection = "*, battle_participants(sort_order,turn_count, characters(id,name,player_name,photo_path,race_id,virtue_id,owner_id,race_physical_allocations,virtue_physical_allocations,race_physical_points_granted,virtue_physical_points_granted,body,sanity,character_attributes(attribute_key,current_value,max_value,points,bonus)))";
+      const playerSelection = "*, battle_participants(sort_order,turn_count, characters(id,name,player_name,photo_path,owner_id))";
       const { data, error } = await supabase
         .from("battles")
-        .select("*, battle_participants(sort_order,turn_count, characters(id,name,player_name,photo_path,race_id,virtue_id,owner_id,race_physical_allocations,virtue_physical_allocations,race_physical_points_granted,virtue_physical_points_granted,body,sanity,character_attributes(attribute_key,current_value,max_value,points,bonus)))")
+        .select(isMaster ? masterSelection : playerSelection)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return data;
+      if (isMaster || !userId) return data ?? [];
+
+      type PublicCharacter = { id: string; name: string; player_name: string; photo_path: string | null; owner_id: string | null };
+      type PublicParticipant = { characters: PublicCharacter | null; [key: string]: unknown };
+      type PublicBattle = { battle_participants?: PublicParticipant[]; [key: string]: unknown };
+      const publicBattles = (data ?? []) as unknown as PublicBattle[];
+      const ownIds = [...new Set(publicBattles.flatMap((row) =>
+        (row.battle_participants ?? [])
+          .map((participant) => participant.characters)
+          .filter((character): character is PublicCharacter => !!character && character.owner_id === userId)
+          .map((character) => character.id)
+      ))];
+
+      if (ownIds.length === 0) return data ?? [];
+
+      const { data: ownedCharacters, error: ownedError } = await supabase
+        .from("characters")
+        .select("id,name,player_name,photo_path,owner_id,race_id,virtue_id,race_physical_allocations,virtue_physical_allocations,race_physical_points_granted,virtue_physical_points_granted,body,sanity,character_attributes(attribute_key,current_value,max_value,points,bonus)")
+        .in("id", ownIds);
+      if (ownedError) throw ownedError;
+
+      const ownById = new Map((ownedCharacters ?? []).map((character) => [character.id, character]));
+      const hydrated = publicBattles.map((row) => ({
+        ...row,
+        battle_participants: (row.battle_participants ?? []).map((participant) => {
+          const character = participant.characters;
+          if (!character || character.owner_id !== userId) return participant;
+          return { ...participant, characters: ownById.get(character.id) ?? character };
+        }),
+      }));
+      return hydrated as unknown as typeof data;
     },
   });
 }
 
 function CombatPage() {
   const { data: me } = useMe();
-  const { data: battles, isLoading } = useLiveBattles();
-  const [sel, setSel] = useState<string | null>(null);
   const isMaster = !!me?.isMaster;
+  const { data: battles, isLoading } = useLiveBattles(isMaster, me?.user.id);
+  const [sel, setSel] = useState<string | null>(null);
   const list = (battles ?? []).filter((b) => isMaster || b.active);
   const battle = list.find((b) => b.id === sel) ?? list[0];
 
@@ -237,17 +254,37 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
   const [manaRegenSettings, setManaRegenSettings] = useState<Record<string, { mode: "percent" | "fixed"; amount: string }>>({});
   const [advancingTurnKeys, setAdvancingTurnKeys] = useState<Set<string>>(() => new Set());
   const fighters = useMemo(
-    () => battle.battle_participants.slice().sort((a, b) => a.sort_order - b.sort_order).map((p) => ({ ...(p.characters as Fighter), participant_turn_count: p.turn_count ?? 0 })).filter((f) => !!f.id),
+    () => battle.battle_participants.slice().sort((a, b) => a.sort_order - b.sort_order).map((p) => {
+      const character = p.characters as Fighter;
+      return { ...character, character_attributes: character?.character_attributes ?? [], participant_turn_count: p.turn_count ?? 0 };
+    }).filter((f) => !!f.id),
     [battle],
   );
   const fighterIds = useMemo(() => fighters.map((fighter) => fighter.id), [fighters]);
+  const visibleEffectCharacterIds = useMemo(
+    () => isMaster ? fighterIds : fighters.filter((fighter) => fighter.owner_id === userId).map((fighter) => fighter.id),
+    [isMaster, fighterIds, fighters, userId],
+  );
+  const { data: publicStates = [] } = useQuery({
+    queryKey: ["battle-character-public-states", battle.id],
+    enabled: !isMaster && !!battle.active,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("get_battle_character_public_states", { _battle_id: battle.id });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const publicStateByCharacter = useMemo(
+    () => new Map(publicStates.map((state) => [state.character_id, state])),
+    [publicStates],
+  );
   const { data: effects = [] } = useQuery({
-    queryKey: ["battle-effects", battle.id, fighterIds],
-    enabled: fighterIds.length > 0,
+    queryKey: ["battle-effects", battle.id, visibleEffectCharacterIds],
+    enabled: visibleEffectCharacterIds.length > 0,
     queryFn: async () => {
       const [battleResult, standaloneResult] = await Promise.all([
-        supabase.from("battle_effects").select("*").eq("battle_id", battle.id),
-        supabase.from("battle_effects").select("*").is("battle_id", null).in("character_id", fighterIds),
+        supabase.from("battle_effects").select("*").eq("battle_id", battle.id).in("character_id", visibleEffectCharacterIds),
+        supabase.from("battle_effects").select("*").is("battle_id", null).in("character_id", visibleEffectCharacterIds),
       ]);
       if (battleResult.error) throw battleResult.error;
       if (standaloneResult.error) throw standaloneResult.error;
@@ -434,10 +471,11 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
           const isOwnFighter = isMaster || f.owner_id === userId;
           const hp = f.character_attributes.find((a) => a.attribute_key === "hp");
           const mana = f.character_attributes.find((a) => a.attribute_key === "mana");
-          const hpMaximum = val(f, "hp");
-          const manaMaximum = val(f, "mana");
-          const hpCurrent = hp?.current_value ?? 0;
-          const manaCurrent = mana?.current_value ?? 0;
+          const hpMaximum = isOwnFighter ? val(f, "hp") : 0;
+          const manaMaximum = isOwnFighter ? val(f, "mana") : 0;
+          const hpCurrent = isOwnFighter ? hp?.current_value ?? 0 : 0;
+          const manaCurrent = isOwnFighter ? mana?.current_value ?? 0 : 0;
+          const publicState = publicStateByCharacter.get(f.id);
           return (
             <div key={f.id} className={cn("panel space-y-2 p-4", isActor && "border-gold ring-1 ring-gold", isTarget && "border-blood ring-1 ring-blood")}>
               <div className="flex gap-3">
@@ -451,14 +489,14 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
               </div>
               {isOwnFighter
                 ? <Bar label="HP" cur={hpCurrent} max={hpMaximum} tone="bg-blood" />
-                : <HiddenResourceState label="Estado" value={healthCondition(hpCurrent, hpMaximum)} />}
+                : <HiddenResourceState label="Estado" value={publicState?.hp_state ?? "Carregando..."} />}
               {isOwnFighter && defs.filter((d) => d.key !== "hp" && d.key !== "mana" && d.show_bar).map((d) => {
                 const attr = f.character_attributes.find((a) => a.attribute_key === d.key);
                 return <Bar key={d.key} label={d.label} cur={attr?.current_value ?? val(f, d.key)} max={val(f, d.key)} tone="bg-sky-500" />;
               })}
               {isOwnFighter
                 ? <Bar label="Mana" cur={manaCurrent} max={manaMaximum} tone="bg-arcane" />
-                : <HiddenResourceState label="Mana" value={manaCondition(manaCurrent, manaMaximum)} />}
+                : <HiddenResourceState label="Mana" value={publicState?.mana_state ?? "Carregando..."} />}
               <CharacterAbilitiesPanel characterId={f.id} characterName={f.name} mode="combat"
                 canUse={isMaster && battle.active} showActiveEffects={isOwnFighter} battleId={battle.id}
                 targets={fighters.map((target) => ({ id: target.id, name: target.name }))} />
