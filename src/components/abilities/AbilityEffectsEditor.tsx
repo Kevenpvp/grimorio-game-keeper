@@ -367,6 +367,19 @@ export function AbilityEffectsEditor({
                         ))}
                       </fieldset>
                     )}
+                    <label className="block space-y-1 text-xs">
+                      Nomes específicos na lista negra (separados por vírgula)
+                      <Input
+                        value={(effect.healing_debuff_name_blacklist ?? []).join(", ")}
+                        placeholder="Ex.: Envenenado, Lentidão, Paralisia"
+                        onChange={(e) => patch(index, {
+                          healing_debuff_name_blacklist: [...new Set(e.target.value.split(",").map((name) => name.trim()).filter(Boolean))],
+                        })}
+                      />
+                      <span className="text-[11px] text-muted-foreground">
+                        O nome é comparado com o nome do efeito, mesmo quando o sistema adiciona o nome da habilidade na frente.
+                      </span>
+                    </label>
                   </div>
 
                   <div className="grid gap-2 sm:grid-cols-2">
