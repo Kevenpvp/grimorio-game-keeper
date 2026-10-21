@@ -246,6 +246,13 @@
       "when": 1792677600001,
       "tag": "0034_both_ability_effect_target",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1792760000000,
+      "tag": "0035_effect_recipient_semantics_and_individual_effect_turns",
+      "breakpoints": true
     }
   ]
 }
