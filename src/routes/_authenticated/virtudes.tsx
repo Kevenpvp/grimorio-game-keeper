@@ -117,7 +117,7 @@ function VirtueEditor({ virtue, defs, isNew, onSaved }: { virtue: Virtue; defs: 
     const clean: Record<string, number> = {};
     for (const [key, value] of Object.entries(mods)) {
       const rounded = Math.round(value);
-      const normalized = key === "body" || key === "sanity" ? Math.max(-100, Math.min(100, rounded)) : rounded;
+      const normalized = key === "body" || key === "sanity" ? Math.max(-100, Math.min(0, rounded)) : rounded;
       if (normalized) clean[key] = normalized;
     }
     const { error } = await supabase.from("virtues").update({
