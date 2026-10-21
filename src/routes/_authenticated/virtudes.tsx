@@ -175,8 +175,8 @@ function VirtueEditor({ virtue, defs, isNew, onSaved }: { virtue: Virtue; defs: 
           {([{ key: "body", label: "Corpo inicial" }, { key: "sanity", label: "Sanidade inicial" }] as const).map((item) => (
             <div key={item.key} className="space-y-1">
               <Label>{item.label} (%)</Label>
-              <Input type="number" min={-100} max={100} step={1} className="tabular" value={mods[item.key] ?? 0}
-                onChange={(e) => setMods({ ...mods, [item.key]: Math.max(-100, Math.min(100, Number(e.target.value) || 0)) })} />
+              <Input type="number" min={-100} max={0} step={1} className="tabular" value={mods[item.key] ?? 0}
+                onChange={(e) => setMods({ ...mods, [item.key]: Math.max(-100, Math.min(0, Number(e.target.value) || 0)) })} />
             </div>
           ))}
         </div>
