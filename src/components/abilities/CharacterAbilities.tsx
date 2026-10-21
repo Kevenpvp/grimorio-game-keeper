@@ -65,7 +65,7 @@ function effectSummary(effect: AbilityEffectDefinition, defs: NonNullable<Return
 }
 
 export function CharacterAbilitiesPanel({
-  characterId, characterName, mode, canUse, battleId, targets = [],
+  characterId, characterName, mode, canUse, battleId, targets = [], showActiveEffects = true,
 }: {
   characterId: string;
   characterName: string;
@@ -73,6 +73,8 @@ export function CharacterAbilitiesPanel({
   canUse: boolean;
   battleId?: string;
   targets?: TargetOption[];
+  /** Hide the active runtime effects list when viewing another character in combat. */
+  showActiveEffects?: boolean;
 }) {
   const qc = useQueryClient();
   const { data: loadout, isLoading } = useCharacterAbilities(characterId);
@@ -143,7 +145,7 @@ export function CharacterAbilitiesPanel({
               </select>
             </label>
           )}
-          {activeEffects.length > 0 && (
+          {showActiveEffects && activeEffects.length > 0 && (
             <div className="space-y-1.5 border-b border-border pb-3">
               <div className="text-xs font-semibold text-muted-foreground">Efeitos ativos no personagem</div>
               <div className="flex flex-wrap gap-1.5">
