@@ -302,6 +302,13 @@
       "when": 1792779000000,
       "tag": "0042_seed_demonio_interno_script",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1792779300000,
+      "tag": "0043_atomic_custom_state_and_damage_adjustment",
+      "breakpoints": true
     }
   ]
 }
