@@ -2,12 +2,35 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Tables } from "@/integrations/supabase/types";
 import { supabase } from "@/integrations/supabase/client";
 
-export type AbilityEffectType = "status" | "regeneration" | "mana_regeneration" | "mana_used" | "no_regen_hp" | "no_regen_mana" | "magic_prohibition" | "stun" | "damage_dealt" | "damage_reduction" | "no_mana";
+export type AbilityEffectType = "status" | "regeneration" | "mana_regeneration" | "mana_used" | "no_regen_hp" | "no_regen_mana" | "magic_prohibition" | "stun" | "damage_dealt" | "damage_reduction" | "no_mana" | "healing";
 export type DamageScope = "any" | "physical" | "magical";
 export type DamageReductionScope = "physical" | "magical";
 export type DamageMagicLevel = "baixa" | "media" | "alta";
 export type DamageTypeOption = Pick<Tables<"damage_types">, "id" | "name">;
 export type AbilityEffectDefinition = {
+  /** Which character receives this effect when the ability is activated. */
+  target_scope?: "caster" | "target";
+  /** Instant restoration or a healing buff that ticks on each combat turn advance. */
+  healing_timing?: "instant" | "per_turn";
+  healing_hp_enabled?: boolean;
+  healing_hp_mode?: "fixed" | "percent";
+  healing_hp_amount?: number;
+  healing_mana_enabled?: boolean;
+  healing_mana_mode?: "fixed" | "percent";
+  healing_mana_amount?: number;
+  healing_body_enabled?: boolean;
+  healing_body_mode?: "fixed" | "percent";
+  healing_body_amount?: number;
+  healing_sanity_enabled?: boolean;
+  healing_sanity_mode?: "fixed" | "percent";
+  healing_sanity_amount?: number;
+  healing_remove_debuffs?: boolean;
+  healing_debuff_blacklist?: string[];
+  healing_reduce_debuff_turns_fixed?: number;
+  healing_reduce_debuff_turns_percent?: number;
+  /** Metadata reserved for future race interactions with healing magic. */
+  healing_damage_type_id?: string | null;
+  healing_magic_level?: DamageMagicLevel | null;
   name: string;
   effect_type: AbilityEffectType;
   attribute_key: string | null;
@@ -29,7 +52,7 @@ export type CharacterAbility = Omit<CharacterAbilityRow, "effects" | "passive_ef
 
 export function parseAbilityEffects(value: unknown): AbilityEffectDefinition[] {
   if (!Array.isArray(value)) return [];
-  const validTypes: AbilityEffectType[] = ["status", "regeneration", "mana_regeneration", "mana_used", "no_regen_hp", "no_regen_mana", "magic_prohibition", "stun", "damage_dealt", "damage_reduction", "no_mana"];
+  const validTypes: AbilityEffectType[] = ["status", "regeneration", "mana_regeneration", "mana_used", "no_regen_hp", "no_regen_mana", "magic_prohibition", "stun", "damage_dealt", "damage_reduction", "no_mana", "healing"];
   return value.flatMap((item): AbilityEffectDefinition[] => {
     if (!item || typeof item !== "object") return [];
     const raw = item as Record<string, unknown>;
@@ -62,6 +85,29 @@ export function parseAbilityEffects(value: unknown): AbilityEffectDefinition[] {
       damage_reduction_magic_level: null,
       damage_reduction_type_ids: damageReductionTypeIds,
       damage_reduction_magic_levels: damageReductionMagicLevels,
+      target_scope: raw.target_scope === "caster" ? "caster" : "target",
+      healing_timing: raw.healing_timing === "per_turn" ? "per_turn" : "instant",
+      healing_hp_enabled: raw.healing_hp_enabled === true,
+      healing_hp_mode: raw.healing_hp_mode === "percent" ? "percent" : "fixed",
+      healing_hp_amount: Math.max(0, Number.isFinite(Number(raw.healing_hp_amount)) ? Number(raw.healing_hp_amount) : 0),
+      healing_mana_enabled: raw.healing_mana_enabled === true,
+      healing_mana_mode: raw.healing_mana_mode === "percent" ? "percent" : "fixed",
+      healing_mana_amount: Math.max(0, Number.isFinite(Number(raw.healing_mana_amount)) ? Number(raw.healing_mana_amount) : 0),
+      healing_body_enabled: raw.healing_body_enabled === true,
+      healing_body_mode: raw.healing_body_mode === "percent" ? "percent" : "fixed",
+      healing_body_amount: Math.max(0, Number.isFinite(Number(raw.healing_body_amount)) ? Number(raw.healing_body_amount) : 0),
+      healing_sanity_enabled: raw.healing_sanity_enabled === true,
+      healing_sanity_mode: raw.healing_sanity_mode === "percent" ? "percent" : "fixed",
+      healing_sanity_amount: Math.max(0, Number.isFinite(Number(raw.healing_sanity_amount)) ? Number(raw.healing_sanity_amount) : 0),
+      healing_remove_debuffs: raw.healing_remove_debuffs === true,
+      healing_debuff_blacklist: Array.isArray(raw.healing_debuff_blacklist)
+        ? raw.healing_debuff_blacklist.filter((item): item is string => typeof item === "string")
+        : [],
+      healing_reduce_debuff_turns_fixed: Math.max(0, Math.floor(Number.isFinite(Number(raw.healing_reduce_debuff_turns_fixed)) ? Number(raw.healing_reduce_debuff_turns_fixed) : 0)),
+      healing_reduce_debuff_turns_percent: Math.max(0, Math.min(100, Number.isFinite(Number(raw.healing_reduce_debuff_turns_percent)) ? Number(raw.healing_reduce_debuff_turns_percent) : 0)),
+      healing_damage_type_id: typeof raw.healing_damage_type_id === "string" ? raw.healing_damage_type_id : null,
+      healing_magic_level: validMagicLevels.includes(raw.healing_magic_level as DamageMagicLevel)
+        ? raw.healing_magic_level as DamageMagicLevel : null,
     }];
   });
 }
@@ -136,6 +182,8 @@ export type ActiveCharacterEffect = {
   duration: number;
   duration_scope: string;
   source_character_ability_id: string | null;
+  target_character_id?: string | null;
+  effect_data?: import("@/integrations/supabase/types").Json;
   damage_reduction_scope?: DamageReductionScope;
   damage_reduction_type_id?: string | null;
   damage_reduction_magic_level?: DamageMagicLevel | null;
