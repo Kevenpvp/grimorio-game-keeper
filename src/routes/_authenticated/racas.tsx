@@ -110,7 +110,7 @@ function RaceEditor({ race, defs, isNew, onSaved }: { race: Race; defs: Attribut
     const clean: Record<string, number> = {};
     for (const [k, v] of Object.entries(mods)) {
       const rounded = Math.round(v);
-      const normalized = k === "body" || k === "sanity" ? Math.max(-100, Math.min(100, rounded)) : rounded;
+      const normalized = k === "body" || k === "sanity" ? Math.max(-100, Math.min(0, rounded)) : rounded;
       if (normalized) clean[k] = normalized;
     }
     const { error } = await supabase.from("races").update({
