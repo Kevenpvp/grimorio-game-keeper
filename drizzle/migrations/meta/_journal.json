@@ -337,6 +337,13 @@
       "when": 1792785600002,
       "tag": "0047_race_starting_effects",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1792785600003,
+      "tag": "0048_magic_healing_reversal",
+      "breakpoints": true
     }
   ]
 }
