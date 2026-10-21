@@ -26,6 +26,10 @@ const demonioInterno: AbilityScript = {
   },
 
   async "causou_dano"(context, api) {
+    // Demonio Interno only reflects when its owner deals physical damage.
+    // Non-physical attacks do not spend heat or pay the HP cost.
+    if (context.dano?.categoria !== "physical") return;
+
     const storedHeat = Math.max(0, Number(context.estado.dano_superaquecimento ?? 0) || 0);
     const hitValues = context.dano?.danoFinalPorGolpe;
     if (storedHeat <= 0 || !context.alvo || !context.dano || !hitValues?.length) return;
