@@ -529,7 +529,17 @@ async function runDamageScriptHooks(
       const api = makeApi(service, context, eventType === "causou_dano" ? async (values) => {
         const normalizedValues = values.map((value) => Math.round(value));
         const total = normalizedValues.reduce((sum, value) => sum + value, 0);
-        const delta = total - tracker.total;
+        // Recalculate HP from the pre-hit value, rather than applying a delta to
+        // zero-clamped HP. This also handles critical hits and overkill correctly.
+        const desiredHp = Math.max(0, tracker.hpBefore - total);
+        const { data: currentHpRow, error: currentHpError } = await service.from("character_attributes")
+          .select("current_value")
+          .eq("character_id", tracker.call.targetId)
+          .eq("attribute_key", "hp")
+          .maybeSingle();
+        if (currentHpError) throw currentHpError;
+        if (!currentHpRow) throw new Error("O alvo não possui atributo de HP.");
+        const delta = Number(currentHpRow.current_value) - desiredHp;
         const { data: nextHp, error } = await service.rpc("adjust_character_hp_for_custom_damage", {
           _character_id: tracker.call.targetId,
           _damage_delta: delta,
