@@ -351,6 +351,13 @@
       "when": 1792785600004,
       "tag": "0049_preserve_permanent_racial_effects",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1792785600005,
+      "tag": "0050_magic_healing_reversal_true_damage",
+      "breakpoints": true
     }
   ]
 }
