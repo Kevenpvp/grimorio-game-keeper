@@ -281,6 +281,13 @@
       "when": 1792771200000,
       "tag": "0039_character_photos_in_active_battles",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1792774800000,
+      "tag": "0040_custom_ability_script_events",
+      "breakpoints": true
     }
   ]
 }
