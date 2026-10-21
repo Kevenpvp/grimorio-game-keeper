@@ -213,8 +213,9 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
         onChange={setEndEffects}
         permanent={false}
         title="Efeitos quando a habilidade acaba"
-        description="Aplicados ao alvo quando todos os efeitos desta ativação terminarem."
+        description="Aplicados ao destino configurado quando todos os efeitos desta ativação terminarem."
         defs={defs}
+        allowPeriodicHealing={false}
       />}
       <AbilityEffectsEditor
         effects={passiveEffects}
@@ -223,6 +224,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
         title="Efeitos passivos"
         description="Aplicados continuamente a quem tiver esta habilidade na ficha."
         defs={defs}
+        allowHealing={false}
       />
       <div className="flex flex-wrap gap-2 border-t border-border pt-3">
         <Button disabled={busy} onClick={() => void save()}>{busy ? "Salvando..." : isNew ? "Salvar nova habilidade" : "Salvar habilidade"}</Button>
