@@ -116,7 +116,9 @@ function VirtueEditor({ virtue, defs, isNew, onSaved }: { virtue: Virtue; defs: 
     if (!name.trim()) { toast.error("Informe o nome"); return; }
     const clean: Record<string, number> = {};
     for (const [key, value] of Object.entries(mods)) {
-      if (Math.round(value)) clean[key] = Math.round(value);
+      const rounded = Math.round(value);
+      const normalized = key === "body" || key === "sanity" ? Math.max(-100, Math.min(100, rounded)) : rounded;
+      if (normalized) clean[key] = normalized;
     }
     const { error } = await supabase.from("virtues").update({
       name: name.trim(),
@@ -127,7 +129,12 @@ function VirtueEditor({ virtue, defs, isNew, onSaved }: { virtue: Virtue; defs: 
     }).eq("id", virtue.id);
     if (error) { toast.error(error.message); return; }
     toast.success("Virtude salva");
-    await qc.invalidateQueries({ queryKey: ["virtues"] });
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ["virtues"] }),
+      qc.invalidateQueries({ queryKey: ["character"] }),
+      qc.invalidateQueries({ queryKey: ["characters"] }),
+      qc.invalidateQueries({ queryKey: ["my-character"] }),
+    ]);
     onSaved();
   }
 
@@ -157,6 +164,21 @@ function VirtueEditor({ virtue, defs, isNew, onSaved }: { virtue: Virtue; defs: 
         <div className="space-y-1.5 sm:col-span-2">
           <Label>Descrição</Label>
           <Textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
+        </div>
+      </div>
+      <div className="space-y-3">
+        <div>
+          <Label className="text-muted-foreground">Modificadores iniciais de Corpo e Sanidade</Label>
+          <p className="mt-1 text-xs text-muted-foreground">Use valores negativos para começar abaixo de 100%. Ex.: -10 faz o personagem começar com 90%. Ao mudar a virtude, a diferença é ajustada sem zerar o dano já sofrido.</p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {([{ key: "body", label: "Corpo inicial" }, { key: "sanity", label: "Sanidade inicial" }] as const).map((item) => (
+            <div key={item.key} className="space-y-1">
+              <Label>{item.label} (%)</Label>
+              <Input type="number" min={-100} max={100} step={1} className="tabular" value={mods[item.key] ?? 0}
+                onChange={(e) => setMods({ ...mods, [item.key]: Math.max(-100, Math.min(100, Number(e.target.value) || 0)) })} />
+            </div>
+          ))}
         </div>
       </div>
       <div>
