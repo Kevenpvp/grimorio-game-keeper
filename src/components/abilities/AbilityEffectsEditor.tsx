@@ -117,6 +117,19 @@ export function AbilityEffectsEditor({
         const selectedReductionMagicLevels = effect.damage_reduction_magic_levels ?? (effect.damage_reduction_magic_level ? [effect.damage_reduction_magic_level] : []);
         const needsAttribute = effect.effect_type === "status" || effect.effect_type === "regeneration";
         const needsValue = needsAttribute || effect.effect_type === "mana_regeneration" || effect.effect_type === "mana_used" || effect.effect_type === "damage_dealt" || isDamageReduction;
+        function patchHealingOption(
+          resourceKey: "hp" | "mana" | "body" | "sanity",
+          field: "enabled" | "mode" | "amount",
+          value: boolean | string | number,
+        ) {
+          const keys = {
+            hp: { enabled: "healing_hp_enabled", mode: "healing_hp_mode", amount: "healing_hp_amount" },
+            mana: { enabled: "healing_mana_enabled", mode: "healing_mana_mode", amount: "healing_mana_amount" },
+            body: { enabled: "healing_body_enabled", mode: "healing_body_mode", amount: "healing_body_amount" },
+            sanity: { enabled: "healing_sanity_enabled", mode: "healing_sanity_mode", amount: "healing_sanity_amount" },
+          } as const;
+          patch(index, { [keys[resourceKey][field]]: value } as Partial<AbilityEffectDefinition>);
+        }
         return (
           <div key={index} className="space-y-3 rounded-md border border-border bg-muted/20 p-3">
             <div className="flex items-center gap-2">
@@ -256,6 +269,133 @@ export function AbilityEffectsEditor({
                   <p className="self-end text-xs text-muted-foreground sm:col-span-2">Reduz o dano recebido depois da defesa correspondente. O valor fixo é aplicado primeiro e depois a porcentagem. Em dano híbrido, a redução atua apenas na metade compatível.</p>
                 </>
               )}
+              {isHealing && allowHealing && (
+                <fieldset className="space-y-3 rounded-md border border-border p-3 sm:col-span-2">
+                  <legend className="px-1 text-sm font-semibold text-gold">Configuração da cura</legend>
+                  <label className="block space-y-1 text-xs font-medium">
+                    Aplicação da cura
+                    <select aria-label="Modo de aplicação da cura" className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                      value={effect.healing_timing ?? "instant"}
+                      disabled={!allowPeriodicHealing}
+                      onChange={(e) => patch(index, { healing_timing: e.target.value as "instant" | "per_turn" })}>
+                      <option value="instant">Cura instantânea ao ativar</option>
+                      {allowPeriodicHealing && <option value="per_turn">Buff: curar a cada turno</option>}
+                    </select>
+                  </label>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {([
+                      { key: "hp", label: "HP", enabled: effect.healing_hp_enabled ?? false, mode: effect.healing_hp_mode ?? "fixed", amount: effect.healing_hp_amount ?? 0 },
+                      { key: "mana", label: "Mana", enabled: effect.healing_mana_enabled ?? false, mode: effect.healing_mana_mode ?? "fixed", amount: effect.healing_mana_amount ?? 0 },
+                      { key: "body", label: "Corpo", enabled: effect.healing_body_enabled ?? false, mode: effect.healing_body_mode ?? "fixed", amount: effect.healing_body_amount ?? 0 },
+                      { key: "sanity", label: "Sanidade", enabled: effect.healing_sanity_enabled ?? false, mode: effect.healing_sanity_mode ?? "fixed", amount: effect.healing_sanity_amount ?? 0 },
+                    ] as const).map((resource) => (
+                      <div key={resource.key} className="space-y-2 rounded-md border border-border p-3">
+                        <label className="flex items-center gap-2 text-sm font-medium">
+                          <input type="checkbox" checked={resource.enabled}
+                            onChange={(e) => patchHealingOption(resource.key, "enabled", e.target.checked)} />
+                          Curar {resource.label}
+                        </label>
+                        {resource.enabled && (
+                          <div className="grid grid-cols-2 gap-2">
+                            <label className="space-y-1 text-xs">
+                              Modo
+                              <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                                value={resource.mode}
+                                onChange={(e) => patchHealingOption(resource.key, "mode", e.target.value)}>
+                                <option value="fixed">{resource.key === "body" || resource.key === "sanity" ? "Pontos percentuais" : "Fixo"}</option>
+                                <option value="percent">{resource.key === "body" || resource.key === "sanity" ? "% do que falta" : "% do máximo"}</option>
+                              </select>
+                            </label>
+                            <label className="space-y-1 text-xs">
+                              Valor ({resource.mode === "percent" ? "%" : resource.key === "body" || resource.key === "sanity" ? "pontos %" : "fixo"})
+                              <Input type="number" min="0" max={resource.mode === "percent" ? 100 : undefined}
+                                value={resource.amount}
+                                onChange={(e) => patchHealingOption(resource.key, "amount", Math.max(0, Number(e.target.value) || 0))} />
+                            </label>
+                          </div>
+                        )}
+                        {(resource.key === "body" || resource.key === "sanity") && resource.enabled && (
+                          <p className="text-[11px] text-muted-foreground">
+                            Fixo adiciona pontos percentuais; porcentagem recupera essa fração do que falta até 100%.
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="space-y-2 rounded-md border border-border p-3">
+                    <label className="flex items-center gap-2 text-sm font-medium">
+                      <input type="checkbox" checked={effect.healing_remove_debuffs ?? false}
+                        onChange={(e) => patch(index, { healing_remove_debuffs: e.target.checked })} />
+                      Remover debuffs do personagem escolhido
+                    </label>
+                    <label className="block space-y-1 text-xs">
+                      Reduzir duração de debuffs — turnos fixos
+                      <Input type="number" min="0" step="1"
+                        value={effect.healing_reduce_debuff_turns_fixed ?? 0}
+                        onChange={(e) => patch(index, { healing_reduce_debuff_turns_fixed: Math.max(0, Math.floor(Number(e.target.value) || 0)) })} />
+                    </label>
+                    <label className="block space-y-1 text-xs">
+                      Reduzir duração de debuffs — porcentagem
+                      <Input type="number" min="0" max="100"
+                        value={effect.healing_reduce_debuff_turns_percent ?? 0}
+                        onChange={(e) => patch(index, { healing_reduce_debuff_turns_percent: Math.max(0, Math.min(100, Number(e.target.value) || 0)) })} />
+                    </label>
+                    {((effect.healing_remove_debuffs ?? false) || (effect.healing_reduce_debuff_turns_fixed ?? 0) > 0 || (effect.healing_reduce_debuff_turns_percent ?? 0) > 0) && (
+                      <fieldset className="space-y-2">
+                        <legend className="text-xs font-medium">Lista negra — debuffs que não podem ser removidos nem reduzidos</legend>
+                        {([
+                          ["status", "Buff/debuff de atributo"],
+                          ["regeneration", "Modificador de regeneração"],
+                          ["mana_used", "Modificador de Mana usada"],
+                          ["no_regen_hp", "Bloqueio de regeneração de HP"],
+                          ["no_regen_mana", "Bloqueio de regeneração de Mana"],
+                          ["magic_prohibition", "Proibição de magia"],
+                          ["no_mana", "Sem Mana"],
+                          ["stun", "Stun"],
+                          ["damage_dealt", "Modificador de dano causado"],
+                        ] as const).map(([type, label]) => (
+                          <label key={type} className="flex items-center gap-2 text-xs">
+                            <input type="checkbox" checked={(effect.healing_debuff_blacklist ?? []).includes(type)}
+                              onChange={(e) => {
+                                const current = effect.healing_debuff_blacklist ?? [];
+                                const next = e.target.checked ? [...current, type] : current.filter((item) => item !== type);
+                                patch(index, { healing_debuff_blacklist: next });
+                              }} />
+                            {label}
+                          </label>
+                        ))}
+                      </fieldset>
+                    )}
+                  </div>
+
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <label className="space-y-1 text-xs font-medium">
+                      Tipo mágico da cura (metadado para regras futuras)
+                      <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                        value={effect.healing_damage_type_id ?? ""}
+                        onChange={(e) => patch(index, { healing_damage_type_id: e.target.value || null })}>
+                        <option value="">Não definido</option>
+                        {damageTypes.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}
+                      </select>
+                    </label>
+                    <label className="space-y-1 text-xs font-medium">
+                      Grau da magia
+                      <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                        value={effect.healing_magic_level ?? "baixa"}
+                        onChange={(e) => patch(index, { healing_magic_level: e.target.value as DamageMagicLevel })}>
+                        <option value="baixa">Baixa</option>
+                        <option value="media">Média</option>
+                        <option value="alta">Alta</option>
+                      </select>
+                    </label>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    HP/Mana em porcentagem usam o máximo atual. Em Corpo/Sanidade, o modo porcentagem restaura parte do que falta até 100%.
+                    {effect.healing_timing === "per_turn" ? " A restauração configurada acontece a cada avanço de turno enquanto o buff estiver ativo; a remoção/redução de debuffs é aplicada uma vez ao ativar." : ""}
+                  </p>
+                </fieldset>
+              )}
               {needsAttribute && (
                 <select aria-label="Atributo afetado" className="h-9 min-w-0 rounded-md border border-input bg-background px-2 text-sm" value={effect.attribute_key ?? (effect.effect_type === "regeneration" ? "hp" : "strength")}
                   onChange={(e) => patch(index, { attribute_key: e.target.value })}>
@@ -281,9 +421,9 @@ export function AbilityEffectsEditor({
                   </label>
                 </>
               )}
-              {!isPermanent && (
+              {!isPermanent && (!isHealing || (effect.healing_timing ?? "instant") === "per_turn") && (
                 <label className="space-y-1 text-xs font-medium">
-                  Duração do efeito (turnos)
+                  {isHealing ? "Duração do buff de cura (turnos)" : "Duração do efeito (turnos)"}
                   <Input type="number" min="1" value={effect.duration} onChange={(e) => patch(index, { duration: Math.max(1, Math.floor(Number(e.target.value) || 1)) })} />
                 </label>
               )}
