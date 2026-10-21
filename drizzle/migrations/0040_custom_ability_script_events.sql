@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS public.ability_script_events (
   ability_id uuid REFERENCES public.abilities(id) ON DELETE SET NULL,
   character_ability_id uuid REFERENCES public.character_abilities(id) ON DELETE SET NULL,
   battle_id uuid REFERENCES public.battles(id) ON DELETE SET NULL,
-  character_id uuid REFERENCES public.characters(id) ON DELETE CASCADE,
+  character_id uuid NOT NULL REFERENCES public.characters(id) ON DELETE CASCADE,
   target_character_id uuid REFERENCES public.characters(id) ON DELETE SET NULL,
   effect_id uuid,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(payload) = 'object'),
