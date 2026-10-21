@@ -672,7 +672,7 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
               {expanded && <div className="mt-2 border-t border-border pt-2 text-xs" role="status">
                 <div className="font-semibold">{effect.name}</div>
                 <div className="mt-1">{details}</div>
-                <div className="mt-1 text-muted-foreground">Duração restante: {effect.duration} turno(s). {effect.duration_scope === "individual" ? "Diminui no turno individual deste personagem." : "Diminui no avanço do turno geral."}</div>
+                <div className="mt-1 text-muted-foreground">Duração restante: {effect.duration} turno(s). Diminui quando o turno individual deste personagem avança ou no avanço do turno geral.</div>
               </div>}
             </div>;
           })}
