@@ -99,6 +99,31 @@ function totalOf(def: AttributeDef, a: Attr | undefined, mods: Record<string, nu
 const diceMod = (mine: number, theirs: number) => Math.max(0, Math.floor((mine - theirs) / 10));
 const dice = (m: number) => `1d20+${m}`;
 
+function healthCondition(current: number, maximum: number) {
+  if (current <= 0) return "Morto";
+  const ratio = current / Math.max(1, maximum);
+  if (ratio > 0.7) return "Saudável";
+  if (ratio > 0.3) return "Machucado";
+  return "Crítico";
+}
+
+function manaCondition(current: number, maximum: number) {
+  if (current <= 0 || maximum <= 0) return "Sem Mana";
+  const ratio = current / maximum;
+  if (ratio > 0.7) return "Cheia";
+  if (ratio > 0.3) return "Mediana";
+  return "Acabando";
+}
+
+function HiddenResourceState({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded border border-border p-2 text-xs">
+      <span className="text-muted-foreground">{label}</span>
+      <div className="font-semibold">{value}</div>
+    </div>
+  );
+}
+
 // Coalesce Realtime notifications and explicit post-action refreshes into one batch.
 // A single turn can update many effect rows, so invalidating on every row causes repeated refetches.
 type PendingCombatRefresh = {
@@ -406,8 +431,13 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
         {fighters.map((f) => {
           const isActor = f.id === actor?.id;
           const isTarget = selectedTargetIds.includes(f.id) && f.id !== actor?.id;
+          const isOwnFighter = isMaster || f.owner_id === userId;
           const hp = f.character_attributes.find((a) => a.attribute_key === "hp");
           const mana = f.character_attributes.find((a) => a.attribute_key === "mana");
+          const hpMaximum = val(f, "hp");
+          const manaMaximum = val(f, "mana");
+          const hpCurrent = hp?.current_value ?? 0;
+          const manaCurrent = mana?.current_value ?? 0;
           return (
             <div key={f.id} className={cn("panel space-y-2 p-4", isActor && "border-gold ring-1 ring-gold", isTarget && "border-blood ring-1 ring-blood")}>
               <div className="flex gap-3">
@@ -419,24 +449,28 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                   {isTarget && <div className="text-xs font-semibold text-blood">◎ Alvo selecionado</div>}
                 </div>
               </div>
-              <Bar label="HP" cur={hp?.current_value ?? 0} max={val(f, "hp")} tone="bg-blood" />
-              {defs.filter((d) => d.key !== "hp" && d.key !== "mana" && d.show_bar).map((d) => {
+              {isOwnFighter
+                ? <Bar label="HP" cur={hpCurrent} max={hpMaximum} tone="bg-blood" />
+                : <HiddenResourceState label="Estado" value={healthCondition(hpCurrent, hpMaximum)} />}
+              {isOwnFighter && defs.filter((d) => d.key !== "hp" && d.key !== "mana" && d.show_bar).map((d) => {
                 const attr = f.character_attributes.find((a) => a.attribute_key === d.key);
                 return <Bar key={d.key} label={d.label} cur={attr?.current_value ?? val(f, d.key)} max={val(f, d.key)} tone="bg-sky-500" />;
               })}
-              <Bar label="Mana" cur={mana?.current_value ?? 0} max={val(f, "mana")} tone="bg-arcane" />
+              {isOwnFighter
+                ? <Bar label="Mana" cur={manaCurrent} max={manaMaximum} tone="bg-arcane" />
+                : <HiddenResourceState label="Mana" value={manaCondition(manaCurrent, manaMaximum)} />}
               <CharacterAbilitiesPanel characterId={f.id} characterName={f.name} mode="combat"
-                canUse={battle.active && (isMaster || f.owner_id === userId)} battleId={battle.id}
+                canUse={isMaster && battle.active} showActiveEffects={isOwnFighter} battleId={battle.id}
                 targets={fighters.map((target) => ({ id: target.id, name: target.name }))} />
-              <div className="grid grid-cols-2 gap-2 text-xs">
+              {isOwnFighter && <div className="grid grid-cols-2 gap-2 text-xs">
                 <div className="rounded border border-border p-2"><span className="text-muted-foreground">Corpo</span><div className="font-semibold">{f.body}%</div></div>
                 <div className="rounded border border-border p-2"><span className="text-muted-foreground">Sanidade</span><div className="font-semibold">{f.sanity}%</div></div>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-xs">
+              </div>}
+              {isOwnFighter && <div className="grid grid-cols-2 gap-2 text-xs">
                 {defs.filter((d) => !d.show_bar && !["hp", "mana"].includes(d.key)).map((d) => (
                   <div key={d.key} className="rounded border border-border p-2"><span className="text-muted-foreground">{d.label}</span><div className="font-semibold">{val(f, d.key)}</div></div>
                 ))}
-              </div>
+              </div>}
               {isMaster && <CombatResourceEditor fighter={f} val={val} effects={effects.filter(e => e.character_id === f.id)} defs={defs} onAddEffect={(effect) => void addEffect(f.id, effect)} onRemoveEffect={async (id) => { const { error } = await supabase.from("battle_effects").delete().eq("id", id); if (error) toast.error(error.message); await qc.invalidateQueries({ queryKey: ["battle-effects", battle.id] }); await qc.invalidateQueries({ queryKey: ["character-active-effects"] }); }} hpRegenBlocked={blocked(f.id, "no_regen_hp")} manaRegenBlocked={blocked(f.id, "no_regen_mana") || blocked(f.id, "no_mana")} manaRegenMode={manaRegenSettings[f.id]?.mode ?? "percent"} manaRegenAmount={manaRegenSettings[f.id]?.amount ?? "0"} onManaRegenModeChange={(mode) => setManaRegen(f.id, { mode })} onManaRegenAmountChange={(amount) => setManaRegen(f.id, { amount })} /> }
               <div className="flex flex-wrap items-center justify-between gap-2 rounded border border-border p-2">
                 <span className="text-xs text-muted-foreground">Turnos individuais: {f.participant_turn_count ?? 0}</span>
