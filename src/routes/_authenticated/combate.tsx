@@ -31,7 +31,7 @@ export const Route = createFileRoute("/_authenticated/combate")({
 });
 
 type Attr = { attribute_key: string; current_value: number; max_value: number; points: number; bonus: number };
-type BattleEffect = { id: string; battle_id: string | null; character_id: string; name: string; effect_type: 'status' | 'regeneration' | 'mana_used' | 'no_regen_hp' | 'no_regen_mana' | 'magic_prohibition' | 'no_mana' | 'stun' | 'damage_dealt' | 'damage_reduction'; attribute_key: string | null; polarity: 'buff' | 'debuff'; value_mode: 'percent' | 'fixed'; amount: number; duration: number; duration_scope: 'individual' | 'global'; damage_scope?: 'any' | 'physical' | 'magical'; damage_reduction_scope?: 'physical' | 'magical'; damage_reduction_type_id?: string | null; damage_reduction_magic_level?: 'baixa' | 'media' | 'alta' | null; damage_reduction_type_ids?: string[] | null; damage_reduction_magic_levels?: ('baixa' | 'media' | 'alta')[] | null; source_character_ability_id?: string | null; effect_group_id?: string | null; is_end_effect?: boolean };
+type BattleEffect = { id: string; battle_id: string | null; character_id: string; name: string; effect_type: 'status' | 'regeneration' | 'mana_used' | 'no_regen_hp' | 'no_regen_mana' | 'magic_prohibition' | 'no_mana' | 'stun' | 'damage_dealt' | 'damage_reduction' | 'healing'; attribute_key: string | null; polarity: 'buff' | 'debuff'; value_mode: 'percent' | 'fixed'; amount: number; duration: number; duration_scope: 'individual' | 'global'; effect_data?: Json; damage_scope?: 'any' | 'physical' | 'magical'; damage_reduction_scope?: 'physical' | 'magical'; damage_reduction_type_id?: string | null; damage_reduction_magic_level?: 'baixa' | 'media' | 'alta' | null; damage_reduction_type_ids?: string[] | null; damage_reduction_magic_levels?: ('baixa' | 'media' | 'alta')[] | null; source_character_ability_id?: string | null; effect_group_id?: string | null; is_end_effect?: boolean };
 function damageReductionSummary(effect: BattleEffect, damageTypes: { id: string; name: string }[]) {
   const selectedTypeIds = effect.damage_reduction_type_ids ?? (effect.damage_reduction_type_id ? [effect.damage_reduction_type_id] : []);
   const selectedLevels = effect.damage_reduction_magic_levels ?? (effect.damage_reduction_magic_level ? [effect.damage_reduction_magic_level] : []);
@@ -43,6 +43,41 @@ function damageReductionSummary(effect: BattleEffect, damageTypes: { id: string;
     : selectedLevels.map((level) => level === "baixa" ? "baixa" : level === "media" ? "média" : "alta").join(", ");
   const scope = effect.damage_reduction_scope === "magical" ? `mágica (${typeNames}; grau(s) ${levelNames})` : "física";
   return `Mitigação ${scope}: ${effect.value_mode === "percent" ? `${effect.amount}%` : `${effect.amount} fixos`} reduzidos depois da defesa`;
+}
+
+
+function periodicHealingSummary(effect: BattleEffect) {
+  const raw = effect.effect_data;
+  const config: Record<string, Json | undefined> =
+    raw && typeof raw === "object" && !Array.isArray(raw)
+      ? raw as Record<string, Json | undefined>
+      : {};
+  const parts: string[] = [];
+  const addResource = (
+    enabledKey: string,
+    modeKey: string,
+    amountKey: string,
+    label: string,
+    fixedLabel: string,
+    percentLabel: string,
+  ) => {
+    if (config[enabledKey] !== true) return;
+    const numericAmount = Number(config[amountKey] ?? 0);
+    const safeAmount = Number.isFinite(numericAmount) ? numericAmount : 0;
+    const mode = config[modeKey] === "percent" ? "percent" : "fixed";
+    const amount = mode === "percent" ? `${safeAmount}% ${percentLabel}` : `${safeAmount} ${fixedLabel}`;
+    parts.push(`${label}: +${amount} por rodada`);
+  };
+
+  addResource("healing_hp_enabled", "healing_hp_mode", "healing_hp_amount", "HP", "fixos", "do máximo");
+  addResource("healing_mana_enabled", "healing_mana_mode", "healing_mana_amount", "Mana", "fixos", "do máximo");
+  addResource("healing_body_enabled", "healing_body_mode", "healing_body_amount", "Corpo", "pontos percentuais", "do que falta");
+  addResource("healing_sanity_enabled", "healing_sanity_mode", "healing_sanity_amount", "Sanidade", "pontos percentuais", "do que falta");
+
+  if (parts.length === 0) {
+    return "Cura por rodada: nenhum recurso de HP, Mana, Corpo ou Sanidade configurado";
+  }
+  return `Cura por rodada: ${parts.join("; ")}`;
 }
 
 type Fighter = {
@@ -622,7 +657,7 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
             const details = [
               effect.effect_type === "status" ? `${effect.polarity === "buff" ? "Buff" : "Debuff"} de ${defs.find(d => d.key === effect.attribute_key)?.label ?? effect.attribute_key} (${effect.value_mode === "percent" ? `${effect.polarity === "debuff" ? "-" : "+"}${effect.amount}%` : `${effect.polarity === "debuff" ? "-" : "+"}${effect.amount} pontos`})` :
               effect.effect_type === "regeneration" ? `${effect.polarity === "buff" ? "Buff" : "Debuff"} de regeneração de ${effect.attribute_key === "hp" ? "HP" : "Mana"}: ${effect.value_mode === "percent" ? `${effect.polarity === "debuff" ? "-" : "+"}${effect.amount}%` : `${effect.polarity === "debuff" ? "-" : "+"}${effect.amount} fixos`}` :
-              effect.effect_type === "no_regen_hp" ? "Impede regeneração de HP" :
+              effect.effect_type === "healing" ? periodicHealingSummary(effect) : effect.effect_type === "no_regen_hp" ? "Impede regeneração de HP" :
               effect.effect_type === "no_regen_mana" ? "Impede regeneração de Mana" : effect.effect_type === "no_mana" ? "Sem Mana: Mana zerada e habilidades mágicas/que usam Mana bloqueadas" : effect.effect_type === "damage_reduction" ? damageReductionSummary(effect, damageTypes) : effect.effect_type === "mana_used" ? `Mana usada ${effect.polarity === "buff" ? "−" : "+"}${effect.value_mode === "percent" ? `${effect.amount}%` : `${effect.amount} Mana`}` : effect.effect_type === "damage_dealt" ? `${effect.polarity === "buff" ? "Buff" : "Debuff"} de dano ${effect.damage_scope === "physical" ? "físico" : effect.damage_scope === "magical" ? "mágico" : "qualquer dano"}: ${effect.polarity === "debuff" ? "-" : "+"}${effect.value_mode === "percent" ? `${effect.amount}%` : `${effect.amount} de dano`}` : effect.effect_type === "magic_prohibition" ? "Proibição de magia: não pode usar habilidades que consomem Mana" : "Stun (apenas visual)"
             ];
             const expanded = expandedEffectId === effect.id;
@@ -637,7 +672,7 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
               {expanded && <div className="mt-2 border-t border-border pt-2 text-xs" role="status">
                 <div className="font-semibold">{effect.name}</div>
                 <div className="mt-1">{details}</div>
-                <div className="mt-1 text-muted-foreground">Duração restante: {effect.duration} turno(s). A duração diminui em qualquer avanço de turno, individual ou geral.</div>
+                <div className="mt-1 text-muted-foreground">Duração restante: {effect.duration} turno(s). {effect.duration_scope === "individual" ? "Diminui no turno individual deste personagem." : "Diminui no avanço do turno geral."}</div>
               </div>}
             </div>;
           })}
