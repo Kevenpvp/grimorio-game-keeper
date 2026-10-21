@@ -5,12 +5,13 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { traitMods, useDefs, useRaces, useVirtues, type AttributeDef, type Character, type Trait } from "@/lib/sheets";
-import { useAbilities } from "@/lib/abilities";
+import { parseAbilityEffects, useAbilities, type AbilityEffectDefinition } from "@/lib/abilities";
 
-export function ModsList({ race, defs, abilities = [] }: {
+export function ModsList({ race, defs, abilities = [], startingEffects = [] }: {
   race: Trait;
   defs: AttributeDef[];
   abilities?: { id: string; name: string }[];
+  startingEffects?: AbilityEffectDefinition[];
 }) {
   const mods = traitMods(race);
   const entries = defs.filter((d) => mods[d.key]);
@@ -44,7 +45,12 @@ export function ModsList({ race, defs, abilities = [] }: {
           Habilidade inicial: {ability.name}
         </span>
       ))}
-      {!entries.length && body === 0 && sanity === 0 && !race.bonus_points && !race.physical_bonus_points && !abilities.length && (
+      {startingEffects.map((effect, index) => (
+        <span key={index} className={`rounded px-2 py-0.5 ${effect.polarity === "debuff" ? "bg-destructive/10 text-destructive" : "bg-emerald-500/10 text-emerald-500"}`}>
+          {effect.polarity === "debuff" ? "Debuff inicial" : "Buff inicial"}: {effect.name}
+        </span>
+      ))}
+      {!entries.length && body === 0 && sanity === 0 && !race.bonus_points && !race.physical_bonus_points && !abilities.length && !startingEffects.length && (
         <span className="text-muted-foreground">Sem modificadores</span>
       )}
     </div>
@@ -188,6 +194,7 @@ export function RacePicker({ character, isMaster }: { character: Character; isMa
                     race={race}
                     defs={defs}
                     abilities={abilities.filter((ability) => raceAbilityRows.some((row) => row.race_id === race.id && row.ability_id === ability.id))}
+                    startingEffects={parseAbilityEffects(race.starting_effects)}
                   /></div>
                 </article>
               );
