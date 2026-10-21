@@ -9,7 +9,7 @@ export type DamageMagicLevel = "baixa" | "media" | "alta";
 export type DamageTypeOption = Pick<Tables<"damage_types">, "id" | "name">;
 export type AbilityEffectDefinition = {
   /** Which character receives this effect when the ability is activated. */
-  target_scope?: "caster" | "target";
+  target_scope?: "caster" | "target" | "both";
   /** Instant restoration or a healing buff that ticks on each combat turn advance. */
   healing_timing?: "instant" | "per_turn";
   healing_hp_enabled?: boolean;
@@ -87,7 +87,7 @@ export function parseAbilityEffects(value: unknown): AbilityEffectDefinition[] {
       damage_reduction_magic_level: null,
       damage_reduction_type_ids: damageReductionTypeIds,
       damage_reduction_magic_levels: damageReductionMagicLevels,
-      target_scope: raw.target_scope === "caster" ? "caster" : "target",
+      target_scope: raw.target_scope === "caster" || raw.target_scope === "both" ? raw.target_scope : "target",
       healing_timing: raw.healing_timing === "per_turn" ? "per_turn" : "instant",
       healing_hp_enabled: raw.healing_hp_enabled === true,
       healing_hp_mode: raw.healing_hp_mode === "percent" ? "percent" : "fixed",
