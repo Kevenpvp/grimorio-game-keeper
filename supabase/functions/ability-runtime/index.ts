@@ -372,5 +372,17 @@ Deno.serve(async (request) => {
     }
   }
 
+  const pendingQuery = service.from("ability_script_events")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "pending");
+  if (battleId) pendingQuery.eq("battle_id", battleId);
+  const { count: pendingCount, error: pendingError } = await pendingQuery;
+  if (pendingError) {
+    console.error("Could not count remaining custom ability events:", pendingError.message);
+    pendingLimitReached = true;
+  } else if ((pendingCount ?? 0) > 0) {
+    pendingLimitReached = true;
+  }
+
   return respond({ ok: true, processed, failed, pendingLimitReached });
 });
