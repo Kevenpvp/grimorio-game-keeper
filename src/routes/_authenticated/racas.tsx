@@ -239,6 +239,7 @@ function RaceEditor({ race, defs, isNew, onSaved }: { race: Race; defs: Attribut
           defs={defs}
           allowHealing={false}
           allowPeriodicHealing={false}
+          permanentNote="Efeito permanente enquanto o personagem mantiver esta raça."
           allowedTypes={[
             "status", "regeneration", "mana_regeneration", "mana_used",
             "no_regen_hp", "no_regen_mana", "magic_prohibition", "stun",
