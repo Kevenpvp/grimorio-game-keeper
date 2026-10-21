@@ -472,7 +472,8 @@ function AttrEditor({ def, characterId, body, sanity, attr, racePts, virtuePts, 
         </div>
       )}
 
-      {def.show_bar && <StatBar value={cur0} max={def.accepts_points ? total : max0} tone={barTone(def.key)} className="mt-3" />}
+      {/* Use the effective maximum after race/virtue modifiers so the bar matches the displayed total. */}
+      {def.show_bar && <StatBar value={cur0} max={total} tone={barTone(def.key)} className="mt-3" />}
 
       <AlertDialog open={pendingMax !== null} onOpenChange={(o) => { if (!o) { setPendingMax(null); setMax(max0); } }}>
         <AlertDialogContent>
