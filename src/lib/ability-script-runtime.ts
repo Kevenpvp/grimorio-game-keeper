@@ -1,15 +1,17 @@
 import { supabase } from "@/integrations/supabase/client";
 
-let dispatchInFlight: Promise<void> | null = null;
+const dispatchesInFlight = new Map<string, Promise<void>>();
 
 /**
  * Ask the authenticated master-only Edge Function to drain the server-side ability event queue.
  * Database triggers are the source of events; this is only the dispatcher.
  */
 export function dispatchCustomAbilityScriptEvents(battleId?: string | null): Promise<void> {
-  if (dispatchInFlight) return dispatchInFlight;
+  const key = battleId ?? "*";
+  const existing = dispatchesInFlight.get(key);
+  if (existing) return existing;
 
-  dispatchInFlight = (async () => {
+  const dispatch = (async () => {
     const { data, error } = await supabase.functions.invoke("ability-runtime", {
       body: { battle_id: battleId ?? null },
     });
@@ -22,8 +24,9 @@ export function dispatchCustomAbilityScriptEvents(battleId?: string | null): Pro
       console.error("A fila de scripts customizados requer atenção.", data);
     }
   })().finally(() => {
-    dispatchInFlight = null;
+    dispatchesInFlight.delete(key);
   });
 
-  return dispatchInFlight;
+  dispatchesInFlight.set(key, dispatch);
+  return dispatch;
 }
