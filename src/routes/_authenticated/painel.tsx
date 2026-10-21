@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
-import { useCharacter, useCharacterLive, useDefs, useMe } from "@/lib/sheets";
+import { computeValue, physicalAttributePoints, traitMods, useCharacter, useCharacterLive, useDefs, useMe, useRaces, useVirtues } from "@/lib/sheets";
 import { CharacterSheetView, Portrait } from "@/components/sheet/CharacterSheetView";
 import { StatBar } from "@/components/sheet/StatBar";
 import { PointsDistribution } from "@/components/sheet/PointsDistribution";
@@ -76,12 +76,14 @@ function MasterDashboard() {
   const navigate = useNavigate();
   const [q, setQ] = useState("");
   const { data: defs } = useDefs();
+  const { data: races = [] } = useRaces();
+  const { data: virtues = [] } = useVirtues();
   const { data: list, isLoading } = useQuery({
     queryKey: ["characters"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("characters")
-        .select("*, character_attributes(attribute_key,current_value,max_value,points)")
+        .select("*, character_attributes(attribute_key,current_value,max_value,points,bonus)")
         .order("name");
       if (error) throw error;
       return data;
@@ -126,6 +128,24 @@ function MasterDashboard() {
           {filtered.map((c) => {
             const hp = c.character_attributes.find((a) => a.attribute_key === "hp");
             const mana = c.character_attributes.find((a) => a.attribute_key === "mana");
+            const modifiers = { ...traitMods(races.find((race) => race.id === c.race_id)) };
+            for (const [key, value] of Object.entries(traitMods(virtues.find((virtue) => virtue.id === c.virtue_id)))) {
+              modifiers[key] = (modifiers[key] ?? 0) + value;
+              if (modifiers[key] === 0) delete modifiers[key];
+            }
+            const effectiveMax = (key: string, attr: typeof hp) => {
+              if (!attr) return 0;
+              const def = defs?.find((item) => item.key === key);
+              if (!def) return attr.max_value ?? 0;
+              const modifier = modifiers[key] ?? 0;
+              const rawMax = def.accepts_points
+                ? computeValue(def, (attr.points ?? 0) + modifier + physicalAttributePoints(c, key)) + (attr.bonus ?? 0)
+                : (attr.max_value ?? 0) + modifier + (attr.bonus ?? 0);
+              const max = Math.floor(rawMax);
+              return key === "hp" ? Math.max(1, max) : Math.max(0, max);
+            };
+            const hpMax = effectiveMax("hp", hp);
+            const manaMax = effectiveMax("mana", mana);
             return (
               <Link
                 key={c.id}
@@ -137,8 +157,8 @@ function MasterDashboard() {
                 <div className="min-w-0 flex-1 space-y-1.5">
                   <div className="truncate font-display text-lg text-gold">{c.name}</div>
                   <div className="truncate text-xs text-muted-foreground">{c.player_name || "Sem jogador"}</div>
-                  <MiniBar label="HP" cur={hp?.current_value ?? 0} max={hp?.max_value ?? 0} tone="bg-blood" />
-                  <MiniBar label="Mana" cur={mana?.current_value ?? 0} max={mana?.max_value ?? 0} tone="bg-arcane" />
+                  <MiniBar label="HP" cur={hp?.current_value ?? 0} max={hpMax} tone="bg-blood" />
+                  <MiniBar label="Mana" cur={mana?.current_value ?? 0} max={manaMax} tone="bg-arcane" />
                   <div className="tabular text-xs text-muted-foreground">Corpo {c.body}% · Sanidade {c.sanity}% · {c.available_points} pt{c.available_points === 1 ? "" : "s"} · {c.kills} abate{c.kills === 1 ? "" : "s"}</div>
                 </div>
               </Link>
