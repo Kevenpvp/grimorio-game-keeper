@@ -20,6 +20,7 @@ const effectTypeLabels: Record<AbilityEffectType, string> = {
   healing: "Cura / cura por rodada",
   invincible: "Invencível — não recebe dano",
   healing_blocked: "Bloqueio de Cura — não recebe curas de habilidades",
+  magic_healing_reversal: "Reversão de Cura — cura mágica vira dano",
 };
 
 export function AbilityEffectsEditor({
@@ -104,6 +105,10 @@ export function AbilityEffectsEditor({
       healing_reduce_debuff_turns_percent: 0,
       healing_damage_type_id: damageTypes[0]?.id ?? null,
       healing_magic_level: "baixa",
+      magic_healing_type_ids: [],
+      magic_healing_magic_levels: [],
+      magic_healing_reversal_damage_mode: "healing_amount",
+      magic_healing_reversal_custom_damage: 10,
     }]);
   }
 
@@ -127,8 +132,11 @@ export function AbilityEffectsEditor({
         const isNoMana = effect.effect_type === "no_mana";
         const isDamageReduction = effect.effect_type === "damage_reduction";
         const isHealing = effect.effect_type === "healing";
+        const isMagicHealingReversal = effect.effect_type === "magic_healing_reversal";
         const selectedReductionTypeIds = effect.damage_reduction_type_ids ?? (effect.damage_reduction_type_id ? [effect.damage_reduction_type_id] : []);
         const selectedReductionMagicLevels = effect.damage_reduction_magic_levels ?? (effect.damage_reduction_magic_level ? [effect.damage_reduction_magic_level] : []);
+        const selectedMagicHealTypeIds = effect.magic_healing_type_ids ?? [];
+        const selectedMagicHealLevels = effect.magic_healing_magic_levels ?? [];
         const needsAttribute = effect.effect_type === "status" || effect.effect_type === "regeneration";
         const needsValue = needsAttribute || effect.effect_type === "mana_regeneration" || effect.effect_type === "mana_used" || effect.effect_type === "damage_dealt" || isDamageReduction;
         function patchHealingOption(
@@ -165,7 +173,7 @@ export function AbilityEffectsEditor({
                     healing_damage_type_id: type === "healing" ? (effect.healing_damage_type_id ?? damageTypes[0]?.id ?? null) : effect.healing_damage_type_id,
                     healing_magic_level: type === "healing" ? (effect.healing_magic_level ?? "baixa") : effect.healing_magic_level,
                     attribute_key: type === "mana_regeneration" ? "mana" : type === "regeneration" ? "hp" : type === "status" ? firstStatusKey() : null,
-                    polarity: type === "magic_prohibition" || type === "no_mana" || type === "healing_blocked"
+                    polarity: type === "magic_prohibition" || type === "no_mana" || type === "healing_blocked" || type === "magic_healing_reversal"
                       ? "debuff"
                       : type === "damage_reduction" || type === "invincible" ? "buff" : effect.polarity,
                     damage_reduction_scope: type === "damage_reduction" ? "physical" : effect.damage_reduction_scope,
@@ -296,6 +304,84 @@ export function AbilityEffectsEditor({
                   <p className="self-end text-xs text-muted-foreground sm:col-span-2">Reduz o dano recebido depois da defesa correspondente. O valor fixo é aplicado primeiro e depois a porcentagem. Em dano híbrido, a redução atua apenas na metade compatível.</p>
                 </>
               )}
+              {isMagicHealingReversal && (
+                <fieldset className="space-y-3 rounded-md border border-border p-3 sm:col-span-2">
+                  <legend className="px-1 text-sm font-semibold text-gold">Configuração da Reversão de Cura</legend>
+                  <p className="text-xs text-muted-foreground">
+                    Quando uma habilidade tenta curar este personagem com uma magia compatível, a cura é cancelada e convertida em dano.
+                    Se uma cura não tiver tipo mágico definido, ela só corresponderá quando todos os tipos estiverem selecionados.
+                  </p>
+                  <fieldset className="space-y-2">
+                    <legend className="text-xs font-medium">Tipos de magia que ativam a reversão</legend>
+                    <label className="flex items-center gap-2 rounded-md border border-border px-2 py-2 text-xs">
+                      <input type="radio" name={`${effectEditorId}-cura-tipos-${index}`}
+                        checked={selectedMagicHealTypeIds.length === 0}
+                        onChange={() => patch(index, { magic_healing_type_ids: [] })} />
+                      Todos os tipos mágicos
+                    </label>
+                    {damageTypes.length === 0
+                      ? <p className="text-xs text-amber-500">Nenhum tipo mágico cadastrado no sistema ainda.</p>
+                      : <div className="grid gap-2 sm:grid-cols-2">
+                          {damageTypes.map((type) => (
+                            <label key={type.id} className="flex items-center gap-2 rounded-md border border-border px-2 py-2 text-xs">
+                              <input type="checkbox" checked={selectedMagicHealTypeIds.includes(type.id)}
+                                onChange={(e) => {
+                                  const next = e.target.checked
+                                    ? [...selectedMagicHealTypeIds, type.id]
+                                    : selectedMagicHealTypeIds.filter((id) => id !== type.id);
+                                  patch(index, { magic_healing_type_ids: next });
+                                }} />
+                              {type.name}
+                            </label>
+                          ))}
+                        </div>}
+                  </fieldset>
+                  <fieldset className="space-y-2">
+                    <legend className="text-xs font-medium">Nível da magia</legend>
+                    <label className="flex items-center gap-2 rounded-md border border-border px-2 py-2 text-xs">
+                      <input type="radio" name={`${effectEditorId}-cura-niveis-${index}`}
+                        checked={selectedMagicHealLevels.length === 0}
+                        onChange={() => patch(index, { magic_healing_magic_levels: [] })} />
+                      Qualquer nível
+                    </label>
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      {([[ "baixa", "Baixa" ], [ "media", "Média" ], [ "alta", "Alta" ]] as const).map(([level, label]) => (
+                        <label key={level} className="flex items-center gap-2 rounded-md border border-border px-2 py-2 text-xs">
+                          <input type="checkbox" checked={selectedMagicHealLevels.includes(level)}
+                            onChange={(e) => {
+                              const next = e.target.checked
+                                ? [...selectedMagicHealLevels, level]
+                                : selectedMagicHealLevels.filter((value) => value !== level);
+                              patch(index, { magic_healing_magic_levels: next });
+                            }} />
+                          {label}
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                  <label className="block space-y-1 text-xs font-medium">
+                    Dano causado quando a cura é revertida
+                    <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                      value={effect.magic_healing_reversal_damage_mode ?? "healing_amount"}
+                      onChange={(e) => patch(index, { magic_healing_reversal_damage_mode: e.target.value as "healing_amount" | "custom" | "both" })}>
+                      <option value="healing_amount">Dano igual ao valor da cura</option>
+                      <option value="custom">Dano customizado</option>
+                      <option value="both">Valor da cura + dano customizado</option>
+                    </select>
+                  </label>
+                  {(effect.magic_healing_reversal_damage_mode === "custom" || effect.magic_healing_reversal_damage_mode === "both") && (
+                    <label className="block space-y-1 text-xs font-medium">
+                      Dano customizado
+                      <Input type="number" min="0" max="1000000" value={effect.magic_healing_reversal_custom_damage ?? 0}
+                        onChange={(e) => patch(index, { magic_healing_reversal_custom_damage: Math.max(0, Math.min(1_000_000, Number(e.target.value) || 0)) })} />
+                    </label>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    “Valor da cura” é a soma dos valores de recuperação configurados no feitiço. O dano mágico respeita defesa e mitigação;
+                    se a própria cura não tiver tipo e nível definidos, o dano revertido será dano verdadeiro.
+                  </p>
+                </fieldset>
+              )}
               {isHealing && allowHealing && (
                 <fieldset className="space-y-3 rounded-md border border-border p-3 sm:col-span-2">
                   <legend className="px-1 text-sm font-semibold text-gold">Configuração da cura</legend>
@@ -411,7 +497,7 @@ export function AbilityEffectsEditor({
 
                   <div className="grid gap-2 sm:grid-cols-2">
                     <label className="space-y-1 text-xs font-medium">
-                      Tipo mágico da cura (metadado para regras futuras)
+                      Tipo mágico da cura (usado pela Reversão de Cura)
                       <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
                         value={effect.healing_damage_type_id ?? ""}
                         onChange={(e) => patch(index, { healing_damage_type_id: e.target.value || null })}>
