@@ -315,6 +315,7 @@ export type Database = {
           effects: Json
           end_effects: Json
           self_target_only: boolean
+          granted_by_race_id: string | null
           granted_by_virtue_id: string | null
           id: string
           is_passive: boolean
@@ -335,6 +336,7 @@ export type Database = {
           effects?: Json
           end_effects?: Json
           self_target_only?: boolean
+          granted_by_race_id?: string | null
           granted_by_virtue_id?: string | null
           id?: string
           is_passive?: boolean
@@ -355,6 +357,7 @@ export type Database = {
           effects?: Json
           end_effects?: Json
           self_target_only?: boolean
+          granted_by_race_id?: string | null
           granted_by_virtue_id?: string | null
           id?: string
           is_passive?: boolean
@@ -376,6 +379,13 @@ export type Database = {
             columns: ["character_id"]
             isOneToOne: false
             referencedRelation: "characters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "character_abilities_granted_by_race_id_fkey"
+            columns: ["granted_by_race_id"]
+            isOneToOne: false
+            referencedRelation: "races"
             referencedColumns: ["id"]
           },
           {
@@ -580,6 +590,39 @@ export type Database = {
         }
         Relationships: []
       }
+      race_abilities: {
+        Row: {
+          ability_id: string
+          created_at: string
+          race_id: string
+        }
+        Insert: {
+          ability_id: string
+          created_at?: string
+          race_id: string
+        }
+        Update: {
+          ability_id?: string
+          created_at?: string
+          race_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "race_abilities_ability_id_fkey"
+            columns: ["ability_id"]
+            isOneToOne: false
+            referencedRelation: "abilities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "race_abilities_race_id_fkey"
+            columns: ["race_id"]
+            isOneToOne: false
+            referencedRelation: "races"
+            referencedColumns: ["id"]
+          },
+        ]
+      },
       races: {
         Row: {
           bonus_points: number
