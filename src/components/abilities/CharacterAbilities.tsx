@@ -112,6 +112,7 @@ export function CharacterAbilitiesPanel({
       qc.invalidateQueries({ queryKey: ["character-active-effects"] }),
       qc.invalidateQueries({ queryKey: ["battles"] }),
       qc.invalidateQueries({ queryKey: ["character", characterId] }),
+      qc.invalidateQueries({ queryKey: ["battle-character-public-states"] }),
     ]);
   }
 
