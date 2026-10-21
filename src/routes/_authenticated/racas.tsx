@@ -82,7 +82,7 @@ function RaceEditor({ race, defs, isNew, onSaved }: { race: Race; defs: Attribut
   const [physicalBonus, setPhysicalBonus] = useState(race.physical_bonus_points);
   const [mods, setMods] = useState(raceMods(race));
   const { data: allAbilities = [], isLoading: catalogLoading } = useAbilities();
-  const { data: raceAbilityRows = [], isLoading: raceAbilitiesLoading } = useQuery({
+  const { data: raceAbilityRows = [], isLoading: raceAbilitiesLoading, error: raceAbilitiesError } = useQuery({
     queryKey: ["race-abilities"],
     queryFn: async () => {
       const { data, error } = await supabase.from("race_abilities").select("race_id,ability_id");
@@ -190,7 +190,9 @@ function RaceEditor({ race, defs, isNew, onSaved }: { race: Race; defs: Attribut
             atribuídas manualmente e habilidades que ainda sejam concedidas pela virtude são preservadas.
           </p>
         </div>
-        {catalogLoading || raceAbilitiesLoading ? (
+        {raceAbilitiesError ? (
+          <p className="text-xs text-amber-500">A tabela de habilidades de raça ainda não está disponível neste backend. A migração 0046 precisa ser aplicada para ativar esta opção.</p>
+        ) : catalogLoading || raceAbilitiesLoading ? (
           <p className="text-xs text-muted-foreground">Carregando habilidades…</p>
         ) : allAbilities.length === 0 ? (
           <p className="text-xs text-muted-foreground">Cadastre habilidades no catálogo para poder vinculá-las a esta raça.</p>
