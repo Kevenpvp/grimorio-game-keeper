@@ -2,9 +2,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Tables } from "@/integrations/supabase/types";
 import { supabase } from "@/integrations/supabase/client";
 
-export type AbilityEffectType = "status" | "regeneration" | "mana_regeneration" | "mana_used" | "no_regen_hp" | "no_regen_mana" | "magic_prohibition" | "stun" | "damage_dealt" | "damage_reduction" | "no_mana" | "healing" | "invincible" | "healing_blocked" | "magic_healing_reversal";
+export type AbilityEffectType = "status" | "regeneration" | "mana_regeneration" | "mana_used" | "no_regen_hp" | "no_regen_mana" | "magic_prohibition" | "stun" | "damage_dealt" | "damage_reduction" | "damage_received" | "no_mana" | "healing" | "invincible" | "healing_blocked" | "magic_healing_reversal";
 export type DamageScope = "any" | "physical" | "magical";
 export type DamageReductionScope = "physical" | "magical";
+export type DamageReceivedScope = "any" | "physical" | "magical" | "race";
 export type DamageMagicLevel = "baixa" | "media" | "alta";
 export type DamageTypeOption = Pick<Tables<"damage_types">, "id" | "name">;
 export type AbilityEffectDefinition = {
@@ -56,6 +57,13 @@ export type AbilityEffectDefinition = {
   /** Empty arrays mean all registered magic types / all magic grades. */
   damage_reduction_type_ids?: string[] | null;
   damage_reduction_magic_levels?: DamageMagicLevel[] | null;
+  /** How incoming damage is increased by this debuff. */
+  damage_received_scope?: DamageReceivedScope;
+  /** Empty arrays mean every magic type or magic level is affected. */
+  damage_received_type_ids?: string[];
+  damage_received_magic_levels?: DamageMagicLevel[];
+  /** When scope is race, only attackers whose character race matches this ID trigger it. */
+  damage_received_race_id?: string | null;
 };
 export type Ability = Tables<"abilities">;
 export type CharacterAbilityRow = Tables<"character_abilities">;
@@ -63,13 +71,13 @@ export type CharacterAbility = Omit<CharacterAbilityRow, "effects" | "passive_ef
 
 export function parseAbilityEffects(value: unknown): AbilityEffectDefinition[] {
   if (!Array.isArray(value)) return [];
-  const validTypes: AbilityEffectType[] = ["status", "regeneration", "mana_regeneration", "mana_used", "no_regen_hp", "no_regen_mana", "magic_prohibition", "stun", "damage_dealt", "damage_reduction", "no_mana", "healing", "invincible", "healing_blocked", "magic_healing_reversal"];
+  const validTypes: AbilityEffectType[] = ["status", "regeneration", "mana_regeneration", "mana_used", "no_regen_hp", "no_regen_mana", "magic_prohibition", "stun", "damage_dealt", "damage_reduction", "damage_received", "no_mana", "healing", "invincible", "healing_blocked", "magic_healing_reversal"];
   return value.flatMap((item): AbilityEffectDefinition[] => {
     if (!item || typeof item !== "object") return [];
     const raw = item as Record<string, unknown>;
     if (!validTypes.includes(raw.effect_type as AbilityEffectType)) return [];
     const effectType = raw.effect_type as AbilityEffectType;
-    const polarity = effectType === "no_mana" || effectType === "healing_blocked" || effectType === "magic_prohibition" || effectType === "magic_healing_reversal"
+    const polarity = effectType === "no_mana" || effectType === "healing_blocked" || effectType === "magic_prohibition" || effectType === "magic_healing_reversal" || effectType === "damage_received"
       ? "debuff"
       : effectType === "damage_reduction" || effectType === "invincible"
         ? "buff"
@@ -101,6 +109,14 @@ export function parseAbilityEffects(value: unknown): AbilityEffectDefinition[] {
       damage_reduction_magic_level: null,
       damage_reduction_type_ids: damageReductionTypeIds,
       damage_reduction_magic_levels: damageReductionMagicLevels,
+      damage_received_scope: raw.damage_received_scope === "physical" || raw.damage_received_scope === "magical" || raw.damage_received_scope === "race" ? raw.damage_received_scope : "any",
+      damage_received_type_ids: Array.isArray(raw.damage_received_type_ids)
+        ? [...new Set(raw.damage_received_type_ids.filter((value): value is string => typeof value === "string"))]
+        : [],
+      damage_received_magic_levels: Array.isArray(raw.damage_received_magic_levels)
+        ? [...new Set(raw.damage_received_magic_levels.filter((value): value is DamageMagicLevel => validMagicLevels.includes(value as DamageMagicLevel)))]
+        : [],
+      damage_received_race_id: typeof raw.damage_received_race_id === "string" ? raw.damage_received_race_id : null,
       target_scope: raw.target_scope === "caster" || raw.target_scope === "both" ? raw.target_scope : "target",
       apply_both_on_activation: raw.apply_both_on_activation === true,
       healing_timing: raw.healing_timing === "per_turn" ? "per_turn" : "instant",
