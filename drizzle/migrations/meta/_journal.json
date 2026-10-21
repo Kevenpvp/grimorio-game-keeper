@@ -330,6 +330,13 @@
       "when": 1792785600000,
       "tag": "0046_race_abilities_and_trait_condition_modifiers",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1792785600002,
+      "tag": "0047_race_starting_effects",
+      "breakpoints": true
     }
   ]
 }
