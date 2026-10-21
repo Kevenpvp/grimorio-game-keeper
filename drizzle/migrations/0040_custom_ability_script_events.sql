@@ -4,6 +4,7 @@ ALTER TABLE public.abilities
 
 CREATE TABLE IF NOT EXISTS public.ability_script_events (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  queue_order bigint GENERATED ALWAYS AS IDENTITY UNIQUE NOT NULL,
   event_type text NOT NULL CHECK (event_type IN (
     'turno_avançou',
     'habilidade_ativada',
@@ -195,7 +196,7 @@ BEGIN
         e.status = 'pending'
         OR (e.status = 'processing' AND e.locked_at < now() - interval '5 minutes')
       )
-    ORDER BY e.created_at, e.id
+    ORDER BY e.queue_order, e.id
     LIMIT GREATEST(1, LEAST(COALESCE(_batch_size, 50), 100))
     FOR UPDATE SKIP LOCKED
   )
