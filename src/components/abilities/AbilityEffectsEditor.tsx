@@ -169,9 +169,10 @@ export function AbilityEffectsEditor({
                   Aplicar efeito em
                   <select aria-label="Aplicar efeito em" className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
                     value={effect.target_scope ?? "target"}
-                    onChange={(e) => patch(index, { target_scope: e.target.value as "caster" | "target" })}>
+                    onChange={(e) => patch(index, { target_scope: e.target.value as "caster" | "target" | "both" })}>
                     <option value="caster">Caster (quem usa)</option>
                     <option value="target">Alvo</option>
+                    <option value="both">Ambos (Caster + Alvo)</option>
                   </select>
                 </label>
               )}
