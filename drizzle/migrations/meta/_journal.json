@@ -309,6 +309,13 @@
       "when": 1792779300000,
       "tag": "0043_atomic_custom_state_and_damage_adjustment",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1792780000000,
+      "tag": "0044_atomic_custom_script_state_updates",
+      "breakpoints": true
     }
   ]
 }
