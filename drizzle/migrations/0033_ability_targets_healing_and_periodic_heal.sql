@@ -78,6 +78,7 @@ DECLARE
   _body_restore numeric := 0;
   _sanity_restore numeric := 0;
   _blacklist jsonb := '[]'::jsonb;
+  _name_blacklist text[] := ARRAY[]::text[];
   _fixed_turns integer := 0;
   _percent_turns numeric := 0;
   _debuff record;
@@ -92,6 +93,12 @@ BEGIN
 
   IF jsonb_typeof(_config->'healing_debuff_blacklist') = 'array' THEN
     _blacklist := _config->'healing_debuff_blacklist';
+  END IF;
+  IF jsonb_typeof(_config->'healing_debuff_name_blacklist') = 'array' THEN
+    SELECT coalesce(array_agg(lower(trim(value))), ARRAY[]::text[])
+    INTO _name_blacklist
+    FROM jsonb_array_elements_text(_config->'healing_debuff_name_blacklist') AS names(value)
+    WHERE trim(value) <> '';
   END IF;
 
   IF _apply_resources THEN
@@ -177,7 +184,13 @@ BEGIN
           e.polarity = 'debuff'
           OR e.effect_type IN ('no_regen_hp','no_regen_mana','magic_prohibition','no_mana','stun')
         )
-        AND NOT (_blacklist ? e.effect_type);
+        AND NOT (_blacklist ? e.effect_type)
+        AND NOT EXISTS (
+          SELECT 1
+          FROM unnest(_name_blacklist) AS excluded(name)
+          WHERE lower(e.name) = excluded.name
+             OR right(lower(e.name), length(excluded.name) + 2) = ': ' || excluded.name
+        );
     END IF;
 
     _fixed_turns := greatest(0, coalesce(nullif(_config->>'healing_reduce_debuff_turns_fixed', '')::integer, 0));
@@ -193,7 +206,13 @@ BEGIN
             e.polarity = 'debuff'
             OR e.effect_type IN ('no_regen_hp','no_regen_mana','magic_prohibition','no_mana','stun')
           )
-          AND NOT (_blacklist ? e.effect_type)
+        AND NOT (_blacklist ? e.effect_type)
+        AND NOT EXISTS (
+          SELECT 1
+          FROM unnest(_name_blacklist) AS excluded(name)
+          WHERE lower(e.name) = excluded.name
+             OR right(lower(e.name), length(excluded.name) + 2) = ': ' || excluded.name
+        )
         ORDER BY e.created_at, e.id
         FOR UPDATE OF e
       LOOP
