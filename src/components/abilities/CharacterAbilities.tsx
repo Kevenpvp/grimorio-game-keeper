@@ -62,6 +62,8 @@ function effectSummary(effect: AbilityEffectDefinition, defs: NonNullable<Return
   if (effect.effect_type === "no_regen_mana") return `${effect.name}: bloqueia regeneração de Mana`;
   if (effect.effect_type === "magic_prohibition") return `${effect.name}: impede habilidades que consomem Mana`;
   if (effect.effect_type === "no_mana") return `${effect.name}: Sem Mana — zera a Mana e bloqueia habilidades mágicas ou que consomem Mana`;
+  if (effect.effect_type === "invincible") return `${effect.name}: não recebe nenhum dano enquanto estiver ativo`;
+  if (effect.effect_type === "healing_blocked") return `${effect.name}: bloqueia curas de habilidades enquanto estiver ativo`;
   return `${effect.name}: Stun (visual)`;
 }
 
@@ -154,7 +156,7 @@ export function CharacterAbilitiesPanel({
               <div className="flex flex-wrap gap-1.5">
                 {activeEffects.map((effect) => (
                   <span key={effect.id} className="rounded bg-muted px-2 py-1 text-xs">
-                    {effect.name} · {effect.duration} turno(s)
+                    {effect.name} · {effect.until_combat_end ? "até o fim do combate" : `${effect.duration} turno(s)`}
                   </span>
                 ))}
               </div>
