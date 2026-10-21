@@ -9,7 +9,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { raceMods, useDefs, useMe, useRaces, type AttributeDef, type Race } from "@/lib/sheets";
-import { useAbilities } from "@/lib/abilities";
+import { parseAbilityEffects, useAbilities, type AbilityEffectDefinition, type AbilityEffectType } from "@/lib/abilities";
+import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
+import type { Json } from "@/integrations/supabase/types";
 
 export const Route = createFileRoute("/_authenticated/racas")({
   head: () => ({
@@ -81,6 +83,7 @@ function RaceEditor({ race, defs, isNew, onSaved }: { race: Race; defs: Attribut
   const [bonus, setBonus] = useState(race.bonus_points);
   const [physicalBonus, setPhysicalBonus] = useState(race.physical_bonus_points);
   const [mods, setMods] = useState(raceMods(race));
+  const [startingEffects, setStartingEffects] = useState<AbilityEffectDefinition[]>(() => parseAbilityEffects(race.starting_effects));
   const { data: allAbilities = [], isLoading: catalogLoading } = useAbilities();
   const { data: raceAbilityRows = [], isLoading: raceAbilitiesLoading, error: raceAbilitiesError } = useQuery({
     queryKey: ["race-abilities"],
@@ -116,7 +119,15 @@ function RaceEditor({ race, defs, isNew, onSaved }: { race: Race; defs: Attribut
     const { error } = await supabase.from("races").update({
       name: name.trim(), description: description.trim() || null,
       bonus_points: Math.max(0, Math.round(bonus) || 0),
-      physical_bonus_points: Math.max(0, Math.round(physicalBonus) || 0), modifiers: clean,
+      physical_bonus_points: Math.max(0, Math.round(physicalBonus) || 0),
+      modifiers: clean,
+      starting_effects: startingEffects.map((effect) => ({
+        ...effect,
+        duration: 1,
+        until_combat_end: false,
+        target_scope: "caster",
+        apply_both_on_activation: false,
+      })) as unknown as Json,
     }).eq("id", race.id);
     if (error) { toast.error(error.message); return; }
     toast.success("Raça salva");
@@ -217,6 +228,24 @@ function RaceEditor({ race, defs, isNew, onSaved }: { race: Race; defs: Attribut
             ))}
           </div>
         )}
+      </div>
+      <div className="rounded-md border border-border p-3">
+        <AbilityEffectsEditor
+          effects={startingEffects}
+          onChange={setStartingEffects}
+          permanent
+          title="Buffs e debuffs iniciais da raça"
+          description="Estes efeitos ficam ativos enquanto o personagem mantiver esta raça. Eles não perdem duração ao avançar turnos e são removidos ao trocar ou remover a raça."
+          defs={defs}
+          allowHealing={false}
+          allowPeriodicHealing={false}
+          allowedTypes={[
+            "status", "regeneration", "mana_regeneration", "mana_used",
+            "no_regen_hp", "no_regen_mana", "magic_prohibition", "stun",
+            "damage_dealt", "no_mana", "damage_reduction", "invincible", "healing_blocked",
+          ] as AbilityEffectType[]}
+          allowPermanentMagicProhibition
+        />
       </div>
       <div className="flex gap-2">
         <Button onClick={save}>{isNew ? "Salvar nova raça" : "Salvar"}</Button>
