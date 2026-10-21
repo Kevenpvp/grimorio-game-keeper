@@ -249,7 +249,7 @@ returns trigger
 language plpgsql
 security definer
 set search_path = public
-as $
+as $$
 declare
   _end_effects jsonb;
   _ability_name text;
@@ -452,7 +452,7 @@ begin
 
   return old;
 end;
-$;
+$$;
 
 create or replace function public.activate_character_ability(
   _character_ability_id uuid,
@@ -463,7 +463,7 @@ returns integer
 language plpgsql
 security definer
 set search_path = public
-as $
+as $$
 declare
   _assignment public.character_abilities;
   _owner_id uuid;
@@ -839,7 +839,7 @@ begin
 
   return _effective_mana_cost;
 end;
-$;
+$$;
 
 create or replace function public.advance_combat_turn(
   _battle_id uuid,
