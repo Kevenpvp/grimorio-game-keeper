@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -9,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { raceMods, useDefs, useMe, useRaces, type AttributeDef, type Race } from "@/lib/sheets";
+import { useAbilities } from "@/lib/abilities";
 
 export const Route = createFileRoute("/_authenticated/racas")({
   head: () => ({
@@ -80,11 +82,38 @@ function RaceEditor({ race, defs, isNew, onSaved }: { race: Race; defs: Attribut
   const [bonus, setBonus] = useState(race.bonus_points);
   const [physicalBonus, setPhysicalBonus] = useState(race.physical_bonus_points);
   const [mods, setMods] = useState(raceMods(race));
+  const { data: allAbilities = [], isLoading: catalogLoading } = useAbilities();
+  const { data: raceAbilityRows = [], isLoading: raceAbilitiesLoading } = useQuery({
+    queryKey: ["race-abilities"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("race_abilities").select("race_id,ability_id");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const selectedAbilityIds = new Set(raceAbilityRows.filter((row) => row.race_id === race.id).map((row) => row.ability_id));
+
+  async function toggleAbility(abilityId: string, checked: boolean) {
+    const result = checked
+      ? await supabase.from("race_abilities").insert({ race_id: race.id, ability_id: abilityId })
+      : await supabase.from("race_abilities").delete().eq("race_id", race.id).eq("ability_id", abilityId);
+    if (result.error) { toast.error(result.error.message); return; }
+    toast.success(checked ? "Habilidade vinculada à raça" : "Habilidade removida da raça");
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ["race-abilities"] }),
+      qc.invalidateQueries({ queryKey: ["character-abilities"] }),
+      qc.invalidateQueries({ queryKey: ["character-abilities-battle"] }),
+    ]);
+  }
 
   async function save() {
     if (!name.trim()) { toast.error("Informe o nome"); return; }
     const clean: Record<string, number> = {};
-    for (const [k, v] of Object.entries(mods)) if (Math.round(v)) clean[k] = Math.round(v);
+    for (const [k, v] of Object.entries(mods)) {
+      const rounded = Math.round(v);
+      const normalized = k === "body" || k === "sanity" ? Math.max(-100, Math.min(100, rounded)) : rounded;
+      if (normalized) clean[k] = normalized;
+    }
     const { error } = await supabase.from("races").update({
       name: name.trim(), description: description.trim() || null,
       bonus_points: Math.max(0, Math.round(bonus) || 0),
@@ -92,7 +121,13 @@ function RaceEditor({ race, defs, isNew, onSaved }: { race: Race; defs: Attribut
     }).eq("id", race.id);
     if (error) { toast.error(error.message); return; }
     toast.success("Raça salva");
-    await qc.invalidateQueries({ queryKey: ["races"] });
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ["races"] }),
+      qc.invalidateQueries({ queryKey: ["race-abilities"] }),
+      qc.invalidateQueries({ queryKey: ["character"] }),
+      qc.invalidateQueries({ queryKey: ["characters"] }),
+      qc.invalidateQueries({ queryKey: ["my-character"] }),
+    ]);
     onSaved();
   }
 
@@ -100,7 +135,13 @@ function RaceEditor({ race, defs, isNew, onSaved }: { race: Race; defs: Attribut
     if (!confirm(`Excluir a raça ${race.name}? Fichas com ela ficam sem raça.`)) return;
     const { error } = await supabase.from("races").delete().eq("id", race.id);
     if (error) { toast.error(error.message); return; }
-    qc.invalidateQueries({ queryKey: ["races"] });
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ["races"] }),
+      qc.invalidateQueries({ queryKey: ["race-abilities"] }),
+      qc.invalidateQueries({ queryKey: ["character"] }),
+      qc.invalidateQueries({ queryKey: ["characters"] }),
+      qc.invalidateQueries({ queryKey: ["my-character"] }),
+    ]);
   }
 
   return (
@@ -114,6 +155,21 @@ function RaceEditor({ race, defs, isNew, onSaved }: { race: Race; defs: Attribut
         <div className="space-y-1.5 sm:col-span-2"><Label>Descrição</Label>
           <Textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} /></div>
       </div>
+      <div className="space-y-3">
+        <div>
+          <Label className="text-muted-foreground">Modificadores iniciais de Corpo e Sanidade</Label>
+          <p className="mt-1 text-xs text-muted-foreground">Use valores negativos para começar abaixo de 100%. Ex.: -10 faz o personagem começar com 90%. Ao mudar a raça, a diferença é ajustada sem zerar o dano já sofrido.</p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {([{ key: "body", label: "Corpo inicial" }, { key: "sanity", label: "Sanidade inicial" }] as const).map((item) => (
+            <div key={item.key} className="space-y-1">
+              <Label>{item.label} (%)</Label>
+              <Input type="number" min={-100} max={100} step={1} className="tabular" value={mods[item.key] ?? 0}
+                onChange={(e) => setMods({ ...mods, [item.key]: Math.max(-100, Math.min(100, Number(e.target.value) || 0)) })} />
+            </div>
+          ))}
+        </div>
+      </div>
       <div>
         <Label className="text-muted-foreground">Pontos iniciais por atributo (negativo = penalidade)</Label>
         <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
@@ -125,6 +181,41 @@ function RaceEditor({ race, defs, isNew, onSaved }: { race: Race; defs: Attribut
             </div>
           ))}
         </div>
+      </div>
+      <div className="space-y-3 rounded-md border border-border p-3">
+        <div>
+          <h3 className="text-sm font-semibold text-gold">Habilidades concedidas por esta raça</h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Os personagens recebem automaticamente as habilidades marcadas quando escolhem esta raça.
+            Ao trocar ou remover a raça, apenas as habilidades concedidas por ela são retiradas; habilidades
+            atribuídas manualmente e habilidades que ainda sejam concedidas pela virtude são preservadas.
+          </p>
+        </div>
+        {catalogLoading || raceAbilitiesLoading ? (
+          <p className="text-xs text-muted-foreground">Carregando habilidades…</p>
+        ) : allAbilities.length === 0 ? (
+          <p className="text-xs text-muted-foreground">Cadastre habilidades no catálogo para poder vinculá-las a esta raça.</p>
+        ) : (
+          <div className="grid gap-2 sm:grid-cols-2">
+            {allAbilities.map((ability) => (
+              <label key={ability.id} className="flex cursor-pointer items-start gap-2 rounded-md border border-border px-3 py-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={selectedAbilityIds.has(ability.id)}
+                  onChange={(event) => void toggleAbility(ability.id, event.target.checked)}
+                />
+                <span className="min-w-0">
+                  <span className="block font-medium">{ability.name}</span>
+                  <span className="block text-xs text-muted-foreground">
+                    {ability.can_activate ? "Ativável" : "Passiva / não ativável"}
+                    {ability.description ? ` · ${ability.description}` : ""}
+                  </span>
+                </span>
+              </label>
+            ))}
+          </div>
+        )}
       </div>
       <div className="flex gap-2">
         <Button onClick={save}>{isNew ? "Salvar nova raça" : "Salvar"}</Button>
