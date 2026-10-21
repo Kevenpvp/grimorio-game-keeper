@@ -15,6 +15,8 @@ export interface ScriptCharacter {
 }
 
 export interface AbilityScriptContext {
+  /** Stable id useful for logs and idempotent custom logic. */
+  idEvento: string;
   evento: AbilityScriptEventType;
   habilidade: {
     id: string | null;
