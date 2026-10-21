@@ -177,9 +177,9 @@ export function DamageApplier({ target, battleId = null, sources = [] }: {
             ? reductionPart("Mitigação da metade física", physicalReductionFixed, physicalReductionPercent)
               + reductionPart(`Mitigação da metade mágica (${typeName}, grau ${magicLevel})`, magicalReductionFixed, magicalReductionPercent)
             : "";
-      const criticalSummary = result.critical_damage === true ? " ⚔️ DANO CRÍTICO ×2 aplicado." : "";
+      const criticalSummary = result.critical_damage === true ? "⚔️ DANO CRÍTICO ×2 aplicado. " : "";
       toast.success(
-        `${criticalSummary} ${target.name}: ${result.hits} golpe(s) de ${damageDescription}; ${defenseText}; ${result.total_damage} de dano total. HP: ${result.hp_before} → ${result.hp_after}.${sourceSummary}${reductionSummary}${hitSummary}`,
+        `${criticalSummary}${target.name}: ${result.hits} golpe(s) de ${damageDescription}; ${defenseText}; ${result.total_damage} de dano total. HP: ${result.hp_before} → ${result.hp_after}.${sourceSummary}${reductionSummary}${hitSummary}`,
         { duration: 8000 },
       );
       const hookErrors = result.custom_script_hooks?.errors ?? [];
