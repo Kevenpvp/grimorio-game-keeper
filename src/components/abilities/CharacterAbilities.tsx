@@ -123,7 +123,7 @@ export function CharacterAbilitiesPanel({
   }
 
   if (isLoading) return null;
-  if (!loadout?.length) return null;
+  if (!loadout?.length && (!showActiveEffects || activeEffects.length === 0)) return null;
 
   return (
     <section className="space-y-3 rounded-md border border-border p-3">
@@ -158,14 +158,14 @@ export function CharacterAbilitiesPanel({
               <div className="flex flex-wrap gap-1.5">
                 {activeEffects.map((effect) => (
                   <span key={effect.id} className="rounded bg-muted px-2 py-1 text-xs">
-                    {effect.name} · {effect.until_combat_end ? "até o fim do combate" : `${effect.duration} turno(s)`}
+                    {effect.name} · {effect.source_race_id ? "permanente (raça)" : effect.until_combat_end ? "até o fim do combate" : `${effect.duration} turno(s)`}
                   </span>
                 ))}
               </div>
             </div>
           )}
           <div className="space-y-2">
-            {loadout.map((ability) => (
+            {(loadout ?? []).map((ability) => (
               <article key={ability.id} className="rounded-md border border-border bg-muted/20 p-3">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
