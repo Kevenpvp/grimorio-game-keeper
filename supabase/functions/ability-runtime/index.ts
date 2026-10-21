@@ -74,10 +74,10 @@ async function buildContext(service: ReturnType<typeof createClient>, event: Que
   if (!event.character_id) throw new Error("O personagem dono da habilidade não existe mais.");
   const [assignmentResult, abilityResult, caster, target, battleResult] = await Promise.all([
     event.character_ability_id
-      ? service.from("character_abilities").select("id,ability_id,name,character_id").eq("id", event.character_ability_id).maybeSingle()
+      ? service.from("character_abilities").select("id,ability_id,name,character_id,custom_state").eq("id", event.character_ability_id).maybeSingle()
       : Promise.resolve({ data: null, error: null }),
     event.ability_id
-      ? service.from("abilities").select("id,name,custom_script_key").eq("id", event.ability_id).maybeSingle()
+      ? service.from("abilities").select("id,name,custom_script_key,custom_attributes").eq("id", event.ability_id).maybeSingle()
       : Promise.resolve({ data: null, error: null }),
     loadCharacter(service, event.character_id),
     loadCharacter(service, event.target_character_id),
@@ -93,9 +93,22 @@ async function buildContext(service: ReturnType<typeof createClient>, event: Que
   const payload = asObject(event.payload);
   const rawEffect = asObject(payload.effect);
   const battle = battleResult.data as { id: string; name: string; turn_count: number; active: boolean } | null;
-  const assignment = assignmentResult.data as { id: string; ability_id: string; name: string } | null;
-  const ability = abilityResult.data as { id: string; name: string; custom_script_key: string | null } | null;
+  const assignment = assignmentResult.data as { id: string; ability_id: string; name: string; custom_state?: unknown } | null;
+  const ability = abilityResult.data as { id: string; name: string; custom_script_key: string | null; custom_attributes?: unknown } | null;
   const individualTurn = Number(payload.turn_count);
+  const rawState = asObject(assignment?.custom_state);
+  const customAttributes: Record<string, number | string | boolean> = {};
+  if (Array.isArray(ability?.custom_attributes)) {
+    for (const rawAttribute of ability.custom_attributes) {
+      const attribute = asObject(rawAttribute);
+      if (typeof attribute.key !== "string" || !attribute.key.trim()) continue;
+      if (attribute.type === "number" && Number.isFinite(Number(attribute.value))) customAttributes[attribute.key] = Number(attribute.value);
+      else if (attribute.type === "boolean") customAttributes[attribute.key] = attribute.value === true;
+      else if (attribute.type === "string" && typeof attribute.value === "string") customAttributes[attribute.key] = attribute.value;
+    }
+  }
+  const rawDamage = asObject(payload.dano);
+  const damage = Object.keys(rawDamage).length ? rawDamage as unknown as AbilityScriptContext["dano"] : null;
 
   return {
     idEvento: event.id,
@@ -115,12 +128,16 @@ async function buildContext(service: ReturnType<typeof createClient>, event: Que
     },
     efeito: Object.keys(rawEffect).length ? rawEffect : null,
     dados: payload,
+    atributos: customAttributes,
+    estado: rawState,
+    dano: damage,
   };
 }
 
 function makeApi(
   service: ReturnType<typeof createClient>,
   context: AbilityScriptContext,
+  onFinalDamageChange?: (values: number[]) => Promise<void>,
 ): AbilityScriptApi {
   const registrarLog = (message: string, details?: unknown) => {
     console.info("[ability-script]", JSON.stringify({
@@ -206,6 +223,35 @@ function makeApi(
       });
     },
 
+    async atualizarEstado(patch: Record<string, unknown>) {
+      const characterAbilityId = context.habilidade.idNaFicha;
+      if (!characterAbilityId) throw new Error("Este evento não está vinculado a uma habilidade da ficha.");
+      const safePatch = asObject(patch);
+      const { data, error } = await service.rpc("merge_character_ability_custom_state", {
+        _character_ability_id: characterAbilityId,
+        _patch: safePatch,
+      });
+      if (error) throw error;
+      context.estado = asObject(data);
+    },
+
+    async modificarDanoFinal(input: { valoresPorGolpe: number[] }) {
+      if (context.evento !== "causou_dano" || !onFinalDamageChange || !context.dano) {
+        throw new Error("modificarDanoFinal só pode ser usado durante causou_dano.");
+      }
+      if (!Array.isArray(input.valoresPorGolpe) || input.valoresPorGolpe.length !== context.dano.danoFinalPorGolpe.length) {
+        throw new Error("A quantidade de valores finais precisa corresponder ao número de golpes.");
+      }
+      const values = input.valoresPorGolpe.map((value) => finiteNumber(value, "Dano final", 0, 1_000_000));
+      await onFinalDamageChange(values);
+      context.dano = {
+        ...context.dano,
+        danoFinalPorGolpe: values,
+        danoFinalTotal: values.reduce((sum, value) => sum + Math.round(value), 0),
+        hpDepois: Math.max(0, Math.round(context.dano.hpAntes - values.reduce((sum, value) => sum + Math.round(value), 0))),
+      };
+    },
+
     async aplicarEfeito(input: { personagem: ScriptTarget; efeito: ApplyScriptEffectInput }) {
       const character = resolveTarget(input.personagem);
       const definition = input.efeito;
@@ -282,6 +328,194 @@ function makeApi(
   };
 }
 
+type DamageRpcResult = {
+  hits: number;
+  total_damage: number;
+  hp_before: number;
+  hp_after: number;
+  final_damage_by_hit?: number[];
+  [key: string]: unknown;
+};
+
+type DamageCall = {
+  battleId: string | null;
+  targetId: string;
+  sourceId: string | null;
+  kind: "physical" | "magical" | "hybrid" | "true";
+  typeId: string | null;
+  magicLevel: "baixa" | "media" | "alta" | null;
+  rawValues: number[];
+};
+
+type DamageTracker = {
+  rawValues: number[];
+  finalValues: number[];
+  total: number;
+  hpBefore: number;
+  hpAfter: number;
+  call: DamageCall;
+};
+
+async function runDamageScriptHooks(
+  service: ReturnType<typeof createClient>,
+  tracker: DamageTracker,
+  ownerCharacterId: string,
+  oppositeCharacterId: string | null,
+  eventType: "causou_dano" | "recebeu_dano",
+): Promise<{ processed: number; errors: string[] }> {
+  const { data: assignments, error: assignmentsError } = await service
+    .from("character_abilities")
+    .select("id,ability_id,character_id,name,custom_state")
+    .eq("character_id", ownerCharacterId);
+  if (assignmentsError) throw assignmentsError;
+  const abilityIds = [...new Set((assignments ?? []).map((row) => row.ability_id))];
+  if (!abilityIds.length) return { processed: 0, errors: [] };
+
+  const { data: abilityRows, error: abilitiesError } = await service
+    .from("abilities")
+    .select("id,name,custom_script_key,custom_attributes")
+    .in("id", abilityIds);
+  if (abilitiesError) throw abilitiesError;
+  const scriptKeys = new Map((abilityRows ?? []).map((ability) => [ability.id, ability.custom_script_key]));
+  let processed = 0;
+  const errors: string[] = [];
+
+  for (const assignment of assignments ?? []) {
+    const scriptKey = scriptKeys.get(assignment.ability_id);
+    if (!scriptKey) continue;
+    const script = abilityScriptRegistry[scriptKey];
+    if (!script) {
+      errors.push(`${scriptKey}: script não registrado`);
+      continue;
+    }
+    const handler = script[eventType];
+    if (!handler) continue;
+
+    const eventId = crypto.randomUUID();
+    const event: QueuedAbilityEvent = {
+      id: eventId,
+      event_type: eventType,
+      script_key: scriptKey,
+      ability_id: assignment.ability_id,
+      character_ability_id: assignment.id,
+      battle_id: tracker.call.battleId,
+      character_id: ownerCharacterId,
+      target_character_id: oppositeCharacterId,
+      effect_id: null,
+      attempts: 0,
+      queue_order: 0,
+      payload: {
+        dano: {
+          origemId: tracker.call.sourceId,
+          personagemAtingidoId: tracker.call.targetId,
+          categoria: tracker.call.kind,
+          tipoDanoId: tracker.call.typeId,
+          grauMagia: tracker.call.magicLevel,
+          danoBrutoPorGolpe: [...tracker.rawValues],
+          danoFinalPorGolpe: [...tracker.finalValues],
+          danoFinalTotal: tracker.total,
+          hpAntes: tracker.hpBefore,
+          hpDepois: tracker.hpAfter,
+        },
+      },
+    };
+
+    try {
+      const context = await buildContext(service, event);
+      const api = makeApi(service, context, eventType === "causou_dano" ? async (values) => {
+        const total = values.reduce((sum, value) => sum + Math.round(value), 0);
+        const nextHp = Math.max(0, Math.round(tracker.hpBefore - total));
+        const { error } = await service.from("character_attributes")
+          .update({ current_value: nextHp, updated_at: new Date().toISOString() })
+          .eq("character_id", tracker.call.targetId)
+          .eq("attribute_key", "hp");
+        if (error) throw error;
+        tracker.finalValues = values.map((value) => Math.round(value));
+        tracker.total = total;
+        tracker.hpAfter = nextHp;
+      } : undefined);
+      await handler(context, api);
+      processed += 1;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error("Custom damage hook failed:", eventId, scriptKey, eventType, message);
+      errors.push(`${scriptKey} (${eventType}): ${message.slice(0, 400)}`);
+    }
+  }
+  return { processed, errors };
+}
+
+async function applyDamageWithScripts(
+  body: ObjectValue,
+  userClient: ReturnType<typeof createClient>,
+  service: ReturnType<typeof createClient>,
+): Promise<ObjectValue> {
+  const battleId = typeof body._battle_id === "string" ? body._battle_id : null;
+  const targetId = typeof body._character_id === "string" ? body._character_id : "";
+  const sourceId = typeof body._source_character_id === "string" ? body._source_character_id : null;
+  const rawValues = Array.isArray(body._damage_values) ? body._damage_values.map((value) => Number(value)) : [];
+  const kind = body._damage_kind as DamageCall["kind"];
+  const typeId = typeof body._damage_type_id === "string" ? body._damage_type_id : null;
+  const magicLevel = typeof body._magic_level === "string" ? body._magic_level as DamageCall["magicLevel"] : null;
+
+  if (!targetId || !["physical", "magical", "hybrid", "true"].includes(kind) ||
+      rawValues.length < 1 || rawValues.length > 200 ||
+      rawValues.some((value) => !Number.isFinite(value) || value < 0 || value > 1_000_000)) {
+    throw new Error("Dados de dano inválidos.");
+  }
+
+  const call: DamageCall = { battleId, targetId, sourceId, kind, typeId, magicLevel, rawValues };
+  const { data, error } = await userClient.rpc("apply_battle_damage", {
+    _battle_id: battleId,
+    _character_id: targetId,
+    _damage_kind: kind,
+    _damage_type_id: typeId,
+    _damage_values: rawValues,
+    _magic_level: magicLevel,
+    _source_character_id: sourceId,
+  });
+  if (error) throw error;
+  const base = asObject(data) as DamageRpcResult;
+  if (!Array.isArray(base.final_damage_by_hit)) {
+    throw new Error("A migração 0041 ainda não foi aplicada: falta o resultado por golpe.");
+  }
+
+  const finalValues = base.final_damage_by_hit.map((value) => finiteNumber(value, "Dano calculado", 0, 1_000_000));
+  const tracker: DamageTracker = {
+    call,
+    rawValues,
+    finalValues,
+    total: finalValues.reduce((sum, value) => sum + Math.round(value), 0),
+    hpBefore: Number(base.hp_before ?? 0),
+    hpAfter: Number(base.hp_after ?? 0),
+  };
+  const hookErrors: string[] = [];
+  let hooksProcessed = 0;
+
+  // causou_dano runs after ordinary source buffs, defense, and mitigation are calculated.
+  // Scripts can replace per-hit final values; the target HP is re-synchronized from hp_before.
+  if (sourceId && tracker.total > 0) {
+    const result = await runDamageScriptHooks(service, tracker, sourceId, targetId, "causou_dano");
+    hooksProcessed += result.processed;
+    hookErrors.push(...result.errors);
+  }
+
+  // received damage observes the final amount after all causou_dano scripts have modified it.
+  if (tracker.total > 0) {
+    const result = await runDamageScriptHooks(service, tracker, targetId, sourceId, "recebeu_dano");
+    hooksProcessed += result.processed;
+    hookErrors.push(...result.errors);
+  }
+
+  return {
+    ...base,
+    total_damage: tracker.total,
+    hp_after: tracker.hpAfter,
+    final_damage_by_hit: tracker.finalValues,
+    custom_script_hooks: { processed: hooksProcessed, errors: hookErrors },
+  };
+}
+
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (request.method !== "POST") return respond({ error: "Use POST." }, 405);
@@ -323,6 +557,16 @@ Deno.serve(async (request) => {
   const service = createClient(supabaseUrl, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+
+  let damageResult: ObjectValue | null = null;
+  if (body.action === "apply_damage") {
+    try {
+      damageResult = await applyDamageWithScripts(body, userClient, service);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return respond({ error: message }, 400);
+    }
+  }
 
   let processed = 0;
   let failed = 0;
@@ -392,5 +636,5 @@ Deno.serve(async (request) => {
     pendingLimitReached = true;
   }
 
-  return respond({ ok: true, processed, failed, pendingLimitReached });
+  return respond({ ok: true, processed, failed, pendingLimitReached, damage_result: damageResult });
 });
