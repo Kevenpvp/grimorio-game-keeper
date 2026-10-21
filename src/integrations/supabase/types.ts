@@ -20,6 +20,7 @@ export type Database = {
           cooldown_turns: number
           created_at: string
           custom_script_key: string | null
+          custom_attributes: Json
           description: string | null
           effects: Json
           end_effects: Json
@@ -36,6 +37,7 @@ export type Database = {
           cooldown_turns?: number
           created_at?: string
           custom_script_key?: string | null
+          custom_attributes?: Json
           description?: string | null
           effects?: Json
           end_effects?: Json
@@ -52,6 +54,7 @@ export type Database = {
           cooldown_turns?: number
           created_at?: string
           custom_script_key?: string | null
+          custom_attributes?: Json
           description?: string | null
           effects?: Json
           end_effects?: Json
