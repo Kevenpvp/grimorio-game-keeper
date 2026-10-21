@@ -344,7 +344,7 @@ function makeApi(
       if (!Array.isArray(input.valoresPorGolpe) || input.valoresPorGolpe.length !== context.dano.danoFinalPorGolpe.length) {
         throw new Error("A quantidade de valores finais precisa corresponder ao número de golpes.");
       }
-      const values = input.valoresPorGolpe.map((value) => finiteNumber(value, "Dano final", 0, 1_000_000));
+      const values = input.valoresPorGolpe.map((value) => finiteNumber(value, "Dano final", 0, 2_000_000));
       await onFinalDamageChange(values);
       context.dano = {
         ...context.dano,
@@ -447,6 +447,7 @@ type DamageCall = {
   typeId: string | null;
   magicLevel: "baixa" | "media" | "alta" | null;
   rawValues: number[];
+  critical: boolean;
 };
 
 type DamageTracker = {
@@ -513,6 +514,7 @@ async function runDamageScriptHooks(
           categoria: tracker.call.kind,
           tipoDanoId: tracker.call.typeId,
           grauMagia: tracker.call.magicLevel,
+          critico: tracker.call.critical,
           danoBrutoPorGolpe: [...tracker.rawValues],
           danoFinalPorGolpe: [...tracker.finalValues],
           danoFinalTotal: tracker.total,
@@ -560,6 +562,7 @@ async function applyDamageWithScripts(
   const kind = body._damage_kind as DamageCall["kind"];
   const typeId = typeof body._damage_type_id === "string" ? body._damage_type_id : null;
   const magicLevel = typeof body._magic_level === "string" ? body._magic_level as DamageCall["magicLevel"] : null;
+  const critical = body._critical_damage === true;
 
   if (!targetId || !["physical", "magical", "hybrid", "true"].includes(kind) ||
       rawValues.length < 1 || rawValues.length > 200 ||
@@ -567,7 +570,7 @@ async function applyDamageWithScripts(
     throw new Error("Dados de dano inválidos.");
   }
 
-  const call: DamageCall = { battleId, targetId, sourceId, kind, typeId, magicLevel, rawValues };
+  const call: DamageCall = { battleId, targetId, sourceId, kind, typeId, magicLevel, rawValues, critical };
   const { data, error } = await userClient.rpc("apply_battle_damage", {
     _battle_id: battleId,
     _character_id: targetId,
@@ -583,14 +586,28 @@ async function applyDamageWithScripts(
     throw new Error("A migração 0041 ainda não foi aplicada: falta o resultado por golpe.");
   }
 
-  const finalValues = base.final_damage_by_hit.map((value) => finiteNumber(value, "Dano calculado", 0, 1_000_000));
+  let finalValues = base.final_damage_by_hit.map((value) => finiteNumber(value, "Dano calculado", 0, 1_000_000));
+  let hpAfter = Number(base.hp_after ?? 0);
+  if (critical) {
+    const damageBeforeCritical = finalValues.reduce((sum, value) => sum + Math.round(value), 0);
+    finalValues = finalValues.map((value) => Math.min(2_000_000, Math.round(value * 2)));
+    const criticalExtraDamage = finalValues.reduce((sum, value) => sum + value, 0) - damageBeforeCritical;
+    if (criticalExtraDamage > 0) {
+      const { data: criticalHpAfter, error: criticalHpError } = await service.rpc("adjust_character_hp_for_custom_damage", {
+        _character_id: targetId,
+        _damage_delta: criticalExtraDamage,
+      });
+      if (criticalHpError) throw criticalHpError;
+      hpAfter = Number(criticalHpAfter);
+    }
+  }
   const tracker: DamageTracker = {
     call,
     rawValues,
     finalValues,
     total: finalValues.reduce((sum, value) => sum + Math.round(value), 0),
     hpBefore: Number(base.hp_before ?? 0),
-    hpAfter: Number(base.hp_after ?? 0),
+    hpAfter,
   };
   const hookErrors: string[] = [];
   let hooksProcessed = 0;
@@ -615,6 +632,7 @@ async function applyDamageWithScripts(
     total_damage: tracker.total,
     hp_after: tracker.hpAfter,
     final_damage_by_hit: tracker.finalValues,
+    critical_damage: critical,
     custom_script_hooks: { processed: hooksProcessed, errors: hookErrors },
   };
 }
