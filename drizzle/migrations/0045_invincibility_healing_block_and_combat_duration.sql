@@ -249,7 +249,7 @@ returns trigger
 language plpgsql
 security definer
 set search_path = public
-as $$
+as $
 declare
   _end_effects jsonb;
   _ability_name text;
@@ -309,7 +309,7 @@ begin
     _polarity := coalesce(nullif(_effect->>'polarity', ''), 'buff');
     _value_mode := coalesce(nullif(_effect->>'value_mode', ''), 'fixed');
     _amount := coalesce(nullif(_effect->>'amount', '')::numeric, 0);
-    _until_combat_end := coalesce((_effect->>'until_combat_end')::boolean, false);
+    _until_combat_end := coalesce((_effect->>'until_combat_end')::boolean, false) AND old.battle_id IS NOT NULL;
     _duration := CASE WHEN _until_combat_end THEN 1
       ELSE greatest(1, coalesce(nullif(_effect->>'duration', '')::integer, 1)) END;
     _effect_name := coalesce(nullif(_effect->>'name', ''), _ability_name);
@@ -452,7 +452,7 @@ begin
 
   return old;
 end;
-$$;
+$;
 
 create or replace function public.activate_character_ability(
   _character_ability_id uuid,
@@ -463,7 +463,7 @@ returns integer
 language plpgsql
 security definer
 set search_path = public
-as $$
+as $
 declare
   _assignment public.character_abilities;
   _owner_id uuid;
@@ -629,6 +629,13 @@ begin
     _value_mode := coalesce(nullif(_effect->>'value_mode', ''), 'fixed');
     _amount := coalesce(nullif(_effect->>'amount', '')::numeric, 0);
     _until_combat_end := coalesce((_effect->>'until_combat_end')::boolean, false);
+    IF _effect_type = 'healing'
+       AND coalesce(_effect->>'healing_timing', 'instant') <> 'per_turn' THEN
+      _until_combat_end := false;
+    END IF;
+    IF _until_combat_end AND _effective_battle_id IS NULL THEN
+      RAISE EXCEPTION 'Efeitos até o fim do combate só podem ser aplicados durante uma batalha ativa';
+    END IF;
     _duration := CASE WHEN _until_combat_end THEN 1
       ELSE coalesce(nullif(_effect->>'duration', '')::integer, 1) END;
     _effect_name := coalesce(nullif(_effect->>'name', ''), _assignment.name);
@@ -832,7 +839,7 @@ begin
 
   return _effective_mana_cost;
 end;
-$$;
+$;
 
 create or replace function public.advance_combat_turn(
   _battle_id uuid,
