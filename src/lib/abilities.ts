@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Tables } from "@/integrations/supabase/types";
 import { supabase } from "@/integrations/supabase/client";
 
-export type AbilityEffectType = "status" | "regeneration" | "mana_regeneration" | "mana_used" | "no_regen_hp" | "no_regen_mana" | "magic_prohibition" | "stun" | "damage_dealt" | "damage_reduction" | "no_mana" | "healing";
+export type AbilityEffectType = "status" | "regeneration" | "mana_regeneration" | "mana_used" | "no_regen_hp" | "no_regen_mana" | "magic_prohibition" | "stun" | "damage_dealt" | "damage_reduction" | "no_mana" | "healing" | "invincible" | "healing_blocked";
 export type DamageScope = "any" | "physical" | "magical";
 export type DamageReductionScope = "physical" | "magical";
 export type DamageMagicLevel = "baixa" | "media" | "alta";
@@ -12,6 +12,8 @@ export type AbilityEffectDefinition = {
   target_scope?: "caster" | "target" | "both";
   /** Explicitly apply this effect to both caster and selected target. */
   apply_both_on_activation?: boolean;
+  /** If true, the effect remains active until its battle ends, independent of turn advances. */
+  until_combat_end?: boolean;
   /** Instant restoration or a healing buff that ticks on each combat turn advance. */
   healing_timing?: "instant" | "per_turn";
   healing_hp_enabled?: boolean;
@@ -56,13 +58,17 @@ export type CharacterAbility = Omit<CharacterAbilityRow, "effects" | "passive_ef
 
 export function parseAbilityEffects(value: unknown): AbilityEffectDefinition[] {
   if (!Array.isArray(value)) return [];
-  const validTypes: AbilityEffectType[] = ["status", "regeneration", "mana_regeneration", "mana_used", "no_regen_hp", "no_regen_mana", "magic_prohibition", "stun", "damage_dealt", "damage_reduction", "no_mana", "healing"];
+  const validTypes: AbilityEffectType[] = ["status", "regeneration", "mana_regeneration", "mana_used", "no_regen_hp", "no_regen_mana", "magic_prohibition", "stun", "damage_dealt", "damage_reduction", "no_mana", "healing", "invincible", "healing_blocked"];
   return value.flatMap((item): AbilityEffectDefinition[] => {
     if (!item || typeof item !== "object") return [];
     const raw = item as Record<string, unknown>;
     if (!validTypes.includes(raw.effect_type as AbilityEffectType)) return [];
     const effectType = raw.effect_type as AbilityEffectType;
-    const polarity = effectType === "no_mana" ? "debuff" : effectType === "damage_reduction" ? "buff" : raw.polarity === "debuff" ? "debuff" : "buff";
+    const polarity = effectType === "no_mana" || effectType === "healing_blocked" || effectType === "magic_prohibition"
+      ? "debuff"
+      : effectType === "damage_reduction" || effectType === "invincible"
+        ? "buff"
+        : raw.polarity === "debuff" ? "debuff" : "buff";
     const valueMode = raw.value_mode === "percent" ? "percent" : "fixed";
     const amount = Number(raw.amount ?? 0);
     const duration = Number(raw.duration ?? 1);
@@ -83,6 +89,7 @@ export function parseAbilityEffects(value: unknown): AbilityEffectDefinition[] {
       value_mode: valueMode,
       amount: Number.isFinite(amount) ? Math.max(0, amount) : 0,
       duration: Number.isFinite(duration) ? Math.max(1, Math.floor(duration)) : 1,
+      until_combat_end: raw.until_combat_end === true,
       damage_scope: raw.damage_scope === "physical" || raw.damage_scope === "magical" ? raw.damage_scope : "any",
       damage_reduction_scope: raw.damage_reduction_scope === "magical" ? "magical" : "physical",
       damage_reduction_type_id: null,
@@ -189,6 +196,7 @@ export type ActiveCharacterEffect = {
   amount: number;
   duration: number;
   duration_scope: string;
+  until_combat_end: boolean;
   source_character_ability_id: string | null;
   target_character_id?: string | null;
   effect_data?: import("@/integrations/supabase/types").Json;
