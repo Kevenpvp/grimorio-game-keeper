@@ -2,8 +2,8 @@ import { useId } from "react";
 import { Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { AttributeDef } from "@/lib/sheets";
-import { useDamageTypes, type AbilityEffectDefinition, type AbilityEffectType, type DamageScope, type DamageReductionScope, type DamageMagicLevel } from "@/lib/abilities";
+import { useRaces, type AttributeDef } from "@/lib/sheets";
+import { useDamageTypes, type AbilityEffectDefinition, type AbilityEffectType, type DamageScope, type DamageReductionScope, type DamageReceivedScope, type DamageMagicLevel } from "@/lib/abilities";
 
 const effectTypeLabels: Record<AbilityEffectType, string> = {
   status: "Buff/debuff de atributo",
@@ -17,6 +17,7 @@ const effectTypeLabels: Record<AbilityEffectType, string> = {
   damage_dealt: "Dano Causado",
   no_mana: "Sem Mana",
   damage_reduction: "Mitigação de Dano",
+  damage_received: "Dano Recebido — recebe dano aumentado",
   healing: "Cura / cura por rodada",
   invincible: "Invencível — não recebe dano",
   healing_blocked: "Bloqueio de Cura — não recebe curas de habilidades",
@@ -57,6 +58,7 @@ export function AbilityEffectsEditor({
 }) {
   const isPermanent = permanent ?? isPassive ?? false;
   const { data: damageTypes = [] } = useDamageTypes();
+  const { data: races = [] } = useRaces();
   const effectEditorId = useId();
 
   function patch(index: number, values: Partial<AbilityEffectDefinition>) {
@@ -83,6 +85,10 @@ export function AbilityEffectsEditor({
       damage_reduction_magic_level: null,
       damage_reduction_type_ids: damageTypes[0] ? [damageTypes[0].id] : [],
       damage_reduction_magic_levels: ["baixa"],
+      damage_received_scope: "any",
+      damage_received_type_ids: [],
+      damage_received_magic_levels: [],
+      damage_received_race_id: null,
       target_scope: "target",
       apply_both_on_activation: false,
       healing_timing: "instant",
@@ -131,14 +137,17 @@ export function AbilityEffectsEditor({
         const isDamageDealt = effect.effect_type === "damage_dealt";
         const isNoMana = effect.effect_type === "no_mana";
         const isDamageReduction = effect.effect_type === "damage_reduction";
+        const isDamageReceived = effect.effect_type === "damage_received";
         const isHealing = effect.effect_type === "healing";
         const isMagicHealingReversal = effect.effect_type === "magic_healing_reversal";
         const selectedReductionTypeIds = effect.damage_reduction_type_ids ?? (effect.damage_reduction_type_id ? [effect.damage_reduction_type_id] : []);
         const selectedReductionMagicLevels = effect.damage_reduction_magic_levels ?? (effect.damage_reduction_magic_level ? [effect.damage_reduction_magic_level] : []);
+        const selectedDamageReceivedTypeIds = effect.damage_received_type_ids ?? [];
+        const selectedDamageReceivedLevels = effect.damage_received_magic_levels ?? [];
         const selectedMagicHealTypeIds = effect.magic_healing_type_ids ?? [];
         const selectedMagicHealLevels = effect.magic_healing_magic_levels ?? [];
         const needsAttribute = effect.effect_type === "status" || effect.effect_type === "regeneration";
-        const needsValue = needsAttribute || effect.effect_type === "mana_regeneration" || effect.effect_type === "mana_used" || effect.effect_type === "damage_dealt" || isDamageReduction;
+        const needsValue = needsAttribute || effect.effect_type === "mana_regeneration" || effect.effect_type === "mana_used" || effect.effect_type === "damage_dealt" || isDamageReduction || isDamageReceived;
         function patchHealingOption(
           resourceKey: "hp" | "mana" | "body" | "sanity",
           field: "enabled" | "mode" | "amount",
@@ -173,7 +182,7 @@ export function AbilityEffectsEditor({
                     healing_damage_type_id: type === "healing" ? (effect.healing_damage_type_id ?? damageTypes[0]?.id ?? null) : effect.healing_damage_type_id,
                     healing_magic_level: type === "healing" ? (effect.healing_magic_level ?? "baixa") : effect.healing_magic_level,
                     attribute_key: type === "mana_regeneration" ? "mana" : type === "regeneration" ? "hp" : type === "status" ? firstStatusKey() : null,
-                    polarity: type === "magic_prohibition" || type === "no_mana" || type === "healing_blocked" || type === "magic_healing_reversal"
+                    polarity: type === "magic_prohibition" || type === "no_mana" || type === "healing_blocked" || type === "magic_healing_reversal" || type === "damage_received"
                       ? "debuff"
                       : type === "damage_reduction" || type === "invincible" ? "buff" : effect.polarity,
                     damage_reduction_scope: type === "damage_reduction" ? "physical" : effect.damage_reduction_scope,
@@ -181,6 +190,10 @@ export function AbilityEffectsEditor({
                     damage_reduction_magic_level: null,
                     damage_reduction_type_ids: type === "damage_reduction" ? (damageTypes[0] ? [damageTypes[0].id] : []) : null,
                     damage_reduction_magic_levels: type === "damage_reduction" ? ["baixa"] : null,
+                    damage_received_scope: type === "damage_received" ? (effect.damage_received_scope ?? "any") : effect.damage_received_scope,
+                    damage_received_type_ids: type === "damage_received" ? (effect.damage_received_type_ids ?? []) : effect.damage_received_type_ids,
+                    damage_received_magic_levels: type === "damage_received" ? (effect.damage_received_magic_levels ?? []) : effect.damage_received_magic_levels,
+                    damage_received_race_id: type === "damage_received" ? (effect.damage_received_race_id ?? null) : effect.damage_received_race_id,
                   });
                 }}>
                 {Object.entries(effectTypeLabels)
@@ -302,6 +315,97 @@ export function AbilityEffectsEditor({
                     </>
                   )}
                   <p className="self-end text-xs text-muted-foreground sm:col-span-2">Reduz o dano recebido depois da defesa correspondente. O valor fixo é aplicado primeiro e depois a porcentagem. Em dano híbrido, a redução atua apenas na metade compatível.</p>
+                </>
+              )}
+              {isDamageReceived && (
+                <>
+                  <label className="space-y-1 text-xs font-medium">
+                    Categoria de dano aumentado
+                    <select aria-label="Categoria de dano aumentado" className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                      value={effect.damage_received_scope ?? "any"}
+                      onChange={(e) => {
+                        const scope = e.target.value as DamageReceivedScope;
+                        patch(index, {
+                          damage_received_scope: scope,
+                          damage_received_type_ids: effect.damage_received_type_ids ?? [],
+                          damage_received_magic_levels: effect.damage_received_magic_levels ?? [],
+                          damage_received_race_id: scope === "race" ? (effect.damage_received_race_id ?? races[0]?.id ?? null) : effect.damage_received_race_id ?? null,
+                          polarity: "debuff",
+                        });
+                      }}>
+                      <option value="any">Qualquer dano, de qualquer origem</option>
+                      <option value="physical">Dano físico</option>
+                      <option value="magical">Dano mágico</option>
+                      <option value="race">Qualquer dano de uma raça específica</option>
+                    </select>
+                  </label>
+                  {effect.damage_received_scope === "race" && (
+                    <label className="space-y-1 text-xs font-medium">
+                      Raça de quem causa o dano
+                      <select aria-label="Raça de quem causa o dano" className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                        value={effect.damage_received_race_id ?? ""}
+                        onChange={(e) => patch(index, { damage_received_race_id: e.target.value || null, polarity: "debuff" })}>
+                        <option value="">Selecione uma raça</option>
+                        {races.map((race) => <option key={race.id} value={race.id}>{race.name}</option>)}
+                      </select>
+                    </label>
+                  )}
+                  {effect.damage_received_scope === "magical" && (
+                    <>
+                      <fieldset className="space-y-2 text-xs sm:col-span-2">
+                        <legend className="font-medium">Tipos mágicos que aumentam o dano</legend>
+                        <label className="flex items-center gap-2 rounded-md border border-border px-2 py-2">
+                          <input type="radio" name={`${effectEditorId}-dano-recebido-tipos-${index}`}
+                            checked={selectedDamageReceivedTypeIds.length === 0}
+                            onChange={() => patch(index, { damage_received_type_ids: [] })} />
+                          Todos os tipos mágicos
+                        </label>
+                        {damageTypes.length === 0
+                          ? <p className="text-amber-500">Nenhum tipo mágico cadastrado.</p>
+                          : <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                              {damageTypes.map((type) => (
+                                <label key={type.id} className="flex items-center gap-2 rounded-md border border-border px-2 py-2">
+                                  <input type="checkbox" checked={selectedDamageReceivedTypeIds.includes(type.id)}
+                                    onChange={(e) => {
+                                      const next = e.target.checked
+                                        ? [...selectedDamageReceivedTypeIds, type.id]
+                                        : selectedDamageReceivedTypeIds.filter((id) => id !== type.id);
+                                      patch(index, { damage_received_type_ids: next });
+                                    }} />
+                                  {type.name}
+                                </label>
+                              ))}
+                            </div>}
+                      </fieldset>
+                      <fieldset className="space-y-2 text-xs sm:col-span-2">
+                        <legend className="font-medium">Nível da magia</legend>
+                        <label className="flex items-center gap-2 rounded-md border border-border px-2 py-2">
+                          <input type="radio" name={`${effectEditorId}-dano-recebido-niveis-${index}`}
+                            checked={selectedDamageReceivedLevels.length === 0}
+                            onChange={() => patch(index, { damage_received_magic_levels: [] })} />
+                          Qualquer nível
+                        </label>
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                          {([[ "baixa", "Baixa" ], [ "media", "Média" ], [ "alta", "Alta" ]] as const).map(([level, label]) => (
+                            <label key={level} className="flex items-center gap-2 rounded-md border border-border px-2 py-2">
+                              <input type="checkbox" checked={selectedDamageReceivedLevels.includes(level)}
+                                onChange={(e) => {
+                                  const next = e.target.checked
+                                    ? [...selectedDamageReceivedLevels, level]
+                                    : selectedDamageReceivedLevels.filter((selected) => selected !== level);
+                                  patch(index, { damage_received_magic_levels: next });
+                                }} />
+                              {label}
+                            </label>
+                          ))}
+                        </div>
+                      </fieldset>
+                    </>
+                  )}
+                  <p className="self-end text-xs text-amber-500 sm:col-span-2">
+                    Este é sempre um debuff. O aumento fixo e a porcentagem são aplicados depois da Defesa e da Mitigação compatíveis.
+                    Em dano híbrido, filtros físicos e mágicos só alteram sua metade correspondente; a opção por raça afeta qualquer categoria de dano.
+                  </p>
                 </>
               )}
               {isMagicHealingReversal && (
@@ -530,7 +634,7 @@ export function AbilityEffectsEditor({
               )}
               {needsValue && (
                 <>
-                  {!isDamageReduction && (
+                  {!isDamageReduction && !isDamageReceived && (
                     <select aria-label="Buff ou debuff" className="h-9 min-w-0 rounded-md border border-input bg-background px-2 text-sm" value={effect.polarity}
                     onChange={(e) => patch(index, { polarity: e.target.value as "buff" | "debuff" })}>
                     <option value="buff">Buff</option><option value="debuff">Debuff</option>
@@ -541,7 +645,7 @@ export function AbilityEffectsEditor({
                     <option value="fixed">Valor fixo</option><option value="percent">Porcentagem</option>
                   </select>
                   <label className="space-y-1 text-xs font-medium">
-                    Valor ({effect.value_mode === "percent" ? "%" : effect.effect_type === "damage_dealt" ? "dano fixo" : effect.effect_type === "mana_regeneration" || effect.effect_type === "mana_used" ? "Mana" : effect.effect_type === "damage_reduction" ? "dano reduzido" : "pontos"})
+                    Valor ({effect.value_mode === "percent" ? "%" : effect.effect_type === "damage_dealt" ? "dano fixo" : effect.effect_type === "mana_regeneration" || effect.effect_type === "mana_used" ? "Mana" : effect.effect_type === "damage_reduction" ? "dano reduzido" : effect.effect_type === "damage_received" ? "dano extra recebido" : "pontos"})
                     <Input type="number" min="0" value={effect.amount} onChange={(e) => patch(index, { amount: Math.max(0, Number(e.target.value) || 0) })} />
                   </label>
                 </>
@@ -575,6 +679,7 @@ export function AbilityEffectsEditor({
               {effect.effect_type === "mana_regeneration" && <p className="self-end text-xs text-muted-foreground">Afeta regeneração de Mana por turno e recuperação manual, mas não o preenchimento completo.</p>}
               {effect.effect_type === "mana_used" && <p className="self-end text-xs text-muted-foreground">Buff reduz Mana gasta; debuff aumenta o custo das habilidades.</p>}
               {effect.effect_type === "damage_dealt" && <p className="self-end text-xs text-muted-foreground">Modifica o dano correspondente ao tipo selecionado antes das defesas. Em dano híbrido, efeitos físicos e mágicos ajustam sua metade correspondente; “Qualquer dano” também afeta dano verdadeiro.</p>}
+              {isDamageReceived && <p className="self-end text-xs text-muted-foreground sm:col-span-2">O valor fixo é dano adicional por acerto; a porcentagem aumenta o dano final depois das defesas e mitigações aplicáveis.</p>}
             </div>
           </div>
         );
