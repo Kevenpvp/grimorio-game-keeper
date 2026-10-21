@@ -325,8 +325,25 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
     if (!name.trim()) { toast.error("Informe o nome"); return; }
     if (!Number.isFinite(cost) || cost < 0) { toast.error("Custo de Mana inválido"); return; }
     if (canActivate && (!Number.isFinite(cooldownTurns) || cooldownTurns < 1)) { toast.error("Habilidade ativável precisa ter cooldown de pelo menos 1 turno"); return; }
-    if (canActivate && endEffects.length > 0 && effects.length === 0) {
-      toast.error("Configure pelo menos um efeito ao ativar para que o sistema detecte quando a habilidade acaba.");
+    const canTriggerEndEffects = effects.some((effect) =>
+      effect.effect_type !== "healing" || effect.healing_timing === "per_turn"
+    );
+    if (canActivate && endEffects.length > 0 && !canTriggerEndEffects) {
+      toast.error("Efeitos de encerramento precisam de pelo menos um efeito ativo com duração. Uma cura instantânea sozinha não tem duração para encerrar.");
+      return;
+    }
+    const hasInvalidHealing = [...effects, ...endEffects].some((effect) =>
+      effect.effect_type === "healing" &&
+      !effect.healing_hp_enabled &&
+      !effect.healing_mana_enabled &&
+      !effect.healing_body_enabled &&
+      !effect.healing_sanity_enabled &&
+      !effect.healing_remove_debuffs &&
+      !(effect.healing_reduce_debuff_turns_fixed && effect.healing_reduce_debuff_turns_fixed > 0) &&
+      !(effect.healing_reduce_debuff_turns_percent && effect.healing_reduce_debuff_turns_percent > 0)
+    );
+    if (hasInvalidHealing) {
+      toast.error("Configure pelo menos uma ação em cada efeito de cura.");
       return;
     }
     setBusy(true);
