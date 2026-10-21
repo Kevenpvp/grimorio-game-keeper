@@ -667,8 +667,20 @@ Deno.serve(async (request) => {
       damageResult = await applyDamageWithScripts(body, userClient, service);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      console.error("Apply damage request failed:", message);
       return respond({ error: message }, 400);
     }
+
+    // Damage hooks run synchronously inside applyDamageWithScripts. Do not drain the
+    // unrelated queued-event worker after HP has already changed: a queue/RPC failure
+    // here would incorrectly turn a successful damage action into an HTTP error.
+    return respond({
+      ok: true,
+      processed: 0,
+      failed: 0,
+      pendingLimitReached: false,
+      damage_result: damageResult,
+    });
   }
 
   let processed = 0;
