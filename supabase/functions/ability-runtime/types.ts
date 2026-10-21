@@ -2,7 +2,9 @@ export type AbilityScriptEventType =
   | "turno_avançou"
   | "habilidade_ativada"
   | "efeito_aplicado_no_caster"
-  | "efeito_removido_no_caster";
+  | "efeito_removido_no_caster"
+  | "recebeu_dano"
+  | "causou_dano";
 
 export type ScriptTarget = "caster" | "alvo";
 export type ScriptResource = "hp" | "mana" | "corpo" | "sanidade";
@@ -12,6 +14,19 @@ export interface ScriptCharacter {
   id: string;
   nome: string;
   nomeJogador?: string | null;
+}
+
+export interface AbilityDamageContext {
+  origemId: string | null;
+  personagemAtingidoId: string;
+  categoria: "physical" | "magical" | "hybrid" | "true";
+  tipoDanoId: string | null;
+  grauMagia: "baixa" | "media" | "alta" | null;
+  danoBrutoPorGolpe: number[];
+  danoFinalPorGolpe: number[];
+  danoFinalTotal: number;
+  hpAntes: number;
+  hpDepois: number;
 }
 
 export interface AbilityScriptContext {
@@ -24,16 +39,19 @@ export interface AbilityScriptContext {
     nome: string;
     scriptKey: string;
   };
-  /** Personagem que tem esta habilidade atribuída. */
   caster: ScriptCharacter;
-  /** Alvo escolhido na ativação, quando o evento tiver um alvo. */
+  /** Target selected during activation or opposite side of a damage event. */
   alvo: ScriptCharacter | null;
   batalha: { id: string; nome: string; turnoGeral: number; ativa: boolean } | null;
   turno: { individual: number | null; geral: number | null };
-  /** Snapshot do efeito relacionado ao evento, quando aplicável. */
   efeito: Record<string, unknown> | null;
-  /** Dados adicionais imutáveis gravados pelo evento no banco. */
   dados: Record<string, unknown>;
+  /** Typed configuration values set by the GM on the ability definition. */
+  atributos: Record<string, number | string | boolean>;
+  /** Mutable per-character-ability state persisted between events. */
+  estado: Record<string, unknown>;
+  /** Damage calculation snapshot, present for recebeu_dano and causou_dano. */
+  dano: AbilityDamageContext | null;
 }
 
 export interface ApplyScriptEffectInput {
@@ -56,6 +74,9 @@ export interface AbilityScriptApi {
     operacao: ResourceOperation;
     quantidade: number;
   }): Promise<void>;
+  atualizarEstado(patch: Record<string, unknown>): Promise<void>;
+  /** Only valid during causou_dano; changes the post-defense and post-mitigation damage by hit. */
+  modificarDanoFinal(input: { valoresPorGolpe: number[] }): Promise<void>;
   aplicarEfeito(input: {
     personagem: ScriptTarget;
     efeito: ApplyScriptEffectInput;
