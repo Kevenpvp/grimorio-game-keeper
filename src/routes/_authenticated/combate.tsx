@@ -147,6 +147,7 @@ function useLiveBattles(isMaster: boolean, userId: string | undefined) {
         if (isMaster) void dispatchCustomAbilityScriptEvents();
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "character_attributes" }, refreshBattles)
+      .on("postgres_changes", { event: "*", schema: "public", table: "characters" }, refreshBattles)
       .on("postgres_changes", { event: "*", schema: "public", table: "battle_effects" }, () => {
         scheduleCombatRefresh(qc, ["battles"], ["battle-effects"], ["character-active-effects"], ["battle-character-public-states"]);
         if (isMaster) void dispatchCustomAbilityScriptEvents();
