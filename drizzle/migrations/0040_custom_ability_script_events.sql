@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS public.ability_script_events (
 );
 
 CREATE INDEX IF NOT EXISTS ability_script_events_pending_idx
-  ON public.ability_script_events(status, created_at)
+  ON public.ability_script_events(status, queue_order)
   WHERE status IN ('pending','processing');
 
 ALTER TABLE public.ability_script_events ENABLE ROW LEVEL SECURITY;
