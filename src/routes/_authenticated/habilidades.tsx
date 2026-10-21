@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { parseAbilityEffects, useAbilities, type Ability, type AbilityEffectDefinition } from "@/lib/abilities";
+import { CUSTOM_ABILITY_SCRIPTS } from "@/lib/custom-ability-scripts";
 import { useDefs, useMe } from "@/lib/sheets";
 import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
 import type { Json } from "@/integrations/supabase/types";
@@ -40,7 +41,7 @@ function HabilidadesPage() {
 
   async function create() {
     const { data, error } = await supabase.from("abilities").insert({
-      name: "Nova habilidade", description: "", is_passive: false, can_activate: true, is_magical: true, self_target_only: false, cooldown_turns: 1, mana_cost: 0, effects: [], passive_effects: [], end_effects: [],
+      name: "Nova habilidade", description: "", is_passive: false, can_activate: true, is_magical: true, self_target_only: false, cooldown_turns: 1, mana_cost: 0, effects: [], passive_effects: [], end_effects: [], custom_script_key: null,
     }).select("id").single();
     if (error) { toast.error(error.message); return; }
     setSearch("");
@@ -86,6 +87,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
   const qc = useQueryClient();
   const [name, setName] = useState(ability.name);
   const [description, setDescription] = useState(ability.description ?? "");
+  const [customScriptKey, setCustomScriptKey] = useState(ability.custom_script_key ?? "");
   const [canActivate, setCanActivate] = useState(ability.can_activate);
   const [isMagical, setIsMagical] = useState(ability.is_magical);
   const [selfTargetOnly, setSelfTargetOnly] = useState(ability.self_target_only);
@@ -99,6 +101,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
   useEffect(() => {
     setName(ability.name);
     setDescription(ability.description ?? "");
+    setCustomScriptKey(ability.custom_script_key ?? "");
     setCanActivate(ability.can_activate);
     setIsMagical(ability.is_magical);
     setSelfTargetOnly(ability.self_target_only);
@@ -151,6 +154,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
     const { error } = await supabase.from("abilities").update({
       name: name.trim(),
       description: description.trim() || null,
+      custom_script_key: customScriptKey || null,
       can_activate: canActivate,
       is_magical: isMagical,
       self_target_only: canActivate && selfTargetOnly,
@@ -208,6 +212,22 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
       <div className="space-y-1.5">
         <Label>Descrição</Label>
         <Textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="O que a habilidade faz..." />
+      </div>
+      <div className="space-y-1.5 rounded-md border border-border p-3">
+        <Label>Script JavaScript personalizado</Label>
+        <select
+          className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+          value={customScriptKey}
+          onChange={(e) => setCustomScriptKey(e.target.value)}
+        >
+          <option value="">Nenhum script personalizado</option>
+          {CUSTOM_ABILITY_SCRIPTS.map((script) => (
+            <option key={script.key} value={script.key}>{script.label}</option>
+          ))}
+        </select>
+        <p className="text-xs text-muted-foreground">
+          Os scripts são executados no servidor quando os eventos da habilidade acontecem. Para adicionar um script, crie o arquivo na pasta supabase/functions/ability-runtime/scripts e registre a chave no registry e nesta lista.
+        </p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         {canActivate && <div className="space-y-1.5"><Label>Cooldown (turnos)</Label><Input type="number" min="1" value={cooldown} onChange={(e) => setCooldown(e.target.value)} /></div>}
