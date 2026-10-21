@@ -35,6 +35,14 @@ await api.alterarRecurso({
   quantidade: 10,
 });
 
+const hp = await api.consultarRecurso({ personagem: "caster", recurso: "hp" });
+// { atual: 80, maximo: 100 }
+
+const acumulado = await api.ajustarEstadoNumerico({
+  chave: "superaquecimento",
+  delta: 12, // use valor negativo para gastar; mínimo padrão 0
+});
+
 const efeitoId = await api.aplicarEfeito({
   personagem: "alvo", // ou "caster"
   efeito: {
@@ -51,7 +59,7 @@ const efeitoId = await api.aplicarEfeito({
 await api.removerEfeito({ efeitoId });
 ```
 
-`alterarRecurso` respeita os limites do recurso (HP/Mana até o máximo calculado; Corpo/Sanidade entre 0 e 100). `aplicarEfeito` usa os mesmos tipos e restrições de efeito do combate; duração e quantidade são validadas. `removerEfeito` só pode remover um efeito no Caster ou no Alvo do evento e, se estiver numa batalha, não pode remover de outra batalha.
+`alterarRecurso` respeita os limites do recurso (HP/Mana até o máximo calculado; Corpo/Sanidade entre 0 e 100). Modificações de HP por soma/subtração e alterações numéricas de estado usam operações atômicas no banco. `consultarRecurso` retorna valor atual e máximo. `ajustarEstadoNumerico` soma ou subtrai uma chave numérica do estado sem perder incrementos concorrentes. `aplicarEfeito` usa os mesmos tipos e restrições de efeito do combate; duração e quantidade são validadas. `removerEfeito` só pode remover um efeito no Caster ou no Alvo do evento e, se estiver numa batalha, não pode remover de outra batalha.
 
 ## Como adicionar um script
 
