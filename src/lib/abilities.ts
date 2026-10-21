@@ -26,6 +26,8 @@ export type AbilityEffectDefinition = {
   healing_sanity_amount?: number;
   healing_remove_debuffs?: boolean;
   healing_debuff_blacklist?: string[];
+  /** Specific effect names that cleansing/reduction must leave untouched. */
+  healing_debuff_name_blacklist?: string[];
   healing_reduce_debuff_turns_fixed?: number;
   healing_reduce_debuff_turns_percent?: number;
   /** Metadata reserved for future race interactions with healing magic. */
@@ -102,6 +104,9 @@ export function parseAbilityEffects(value: unknown): AbilityEffectDefinition[] {
       healing_remove_debuffs: raw.healing_remove_debuffs === true,
       healing_debuff_blacklist: Array.isArray(raw.healing_debuff_blacklist)
         ? raw.healing_debuff_blacklist.filter((item): item is string => typeof item === "string")
+        : [],
+      healing_debuff_name_blacklist: Array.isArray(raw.healing_debuff_name_blacklist)
+        ? raw.healing_debuff_name_blacklist.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean)
         : [],
       healing_reduce_debuff_turns_fixed: Math.max(0, Math.floor(Number.isFinite(Number(raw.healing_reduce_debuff_turns_fixed)) ? Number(raw.healing_reduce_debuff_turns_fixed) : 0)),
       healing_reduce_debuff_turns_percent: Math.max(0, Math.min(100, Number.isFinite(Number(raw.healing_reduce_debuff_turns_percent)) ? Number(raw.healing_reduce_debuff_turns_percent) : 0)),
