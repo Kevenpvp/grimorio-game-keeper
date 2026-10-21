@@ -54,6 +54,7 @@ export function DamageApplier({ target, battleId = null, sources = [] }: {
       const count = Number(repeatCount);
       if (!Number.isFinite(amount) || amount < 0 || amount > 1000000 ||
           !Number.isInteger(count) || count < 1 || count > 200) {
+        setCriticalDamage(false);
         toast.error("Informe um dano válido e uma quantidade de 1 a 200 golpes");
         return;
       }
@@ -63,11 +64,13 @@ export function DamageApplier({ target, battleId = null, sources = [] }: {
       values = parts.map(Number);
       if (values.length < 1 || values.length > 200 ||
           values.some((n) => !Number.isFinite(n) || n < 0 || n > 1000000)) {
+        setCriticalDamage(false);
         toast.error("Informe de 1 a 200 danos válidos, separados por vírgula");
         return;
       }
     }
     if (needsMagic && !damageTypeId) {
+      setCriticalDamage(false);
       toast.error("Selecione um tipo de dano mágico");
       return;
     }
