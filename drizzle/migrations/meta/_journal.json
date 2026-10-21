@@ -239,6 +239,13 @@
       "when": 1792677600000,
       "tag": "0033_ability_targets_healing_and_periodic_heal",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1792677600001,
+      "tag": "0034_both_ability_effect_target",
+      "breakpoints": true
     }
   ]
 }
