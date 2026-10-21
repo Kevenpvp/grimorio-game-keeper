@@ -307,6 +307,7 @@ export type Database = {
           cooldown_remaining: number
           cooldown_turns: number
           created_at: string
+          custom_state: Json
           description: string | null
           effects: Json
           end_effects: Json
@@ -326,6 +327,7 @@ export type Database = {
           cooldown_remaining?: number
           cooldown_turns?: number
           created_at?: string
+          custom_state?: Json
           description?: string | null
           effects?: Json
           end_effects?: Json
@@ -345,6 +347,7 @@ export type Database = {
           cooldown_remaining?: number
           cooldown_turns?: number
           created_at?: string
+          custom_state?: Json
           description?: string | null
           effects?: Json
           end_effects?: Json
