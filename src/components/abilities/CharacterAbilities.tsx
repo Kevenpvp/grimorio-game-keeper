@@ -243,13 +243,13 @@ export function CharacterAbilitiesPanel({
                 {ability.passive_effects.length > 0 && (
                   <div className="mt-2 space-y-1 border-t border-border pt-2 text-xs text-muted-foreground">
                     <div className="font-semibold text-gold">Efeitos passivos · permanentes</div>
-                    {ability.passive_effects.map((effect, index) => <div key={index}>{effectSummary(effect, defs ?? [], damageTypes)}</div>)}
+                    {ability.passive_effects.map((effect, index) => <div key={index}>{effectSummary(effect, defs ?? [], damageTypes, races)}</div>)}
                   </div>
                 )}
                 {ability.end_effects.length > 0 && ability.can_activate && (
                   <div className="mt-2 space-y-1 border-t border-border pt-2 text-xs text-muted-foreground">
                     <div className="font-semibold text-gold">Efeitos quando a habilidade acaba</div>
-                    {ability.end_effects.map((effect, index) => <div key={index}>{effectSummary(effect, defs ?? [], damageTypes)} · Destino: {effect.target_scope === "caster" ? "Caster" : effect.target_scope === "both" ? "Ambos" : "Alvo"}{effect.effect_type === "healing" && effect.healing_timing !== "per_turn" ? "" : ` · ${effect.until_combat_end ? "até o fim do combate" : `${effect.duration} turno(s)`}`}</div>)}
+                    {ability.end_effects.map((effect, index) => <div key={index}>{effectSummary(effect, defs ?? [], damageTypes, races)} · Destino: {effect.target_scope === "caster" ? "Caster" : effect.target_scope === "both" ? "Ambos" : "Alvo"}{effect.effect_type === "healing" && effect.healing_timing !== "per_turn" ? "" : ` · ${effect.until_combat_end ? "até o fim do combate" : `${effect.duration} turno(s)`}`}</div>)}
                   </div>
                 )}
               </article>
