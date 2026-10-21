@@ -66,6 +66,23 @@ function effectSummary(effect: AbilityEffectDefinition, defs: NonNullable<Return
   if (effect.effect_type === "no_mana") return `${effect.name}: Sem Mana — zera a Mana e bloqueia habilidades mágicas ou que consomem Mana`;
   if (effect.effect_type === "invincible") return `${effect.name}: não recebe nenhum dano enquanto estiver ativo`;
   if (effect.effect_type === "healing_blocked") return `${effect.name}: bloqueia curas de habilidades enquanto estiver ativo`;
+  if (effect.effect_type === "magic_healing_reversal") {
+    const selectedTypeIds = effect.magic_healing_type_ids ?? [];
+    const selectedLevels = effect.magic_healing_magic_levels ?? [];
+    const types = selectedTypeIds.length === 0
+      ? "todos os tipos mágicos"
+      : selectedTypeIds.map((id) => damageTypes.find((type) => type.id === id)?.name ?? "tipo removido").join(", ");
+    const levels = selectedLevels.length === 0
+      ? "qualquer nível"
+      : selectedLevels.map((level) => level === "baixa" ? "baixo" : level === "media" ? "médio" : "alto").join(", ");
+    const mode = effect.magic_healing_reversal_damage_mode ?? "healing_amount";
+    const damage = mode === "custom"
+      ? `dano customizado de ${effect.magic_healing_reversal_custom_damage ?? 0}`
+      : mode === "both"
+        ? `valor da cura + ${effect.magic_healing_reversal_custom_damage ?? 0} de dano customizado`
+        : "dano igual ao valor da cura";
+    return `${effect.name}: reverte curas mágicas de ${types} (${levels}) em dano — ${damage}`;
+  }
   return `${effect.name}: Stun (visual)`;
 }
 
