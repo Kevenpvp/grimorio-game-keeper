@@ -37,6 +37,11 @@ export type AbilityEffectDefinition = {
   /** Metadata reserved for future race interactions with healing magic. */
   healing_damage_type_id?: string | null;
   healing_magic_level?: DamageMagicLevel | null;
+  /** Empty lists mean all magic types / all grades for Reversão de Cura. */
+  magic_healing_type_ids?: string[];
+  magic_healing_magic_levels?: DamageMagicLevel[];
+  magic_healing_reversal_damage_mode?: "healing_amount" | "custom" | "both";
+  magic_healing_reversal_custom_damage?: number;
   name: string;
   effect_type: AbilityEffectType;
   attribute_key: string | null;
@@ -58,13 +63,13 @@ export type CharacterAbility = Omit<CharacterAbilityRow, "effects" | "passive_ef
 
 export function parseAbilityEffects(value: unknown): AbilityEffectDefinition[] {
   if (!Array.isArray(value)) return [];
-  const validTypes: AbilityEffectType[] = ["status", "regeneration", "mana_regeneration", "mana_used", "no_regen_hp", "no_regen_mana", "magic_prohibition", "stun", "damage_dealt", "damage_reduction", "no_mana", "healing", "invincible", "healing_blocked"];
+  const validTypes: AbilityEffectType[] = ["status", "regeneration", "mana_regeneration", "mana_used", "no_regen_hp", "no_regen_mana", "magic_prohibition", "stun", "damage_dealt", "damage_reduction", "no_mana", "healing", "invincible", "healing_blocked", "magic_healing_reversal"];
   return value.flatMap((item): AbilityEffectDefinition[] => {
     if (!item || typeof item !== "object") return [];
     const raw = item as Record<string, unknown>;
     if (!validTypes.includes(raw.effect_type as AbilityEffectType)) return [];
     const effectType = raw.effect_type as AbilityEffectType;
-    const polarity = effectType === "no_mana" || effectType === "healing_blocked" || effectType === "magic_prohibition"
+    const polarity = effectType === "no_mana" || effectType === "healing_blocked" || effectType === "magic_prohibition" || effectType === "magic_healing_reversal"
       ? "debuff"
       : effectType === "damage_reduction" || effectType === "invincible"
         ? "buff"
@@ -123,6 +128,16 @@ export function parseAbilityEffects(value: unknown): AbilityEffectDefinition[] {
       healing_damage_type_id: typeof raw.healing_damage_type_id === "string" ? raw.healing_damage_type_id : null,
       healing_magic_level: validMagicLevels.includes(raw.healing_magic_level as DamageMagicLevel)
         ? raw.healing_magic_level as DamageMagicLevel : null,
+      magic_healing_type_ids: Array.isArray(raw.magic_healing_type_ids)
+        ? [...new Set(raw.magic_healing_type_ids.filter((value): value is string => typeof value === "string"))]
+        : [],
+      magic_healing_magic_levels: Array.isArray(raw.magic_healing_magic_levels)
+        ? [...new Set(raw.magic_healing_magic_levels.filter((value): value is DamageMagicLevel => validMagicLevels.includes(value as DamageMagicLevel)))]
+        : [],
+      magic_healing_reversal_damage_mode: raw.magic_healing_reversal_damage_mode === "custom" || raw.magic_healing_reversal_damage_mode === "both"
+        ? raw.magic_healing_reversal_damage_mode : "healing_amount",
+      magic_healing_reversal_custom_damage: Math.max(0, Math.min(1_000_000,
+        Number.isFinite(Number(raw.magic_healing_reversal_custom_damage)) ? Number(raw.magic_healing_reversal_custom_damage) : 0)),
     }];
   });
 }
