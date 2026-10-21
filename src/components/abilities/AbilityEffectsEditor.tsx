@@ -32,6 +32,8 @@ export function AbilityEffectsEditor({
   defs,
   allowHealing = true,
   allowPeriodicHealing = true,
+  allowedTypes,
+  allowPermanentMagicProhibition = false,
 }: {
   effects: AbilityEffectDefinition[];
   onChange: (effects: AbilityEffectDefinition[]) => void;
@@ -44,6 +46,10 @@ export function AbilityEffectsEditor({
   defs: AttributeDef[];
   allowHealing?: boolean;
   allowPeriodicHealing?: boolean;
+  /** Restrict effect types for specialized editors such as race traits. */
+  allowedTypes?: AbilityEffectType[];
+  /** Magic prohibition can be permanent when tied to a race, even though passive abilities omit it. */
+  allowPermanentMagicProhibition?: boolean;
 }) {
   const isPermanent = permanent ?? isPassive ?? false;
   const { data: damageTypes = [] } = useDamageTypes();
@@ -167,7 +173,10 @@ export function AbilityEffectsEditor({
                   });
                 }}>
                 {Object.entries(effectTypeLabels)
-                  .filter(([value]) => (!isPermanent || value !== "magic_prohibition") && (allowHealing || value !== "healing"))
+                  .filter(([value]) =>
+                    (!allowedTypes || allowedTypes.includes(value as AbilityEffectType)) &&
+                    (!isPermanent || allowPermanentMagicProhibition || value !== "magic_prohibition") &&
+                    (allowHealing || value !== "healing"))
                   .map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select>
               {!isPermanent && (
