@@ -136,6 +136,15 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
       toast.error("Efeitos de encerramento precisam de pelo menos um efeito ativo com duração. Uma cura instantânea sozinha não tem duração para encerrar.");
       return;
     }
+    const customAttributeKeys = customAttributes.map((attribute) => attribute.key.trim());
+    if (customAttributes.some((attribute) =>
+      !attribute.name.trim() ||
+      !/^[a-zA-Z][a-zA-Z0-9_]*$/.test(attribute.key) ||
+      (attribute.type === "number" && !Number.isFinite(Number(attribute.value)))
+    ) || new Set(customAttributeKeys).size !== customAttributeKeys.length) {
+      toast.error("Revise os atributos extras: cada um precisa de nome, chave API única e valor válido.");
+      return;
+    }
     const allConfiguredEffects = [...effects, ...passiveEffects, ...endEffects];
     const hasInvalidHealing = allConfiguredEffects.some((effect) =>
       effect.effect_type === "healing" &&
@@ -266,14 +275,24 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
               <Label>Nome do atributo</Label>
               <Input value={attribute.name} placeholder="Porcentagem máxima de dano refletido" onChange={(e) => {
                 const name = e.target.value;
-                setCustomAttributes((current) => current.map((item, itemIndex) => {
-                  if (itemIndex !== index) return item;
-                  const baseKey = customAttributeKey(name, index);
-                  const duplicate = current.some((other, otherIndex) => otherIndex !== index && other.key === baseKey);
-                  return { ...item, name, key: duplicate ? `${baseKey}_${index + 1}` : baseKey };
-                }));
+                setCustomAttributes((current) => current.map((item, itemIndex) =>
+                  itemIndex === index ? { ...item, name } : item
+                ));
               }} />
-              <p className="text-[11px] text-muted-foreground">Chave API: <code>{attribute.key}</code></p>
+              <div className="mt-2 space-y-1">
+                <Label>Chave da API</Label>
+                <Input
+                  value={attribute.key}
+                  placeholder="minha_chave"
+                  onChange={(e) => {
+                    const key = e.target.value.replace(/[^a-zA-Z0-9_]/g, "");
+                    setCustomAttributes((current) => current.map((item, itemIndex) =>
+                      itemIndex === index ? { ...item, key } : item
+                    ));
+                  }}
+                />
+                <p className="text-[11px] text-muted-foreground">Use esta chave no script em <code>contexto.atributos.{attribute.key || "chave"}</code>.</p>
+              </div>
             </div>
             <div className="space-y-1">
               <Label>Tipo</Label>
