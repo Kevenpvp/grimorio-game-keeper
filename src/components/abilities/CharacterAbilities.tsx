@@ -35,6 +35,8 @@ function effectSummary(effect: AbilityEffectDefinition, defs: NonNullable<Return
     restoreAmount(effect.healing_body_enabled, effect.healing_body_mode, effect.healing_body_amount, "Corpo", "do que falta");
     restoreAmount(effect.healing_sanity_enabled, effect.healing_sanity_mode, effect.healing_sanity_amount, "Sanidade", "do que falta");
     if (effect.healing_remove_debuffs) parts.push("remove debuffs permitidos");
+    const blockedNames = (effect.healing_debuff_name_blacklist ?? []).filter((name) => name.trim());
+    if (blockedNames.length > 0) parts.push(`preserva: ${blockedNames.join(", ")}`);
     if ((effect.healing_reduce_debuff_turns_fixed ?? 0) > 0) parts.push(`reduz debuffs em ${effect.healing_reduce_debuff_turns_fixed} turno(s)`);
     if ((effect.healing_reduce_debuff_turns_percent ?? 0) > 0) parts.push(`reduz duração em ${effect.healing_reduce_debuff_turns_percent}%`);
     const damageName = damageTypes.find((type) => type.id === effect.healing_damage_type_id)?.name;
