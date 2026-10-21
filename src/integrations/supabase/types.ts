@@ -728,6 +728,14 @@ export type Database = {
         Args: { _character_id: string; _race_id: string }
         Returns: undefined
       }
+      get_battle_character_public_states: {
+        Args: { _battle_id: string }
+        Returns: {
+          character_id: string
+          hp_state: string
+          mana_state: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
