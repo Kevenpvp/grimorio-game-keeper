@@ -18,6 +18,8 @@ const effectTypeLabels: Record<AbilityEffectType, string> = {
   no_mana: "Sem Mana",
   damage_reduction: "Mitigação de Dano",
   healing: "Cura / cura por rodada",
+  invincible: "Invencível — não recebe dano",
+  healing_blocked: "Bloqueio de Cura — não recebe curas de habilidades",
 };
 
 export function AbilityEffectsEditor({
@@ -64,6 +66,7 @@ export function AbilityEffectsEditor({
       value_mode: "fixed",
       amount: 10,
       duration: 2,
+      until_combat_end: false,
       damage_scope: "any",
       damage_reduction_scope: "physical",
       damage_reduction_type_id: null,
@@ -153,7 +156,9 @@ export function AbilityEffectsEditor({
                     healing_damage_type_id: type === "healing" ? (effect.healing_damage_type_id ?? damageTypes[0]?.id ?? null) : effect.healing_damage_type_id,
                     healing_magic_level: type === "healing" ? (effect.healing_magic_level ?? "baixa") : effect.healing_magic_level,
                     attribute_key: type === "mana_regeneration" ? "mana" : type === "regeneration" ? "hp" : type === "status" ? firstStatusKey() : null,
-                    polarity: type === "magic_prohibition" || type === "no_mana" ? "debuff" : type === "damage_reduction" ? "buff" : effect.polarity,
+                    polarity: type === "magic_prohibition" || type === "no_mana" || type === "healing_blocked"
+                      ? "debuff"
+                      : type === "damage_reduction" || type === "invincible" ? "buff" : effect.polarity,
                     damage_reduction_scope: type === "damage_reduction" ? "physical" : effect.damage_reduction_scope,
                     damage_reduction_type_id: null,
                     damage_reduction_magic_level: null,
@@ -445,14 +450,31 @@ export function AbilityEffectsEditor({
                 </>
               )}
               {!isPermanent && (!isHealing || (effect.healing_timing ?? "instant") === "per_turn") && (
-                <label className="space-y-1 text-xs font-medium">
-                  {isHealing ? "Duração do buff de cura (turnos)" : "Duração do efeito (turnos)"}
-                  <Input type="number" min="1" value={effect.duration} onChange={(e) => patch(index, { duration: Math.max(1, Math.floor(Number(e.target.value) || 1)) })} />
-                </label>
+                <>
+                  <label className="space-y-1 text-xs font-medium">
+                    Duração do efeito
+                    <select
+                      className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                      value={effect.until_combat_end ? "until_combat_end" : "turns"}
+                      onChange={(e) => patch(index, { until_combat_end: e.target.value === "until_combat_end" })}
+                    >
+                      <option value="turns">Por turnos</option>
+                      <option value="until_combat_end">Até o fim do combate</option>
+                    </select>
+                  </label>
+                  {!effect.until_combat_end && (
+                    <label className="space-y-1 text-xs font-medium">
+                      {isHealing ? "Duração do buff de cura (turnos)" : "Duração do efeito (turnos)"}
+                      <Input type="number" min="1" value={effect.duration} onChange={(e) => patch(index, { duration: Math.max(1, Math.floor(Number(e.target.value) || 1)) })} />
+                    </label>
+                  )}
+                </>
               )}
               {isPermanent && <p className="self-end text-xs text-muted-foreground">Efeito permanente enquanto a habilidade estiver atribuída.</p>}
               {isMagicProhibition && <p className="self-end text-xs text-amber-500 sm:col-span-2">Debuff: impede a ativação de habilidades mágicas ou que consomem Mana enquanto durar.</p>}
               {isNoMana && <p className="self-end text-xs text-amber-500 sm:col-span-2">Debuff: zera a Mana atual e máxima enquanto durar e bloqueia habilidades mágicas ou que gastem Mana. Não é possível mudar sua polaridade.</p>}
+              {effect.effect_type === "invincible" && <p className="self-end text-xs text-amber-500 sm:col-span-2">Buff: bloqueia todo dano recebido enquanto o efeito estiver ativo.</p>}
+              {effect.effect_type === "healing_blocked" && <p className="self-end text-xs text-amber-500 sm:col-span-2">Debuff: impede receber cura de habilidades, inclusive cura por rodada.</p>}
               {effect.effect_type === "mana_regeneration" && <p className="self-end text-xs text-muted-foreground">Afeta regeneração de Mana por turno e recuperação manual, mas não o preenchimento completo.</p>}
               {effect.effect_type === "mana_used" && <p className="self-end text-xs text-muted-foreground">Buff reduz Mana gasta; debuff aumenta o custo das habilidades.</p>}
               {effect.effect_type === "damage_dealt" && <p className="self-end text-xs text-muted-foreground">Modifica o dano correspondente ao tipo selecionado antes das defesas. Em dano híbrido, efeitos físicos e mágicos ajustam sua metade correspondente; “Qualquer dano” também afeta dano verdadeiro.</p>}
