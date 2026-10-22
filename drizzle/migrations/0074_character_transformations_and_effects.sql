@@ -614,7 +614,8 @@ BEGIN
   DO UPDATE SET image_path=EXCLUDED.image_path,updated_at=now();
 END;
 $function$
-\n
+
+
 
 REVOKE ALL ON FUNCTION public.apply_character_transformation_effects(uuid,uuid,uuid,jsonb,uuid,boolean,integer) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.apply_character_transformation_effects(uuid,uuid,uuid,jsonb,uuid,boolean,integer) TO service_role;
