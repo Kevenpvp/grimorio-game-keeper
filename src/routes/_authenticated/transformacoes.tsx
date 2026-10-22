@@ -297,14 +297,6 @@ function TransformationEditor({
         />
       </div>
 
-      <div className="space-y-3 rounded-md border border-border p-3">
-        <h3 className="text-sm font-semibold text-gold">Conceder transformação</h3>
-        <div className="grid gap-4 lg:grid-cols-2">
-          <TransformationGrantList transformationId={transformation.id} scope="race" />
-          <TransformationGrantList transformationId={transformation.id} scope="virtue" />
-        </div>
-      </div>
-
       <div className="flex flex-wrap gap-2">
         <Button onClick={() => void save()}>{isNew ? "Salvar transformação" : "Salvar alterações"}</Button>
         <Button variant="destructive" onClick={() => void remove()}><Trash2 className="mr-1 h-4 w-4" /> Excluir</Button>
