@@ -414,6 +414,13 @@
       "when": 1792785600013,
       "tag": "0058_always_reset_demonio_heat_when_battle_ends",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1792785600014,
+      "tag": "0059_return_invincibility_flag_from_damage_calculation",
+      "breakpoints": true
     }
   ]
 }
