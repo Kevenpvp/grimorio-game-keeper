@@ -317,7 +317,7 @@ function makeApi(
     },
 
     async sincronizarBonusCoracaoCorrompido(bonusForca?: number) {
-      const { error } = await service.rpc("sync_coracao_corrompido_strength_effect", {
+      const { error } = await service.rpc("sync_coracao_corrompido_strength_effect_with_bonus", {
         _character_id: context.caster.id,
         _bonus_strength: bonusForca === undefined || bonusForca === null
           ? null
