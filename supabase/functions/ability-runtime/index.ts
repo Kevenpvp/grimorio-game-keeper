@@ -712,7 +712,7 @@ async function applyDamageWithScripts(
   // This trigger runs after damage is finalized, so its buff/debuff never alters the
   // hit that activated it. Zero damage (including Invencível) does not trigger it.
   if (tracker.total > 0) {
-    const { data: vulnerabilityCount, error: vulnerabilityError } = await service.rpc(
+    const { data: vulnerabilityCount, error: vulnerabilityError } = await userClient.rpc(
       "trigger_damage_vulnerability_effects",
       {
         _battle_id: battleId,
