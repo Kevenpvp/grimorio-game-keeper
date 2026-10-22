@@ -407,6 +407,13 @@
       "when": 1792785600012,
       "tag": "0057_reset_demonio_heat_after_battle_end",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1792785600013,
+      "tag": "0058_always_reset_demonio_heat_when_battle_ends",
+      "breakpoints": true
     }
   ]
 }
