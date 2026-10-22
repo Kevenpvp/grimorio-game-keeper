@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
-import { Swords } from "lucide-react";
+import { Loader2, Swords } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,12 +29,24 @@ function AuthPage() {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
+  const [hasSession, setHasSession] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.location.hash.includes("access_token") || window.location.search.includes("code=");
+  });
 
   useEffect(() => {
     const { data } = supabase.auth.onAuthStateChange((_e, session) => {
-      if (session) navigate({ to: "/painel", replace: true });
+      if (session) {
+        setHasSession(true);
+        navigate({ to: "/painel", replace: true });
+      }
     });
-    supabase.auth.getSession().then(({ data }) => data.session && navigate({ to: "/painel", replace: true }));
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session) {
+        setHasSession(true);
+        navigate({ to: "/painel", replace: true });
+      }
+    });
     return () => data.subscription.unsubscribe();
   }, [navigate]);
 
@@ -99,6 +111,25 @@ function AuthPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  if (hasSession) {
+    return (
+      <div className="flex min-h-screen items-center justify-center px-4">
+        <div className="panel w-full max-w-sm p-8 text-center space-y-4 animate-in fade-in duration-300">
+          <div className="relative mx-auto flex h-16 w-16 items-center justify-center">
+            <Swords className="h-10 w-10 text-gold animate-pulse" />
+            <Loader2 className="absolute inset-0 h-16 w-16 animate-spin text-gold/30" />
+          </div>
+          <div className="space-y-1">
+            <h1 className="text-2xl font-bold text-gold">Conectando ao Grimório...</h1>
+            <p className="text-sm text-muted-foreground">
+              Sessão identificada. Redirecionando para o painel...
+            </p>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
