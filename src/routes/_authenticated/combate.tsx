@@ -109,6 +109,7 @@ type TransformationTemplate = {
   id: string;
   name: string;
   description: string | null;
+  duration_turns: number;
   cooldown_turns: number;
   mana_cost: number;
 };
@@ -119,6 +120,7 @@ type CharacterTransformationState = {
   image_path: string | null;
   active: boolean;
   cooldown_remaining: number;
+  active_effect_group_id: string | null;
 };
 
 /** Applied total of an attribute (points + race + buff/debuff). */
@@ -343,7 +345,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
   const { data: transformationCatalog = [] } = useQuery<TransformationTemplate[]>({
     queryKey: ["transformations"],
     queryFn: async () => {
-      const { data, error } = await db.from("transformations").select("id,name,description,cooldown_turns,mana_cost").order("name");
+      const { data, error } = await db.from("transformations").select("id,name,description,duration_turns,cooldown_turns,mana_cost").order("name");
       if (error) throw error;
       return data ?? [];
     },
@@ -369,7 +371,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
     enabled: fighterIds.length > 0,
     queryFn: async () => {
       const { data, error } = await db.from("character_transformations")
-        .select("character_id,transformation_id,image_path,active,cooldown_remaining")
+        .select("character_id,transformation_id,image_path,active,cooldown_remaining,active_effect_group_id")
         .in("character_id", fighterIds);
       if (error) throw error;
       return data ?? [];
@@ -399,7 +401,11 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
       }
       const result = data && typeof data === "object" ? data as Record<string, unknown> : {};
       toast.success("Transformação ativada");
-      if (result.cooldown_remaining) toast.info(`Duração: ${result.cooldown_remaining} turno(s)`);
+      const configuredTransformation = transformationCatalog.find((item) => item.id === transformationId);
+      const activeDuration = configuredTransformation?.duration_turns
+        ?? (typeof result.duration_remaining === "number" ? result.duration_remaining : undefined)
+        ?? (typeof result.duration_turns === "number" ? result.duration_turns : undefined);
+      if (activeDuration) toast.info(`Duração: ${activeDuration} turno(s)`);
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["battle-character-transformations"] }),
         qc.invalidateQueries({ queryKey: ["character-transformations"] }),
@@ -648,6 +654,21 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
           const activeTransformation = activeTransformationState
             ? transformationCatalog.find((transformation) => transformation.id === activeTransformationState.transformation_id)
             : undefined;
+          const activeTransformationEffectDurations = activeTransformationState
+            ? effects
+                .filter((effect) =>
+                  effect.character_id === f.id
+                  && effect.effect_group_id === activeTransformationState.active_effect_group_id
+                  && effect.is_end_effect !== true
+                )
+                .map((effect) => Number(effect.duration))
+                .filter((duration) => Number.isFinite(duration) && duration > 0)
+            : [];
+          const activeTransformationRemaining = activeTransformationState
+            ? activeTransformationEffectDurations.length > 0
+              ? Math.min(...activeTransformationEffectDurations)
+              : activeTransformation?.duration_turns ?? activeTransformationState.cooldown_remaining
+            : 0;
           const transformationImage = activeTransformationState?.image_path || f.photo_path;
           const availableTransformations = availableTransformationsFor(f);
           return (
@@ -672,7 +693,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
               {activeTransformationState && (
                 <div className="rounded-md border border-emerald-500/40 bg-emerald-500/5 p-2">
                   <div className="text-xs font-semibold text-emerald-500">Transformado: {activeTransformation?.name ?? "Transformação ativa"}</div>
-                  <div className="text-[11px] text-muted-foreground">Termina em {activeTransformationState.cooldown_remaining} turno(s)</div>
+                  <div className="text-[11px] text-muted-foreground">Termina em {activeTransformationRemaining} turno(s)</div>
                 </div>
               )}
               {isOwnFighter && availableTransformations.length > 0 && (
