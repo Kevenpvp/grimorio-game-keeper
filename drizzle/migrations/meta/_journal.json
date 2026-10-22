@@ -456,6 +456,13 @@
       "when": 1792785600019,
       "tag": "0064_fix_invincible_demonio_stacks_queue_fk_and_configured_heart_bonus",
       "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1792785600020,
+      "tag": "0065_physical_damage_types_healing_whitelist_and_damage_vulnerability",
+      "breakpoints": true
     }
   ]
 }
