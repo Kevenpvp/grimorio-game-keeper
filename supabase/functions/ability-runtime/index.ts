@@ -482,6 +482,7 @@ type DamageCall = {
   sourceId: string | null;
   kind: "physical" | "magical" | "hybrid" | "true";
   typeId: string | null;
+  physicalTypeId: string | null;
   magicLevel: "baixa" | "media" | "alta" | null;
   rawValues: number[];
   critical: boolean;
@@ -639,6 +640,7 @@ async function applyDamageWithScripts(
   const rawValues = Array.isArray(body._damage_values) ? body._damage_values.map((value) => Number(value)) : [];
   const kind = body._damage_kind as DamageCall["kind"];
   const typeId = typeof body._damage_type_id === "string" ? body._damage_type_id : null;
+  const physicalTypeId = typeof body._physical_damage_type_id === "string" ? body._physical_damage_type_id : null;
   const magicLevel = typeof body._magic_level === "string" ? body._magic_level as DamageCall["magicLevel"] : null;
   const critical = body._critical_damage === true;
 
@@ -648,7 +650,7 @@ async function applyDamageWithScripts(
     throw new Error("Dados de dano inválidos.");
   }
 
-  const call: DamageCall = { battleId, targetId, sourceId, kind, typeId, magicLevel, rawValues, critical };
+  const call: DamageCall = { battleId, targetId, sourceId, kind, typeId, physicalTypeId, magicLevel, rawValues, critical };
   const damageFunction = critical ? "apply_battle_damage_critical" : "apply_battle_damage";
   const { data, error } = await userClient.rpc(damageFunction, {
     _battle_id: battleId,
@@ -658,6 +660,7 @@ async function applyDamageWithScripts(
     _damage_values: rawValues,
     _magic_level: magicLevel,
     _source_character_id: sourceId,
+    _physical_damage_type_id: physicalTypeId,
   });
   if (error) throw error;
   const base = asObject(data) as DamageRpcResult;
@@ -704,6 +707,28 @@ async function applyDamageWithScripts(
     const result = await runDamageScriptHooksSafely(service, tracker, targetId, sourceId, "recebeu_dano");
     hooksProcessed += result.processed;
     hookErrors.push(...result.errors);
+  }
+
+  // This trigger runs after damage is finalized, so its buff/debuff never alters the
+  // hit that activated it. Zero damage (including Invencível) does not trigger it.
+  if (tracker.total > 0) {
+    const { data: vulnerabilityCount, error: vulnerabilityError } = await service.rpc(
+      "trigger_damage_vulnerability_effects",
+      {
+        _battle_id: battleId,
+        _character_id: targetId,
+        _damage_kind: kind,
+        _physical_damage_type_id: physicalTypeId,
+        _damage_type_id: typeId,
+        _magic_level: magicLevel,
+        _damage_total: tracker.total,
+      },
+    );
+    if (vulnerabilityError) {
+      hookErrors.push(`Vulnerabilidade de Dano: ${errorMessage(vulnerabilityError).slice(0, 400)}`);
+    } else {
+      hooksProcessed += Math.max(0, Math.floor(Number(vulnerabilityCount ?? 0)));
+    }
   }
 
   return {
