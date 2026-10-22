@@ -249,7 +249,7 @@ export function DamageOverTimeManager({
           : "Aplique um modelo de DoT salvo a um alvo da batalha ativa. O dano passa pela defesa e mitigação do tipo escolhido; o percentual é calculado sobre o HP máximo atual do alvo."}
       </p>
 
-      <div className={mode === "templates" ? "grid gap-4" : "grid gap-4 lg:grid-cols-2"}>
+      <div className="grid gap-4">
         {mode === "templates" && (
         <div className="space-y-3 rounded-md border border-border p-3">
           <h3 className="font-semibold">Modelos registrados pelo mestre</h3>
