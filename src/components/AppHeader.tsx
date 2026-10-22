@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { LogOut, Menu, Sparkles, Swords, X } from "lucide-react";
+import { Flame, LogOut, Menu, Sparkles, Swords, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useMe } from "@/lib/sheets";
@@ -46,6 +46,9 @@ export function AppHeader() {
                 <Link to="/tipos-dano" className="flex whitespace-nowrap items-center gap-1 text-muted-foreground hover:text-gold">
                   <Sparkles className="h-3.5 w-3.5" /> Tipos de dano
                 </Link>
+                <Link to="/dots" className="flex whitespace-nowrap items-center gap-1 text-muted-foreground hover:text-gold">
+                  <Flame className="h-3.5 w-3.5" /> Dano por turno
+                </Link>
               </>
             )}
             {me && (
@@ -86,6 +89,9 @@ export function AppHeader() {
                 <Link to="/habilidades" className={navClass} onClick={() => setMobileOpen(false)}>Habilidades</Link>
                 <Link to="/tipos-dano" className={navClass} onClick={() => setMobileOpen(false)}>
                   <span className="flex items-center gap-2"><Sparkles className="h-4 w-4" /> Tipos de dano</span>
+                </Link>
+                <Link to="/dots" className={navClass} onClick={() => setMobileOpen(false)}>
+                  <span className="flex items-center gap-2"><Flame className="h-4 w-4" /> Dano por turno</span>
                 </Link>
               </>
             )}
