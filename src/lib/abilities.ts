@@ -154,10 +154,10 @@ export function parseAbilityEffects(value: unknown, nested = false): AbilityEffe
         ? Math.max(1, Math.min(1000, Math.floor(Number(raw.damage_vulnerability_applied_duration)))) : 1,
       ...(effectType === "damage_vulnerability" ? {
         damage_vulnerability_effects: parseAbilityEffects(
-          Array.isArray(raw.damage_vulnerability_effects) && raw.damage_vulnerability_effects.length > 0
+          Array.isArray(raw.damage_vulnerability_effects)
             ? raw.damage_vulnerability_effects
             : [{
-                name: typeof raw.name === "string" ? raw.name : "Efeito aplicado",
+                name: "Efeito aplicado",
                 effect_type: "status",
                 attribute_key: typeof raw.attribute_key === "string" ? raw.attribute_key : "strength",
                 polarity: raw.polarity === "buff" ? "buff" : "debuff",
