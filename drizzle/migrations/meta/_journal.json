@@ -526,6 +526,13 @@
       "when": 1792785600029,
       "tag": "0074_character_transformations_and_effects",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1792785600030,
+      "tag": "0075_end_transformation_on_delete_fix_upload_policy_and_publish_realtime",
+      "breakpoints": true
     }
   ]
 }
