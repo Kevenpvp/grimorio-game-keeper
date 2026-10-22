@@ -23,6 +23,8 @@ const demonioInterno: AbilityScript = {
       danoRecebido: damageReceived,
       superaquecimentoTotal: nextHeat,
     });
+    // Notify the paired Coração Corrompido script/rule immediately after the stack changes.
+    await api.sincronizarBonusCoracaoCorrompido();
   },
 
   async "causou_dano"(context, api) {
@@ -75,6 +77,8 @@ const demonioInterno: AbilityScript = {
       hpMaximoUsadoNoCalculo: casterHp.maximo,
       superaquecimentoRestante: remainingHeat,
     });
+    // If the final stack was spent, remove Coração Corrompido's +20 Strength immediately.
+    await api.sincronizarBonusCoracaoCorrompido();
   },
 };
 
