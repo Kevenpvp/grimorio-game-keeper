@@ -101,6 +101,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/combate': typeof AuthenticatedCombateRoute
   '/dots': typeof AuthenticatedDotsRoute
+  '/transformacoes': typeof AuthenticatedTransformacoesRoute
   '/habilidades': typeof AuthenticatedHabilidadesRoute
   '/painel': typeof AuthenticatedPainelRoute
   '/racas': typeof AuthenticatedRacasRoute
@@ -143,6 +144,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/combate'
     | '/dots'
+    | '/transformacoes'
     | '/habilidades'
     | '/painel'
     | '/racas'
