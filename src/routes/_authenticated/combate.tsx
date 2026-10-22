@@ -105,6 +105,21 @@ type Fighter = {
   body: number; sanity: number; participant_turn_count?: number;
   character_attributes: Attr[];
 };
+type TransformationTemplate = {
+  id: string;
+  name: string;
+  description: string | null;
+  cooldown_turns: number;
+  mana_cost: number;
+};
+type TransformationLink = { transformation_id: string; race_id?: string; virtue_id?: string };
+type CharacterTransformationState = {
+  character_id: string;
+  transformation_id: string;
+  image_path: string | null;
+  active: boolean;
+  cooldown_remaining: number;
+};
 
 /** Applied total of an attribute (points + race + buff/debuff). */
 function totalOf(def: AttributeDef, a: Attr | undefined, mods: Record<string, number>, physicalPoints = 0) {
@@ -173,6 +188,9 @@ function useLiveBattles(isMaster: boolean, userId: string | undefined) {
       .on("postgres_changes", { event: "*", schema: "public", table: "character_abilities" }, () => {
         scheduleCombatRefresh(qc, ["character-abilities"], ["character-abilities-battle"], ["battle-character-public-states"]);
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "character_transformations" }, () => {
+        scheduleCombatRefresh(qc, ["character-transformations"], ["battle-character-transformations"], ["battles"]);
+      })
       .on("postgres_changes", { event: "*", schema: "public", table: "abilities" }, () => {
         scheduleCombatRefresh(qc, ["abilities"]);
       })
@@ -184,7 +202,7 @@ function useLiveBattles(isMaster: boolean, userId: string | undefined) {
     enabled: !!userId,
     queryFn: async () => {
       const masterSelection = "*, battle_participants(sort_order,turn_count, characters(id,name,player_name,photo_path,race_id,virtue_id,owner_id,race_physical_allocations,virtue_physical_allocations,race_physical_points_granted,virtue_physical_points_granted,body,sanity,character_attributes(attribute_key,current_value,max_value,points,bonus)))";
-      const playerSelection = "*, battle_participants(sort_order,turn_count, characters(id,name,player_name,photo_path,owner_id))";
+      const playerSelection = "*, battle_participants(sort_order,turn_count, characters(id,name,player_name,photo_path,owner_id,race_id,virtue_id))";
       const { data, error } = await supabase
         .from("battles")
         .select(isMaster ? masterSelection : playerSelection)
@@ -192,7 +210,7 @@ function useLiveBattles(isMaster: boolean, userId: string | undefined) {
       if (error) throw error;
       if (isMaster || !userId) return data ?? [];
 
-      type PublicCharacter = { id: string; name: string; player_name: string; photo_path: string | null; owner_id: string | null };
+      type PublicCharacter = { id: string; name: string; player_name: string; photo_path: string | null; owner_id: string | null; race_id: string | null; virtue_id: string | null };
       type PublicParticipant = { characters: PublicCharacter | null; [key: string]: unknown };
       type PublicBattle = { battle_participants?: PublicParticipant[]; [key: string]: unknown };
       const publicBattles = (data ?? []) as unknown as PublicBattle[];
@@ -312,6 +330,78 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
     [battle],
   );
   const fighterIds = useMemo(() => fighters.map((fighter) => fighter.id), [fighters]);
+  const db = supabase as any;
+  const { data: transformationCatalog = [] } = useQuery<TransformationTemplate[]>({
+    queryKey: ["transformations"],
+    queryFn: async () => {
+      const { data, error } = await db.from("transformations").select("id,name,description,cooldown_turns,mana_cost").order("name");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const { data: raceTransformationLinks = [] } = useQuery<TransformationLink[]>({
+    queryKey: ["battle-race-transformations"],
+    queryFn: async () => {
+      const { data, error } = await db.from("race_transformations").select("race_id,transformation_id");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const { data: virtueTransformationLinks = [] } = useQuery<TransformationLink[]>({
+    queryKey: ["battle-virtue-transformations"],
+    queryFn: async () => {
+      const { data, error } = await db.from("virtue_transformations").select("virtue_id,transformation_id");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const { data: transformationStates = [] } = useQuery<CharacterTransformationState[]>({
+    queryKey: ["battle-character-transformations", battle.id, fighterIds],
+    enabled: fighterIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await db.from("character_transformations")
+        .select("character_id,transformation_id,image_path,active,cooldown_remaining")
+        .in("character_id", fighterIds);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const transformStateFor = (fighterId: string) => transformationStates.filter((state) => state.character_id === fighterId);
+  const availableTransformationsFor = (fighter: Fighter) => {
+    const ids = new Set([
+      ...raceTransformationLinks.filter((link) => link.race_id === fighter.race_id).map((link) => link.transformation_id),
+      ...virtueTransformationLinks.filter((link) => link.virtue_id === fighter.virtue_id).map((link) => link.transformation_id),
+    ]);
+    return transformationCatalog.filter((transformation) => ids.has(transformation.id));
+  };
+  const [activatingTransformationFor, setActivatingTransformationFor] = useState<string | null>(null);
+  async function activateTransformation(characterId: string, transformationId: string) {
+    if (!battle.active || activatingTransformationFor) return;
+    setActivatingTransformationFor(characterId);
+    try {
+      const { data, error } = await db.rpc("activate_character_transformation", {
+        _character_id: characterId,
+        _transformation_id: transformationId,
+        _battle_id: battle.id,
+      });
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      const result = data && typeof data === "object" ? data as Record<string, unknown> : {};
+      toast.success("Transformação ativada");
+      if (result.cooldown_remaining) toast.info(`Duração: ${result.cooldown_remaining} turno(s)`);
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["battle-character-transformations"] }),
+        qc.invalidateQueries({ queryKey: ["character-transformations"] }),
+        qc.invalidateQueries({ queryKey: ["battles"] }),
+        qc.invalidateQueries({ queryKey: ["character-attributes"] }),
+        qc.invalidateQueries({ queryKey: ["battle-effects"] }),
+      ]);
+    } finally {
+      setActivatingTransformationFor(null);
+    }
+  }
   const visibleEffectCharacterIds = useMemo(
     () => isMaster ? fighterIds : fighters.filter((fighter) => fighter.owner_id === userId).map((fighter) => fighter.id),
     [isMaster, fighterIds, fighters, userId],
@@ -544,10 +634,17 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
           const hpCurrent = isOwnFighter ? hp?.current_value ?? 0 : 0;
           const manaCurrent = isOwnFighter ? mana?.current_value ?? 0 : 0;
           const publicState = publicStateByCharacter.get(f.id);
+          const characterTransformStates = transformStateFor(f.id);
+          const activeTransformationState = characterTransformStates.find((state) => state.active);
+          const activeTransformation = activeTransformationState
+            ? transformationCatalog.find((transformation) => transformation.id === activeTransformationState.transformation_id)
+            : undefined;
+          const transformationImage = activeTransformationState?.image_path || f.photo_path;
+          const availableTransformations = availableTransformationsFor(f);
           return (
             <div key={f.id} className={cn("panel space-y-2 p-3", isActor && "border-gold ring-1 ring-gold", isTarget && "border-blood ring-1 ring-blood")}>
               <div className="flex items-center gap-2">
-                <Portrait path={f.photo_path} name={f.name} className="h-12 w-10 shrink-0" />
+                <Portrait path={transformationImage} name={f.name} className="h-12 w-10 shrink-0" />
                 <div className="min-w-0 flex-1 space-y-0.5">
                   <div className="truncate font-display text-base text-gold">{f.name}</div>
                   <div className="truncate text-[11px] text-muted-foreground">{f.player_name || "NPC"}</div>
@@ -562,6 +659,40 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
               {isOwnFighter
                 ? <Bar label="Mana" cur={manaCurrent} max={manaMaximum} tone="bg-arcane" />
                 : <HiddenResourceState label="Mana" value={publicState?.mana_state ?? "Carregando..."} />}
+
+              {activeTransformationState && (
+                <div className="rounded-md border border-emerald-500/40 bg-emerald-500/5 p-2">
+                  <div className="text-xs font-semibold text-emerald-500">Transformado: {activeTransformation?.name ?? "Transformação ativa"}</div>
+                  <div className="text-[11px] text-muted-foreground">Termina em {activeTransformationState.cooldown_remaining} turno(s)</div>
+                </div>
+              )}
+              {isOwnFighter && availableTransformations.length > 0 && (
+                <div className="space-y-2 rounded-md border border-border p-2">
+                  <div className="text-xs font-semibold text-gold">Transformações</div>
+                  <div className="flex flex-wrap gap-2">
+                    {availableTransformations.map((transformation) => {
+                      const state = characterTransformStates.find((item) => item.transformation_id === transformation.id);
+                      const isActive = state?.active === true;
+                      const isCoolingDown = (state?.cooldown_remaining ?? 0) > 0;
+                      const anotherActive = !!activeTransformationState && !isActive;
+                      const disabled = !battle.active || activatingTransformationFor === f.id || !!activatingTransformationFor || isActive || isCoolingDown || anotherActive;
+                      return (
+                        <Button
+                          key={transformation.id}
+                          size="sm"
+                          variant={isActive ? "default" : "outline"}
+                          disabled={disabled}
+                          onClick={() => void activateTransformation(f.id, transformation.id)}
+                        >
+                          <Sparkles className="mr-1 h-3.5 w-3.5" />
+                          {isActive ? transformation.name : isCoolingDown ? `${transformation.name} · ${state?.cooldown_remaining}T` : activatingTransformationFor === f.id ? "Ativando…" : transformation.name}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                  {activeTransformationState && <p className="text-[11px] text-muted-foreground">A transformação é encerrada automaticamente quando seu contador chega a zero.</p>}
+                </div>
+              )}
 
               {isExpanded && (
                 <>
