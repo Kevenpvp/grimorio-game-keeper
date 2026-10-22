@@ -45,11 +45,17 @@ export function ModsList({ race, defs, abilities = [], startingEffects = [] }: {
           Habilidade inicial: {ability.name}
         </span>
       ))}
-      {startingEffects.map((effect, index) => (
-        <span key={index} className={`rounded px-2 py-0.5 ${effect.polarity === "debuff" ? "bg-destructive/10 text-destructive" : "bg-emerald-500/10 text-emerald-500"}`}>
-          {effect.polarity === "debuff" ? "Debuff inicial" : "Buff inicial"}: {effect.name}
-        </span>
-      ))}
+      {startingEffects.map((effect, index) => {
+        // Vulnerabilidade de Dano é uma condição negativa para quem a recebe,
+        // mesmo que a configuração interna do gatilho tenha polarity="buff"
+        // para descrever o efeito que será aplicado quando o gatilho disparar.
+        const isInitialDebuff = effect.effect_type === "damage_vulnerability" || effect.polarity === "debuff";
+        return (
+          <span key={index} className={`rounded px-2 py-0.5 ${isInitialDebuff ? "bg-destructive/10 text-destructive" : "bg-emerald-500/10 text-emerald-500"}`}>
+            {isInitialDebuff ? "Debuff inicial" : "Buff inicial"}: {effect.name}
+          </span>
+        );
+      })}
       {!entries.length && body === 0 && sanity === 0 && !race.bonus_points && !race.physical_bonus_points && !abilities.length && !startingEffects.length && (
         <span className="text-muted-foreground">Sem modificadores</span>
       )}
