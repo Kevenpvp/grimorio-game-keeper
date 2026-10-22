@@ -11,8 +11,8 @@ import { useMe } from "@/lib/sheets";
 export const Route = createFileRoute("/_authenticated/tipos-dano")({
   head: () => ({
     meta: [
-      { title: "Tipos de Dano Mágico — Grimório" },
-      { name: "description", content: "Gerencie os tipos de dano mágico da campanha." },
+      { title: "Tipos de Dano — Grimório" },
+      { name: "description", content: "Gerencie os tipos de dano físico e mágico da campanha." },
     ],
   }),
   component: DamageTypesPage,
@@ -35,7 +35,7 @@ function DamageTypesPage() {
 
   async function addType() {
     const clean = name.trim();
-    if (!clean) { toast.error("Digite o nome do tipo mágico"); return; }
+    if (!clean) { toast.error("Digite o nome do tipo de dano"); return; }
     if (clean.length > 40) { toast.error("Use no máximo 40 caracteres"); return; }
     const { error } = await supabase.from("damage_types").insert({ name: clean, category });
     if (error) {
