@@ -529,8 +529,14 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
 
   async function setCooldownRemaining(next: number) {
     const value = Math.max(0, Math.min(ability.cooldown_turns, Math.floor(next)));
+    const previousValue = ability.cooldown_remaining;
     const { error } = await supabase.from("character_abilities").update({ cooldown_remaining: value }).eq("id", ability.id);
     if (error) { toast.error(error.message); return; }
+    if (previousValue > 0 && value === 0) {
+      // The database removes Coração Corrompido's bonus immediately and queues
+      // habilidade_saiu_do_cooldown; dispatch it for manual cooldown edits too.
+      void dispatchCustomAbilityScriptEvents();
+    }
     await qc.invalidateQueries({ queryKey: ["character-abilities", ability.character_id] });
     await qc.invalidateQueries({ queryKey: ["character-abilities-battle"] });
     toast.success(value === 0 ? "Cooldown zerado" : `Cooldown: ${value} turno(s)`);
