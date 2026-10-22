@@ -76,6 +76,16 @@ export function DamageOverTimeManager({
   });
 
   useEffect(() => {
+    const channel = supabase
+      .channel("damage-over-time-templates-live")
+      .on("postgres_changes", { event: "*", schema: "public", table: "damage_over_time_templates" }, () => {
+        void queryClient.invalidateQueries({ queryKey: ["damage-over-time-templates"] });
+      })
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [queryClient]);
+
+  useEffect(() => {
     if (templates.length > 0 && !templates.some((template) => template.id === selectedTemplateId)) {
       setSelectedTemplateId(templates[0].id);
     }
@@ -163,8 +173,13 @@ export function DamageOverTimeManager({
     const numericAmount = Number(amount);
     const numericDuration = Math.floor(Number(duration));
     const maxAmount = amountMode === "percent" ? 1000 : 1_000_000;
-    if (!Number.isFinite(numericAmount) || numericAmount <= 0 || numericAmount > maxAmount) {
-      toast.error(amountMode === "percent" ? "Informe um percentual entre 0 e 1000%" : "Informe um dano fixo entre 1 e 1000000");
+    if (
+      !Number.isFinite(numericAmount) ||
+      numericAmount <= 0 ||
+      numericAmount > maxAmount ||
+      (amountMode === "fixed" && !Number.isInteger(numericAmount))
+    ) {
+      toast.error(amountMode === "percent" ? "Informe um percentual entre 0 e 1000%" : "Informe um dano fixo inteiro entre 1 e 1000000");
       return;
     }
     if (!Number.isFinite(numericDuration) || numericDuration < 1 || numericDuration > 1000) {
@@ -348,7 +363,7 @@ export function DamageOverTimeManager({
             </label>
             <label className={fieldLabel}>
               {amountMode === "percent" ? "Percentual (%)" : "Dano por turno"}
-              <Input type="number" min="0.1" max={amountMode === "percent" ? 1000 : 1000000} step="any" value={amount} onChange={(event) => setAmount(event.target.value)} />
+              <Input type="number" min={amountMode === "percent" ? 0.1 : 1} max={amountMode === "percent" ? 1000 : 1000000} step={amountMode === "percent" ? "any" : "1"} value={amount} onChange={(event) => setAmount(event.target.value)} />
             </label>
           </div>
           <label className={fieldLabel}>
