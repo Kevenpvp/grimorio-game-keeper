@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronDown, ChevronUp, Clock3, Minus, Plus, Sparkles, Trash2, WandSparkles, Zap } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Check, ChevronDown, ChevronUp, Clock3, Flame, HeartPulse, Minus, Plus, Sparkles, Trash2, WandSparkles, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,22 @@ import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEdito
 import type { Json } from "@/integrations/supabase/types";
 
 type TargetOption = { id: string; name: string };
+
+function customNumberAttribute(attributes: unknown, key: string, fallback: number): number {
+  if (!Array.isArray(attributes)) return fallback;
+  const row = attributes.find((item) =>
+    !!item && typeof item === "object" && (item as Record<string, unknown>).key === key
+  ) as Record<string, unknown> | undefined;
+  if (!row) return fallback;
+  const value = Number(row.value);
+  return Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : fallback;
+}
+
+function numericStateValue(state: unknown, key: string): number {
+  if (!state || typeof state !== "object" || Array.isArray(state)) return 0;
+  const value = Number((state as Record<string, unknown>)[key] ?? 0);
+  return Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+}
 
 function effectSummary(effect: AbilityEffectDefinition, defs: NonNullable<ReturnType<typeof useDefs>["data"]>, damageTypes: NonNullable<ReturnType<typeof useDamageTypes>["data"]>, races: NonNullable<ReturnType<typeof useRaces>["data"]>) {
   const amount = effect.value_mode === "percent" ? `${effect.amount}%` : effect.effect_type === "damage_dealt" ? String(effect.amount) : (effect.effect_type === "mana_regeneration" || effect.effect_type === "mana_used") ? `${effect.amount} Mana` : `${effect.amount} pontos`;
@@ -124,6 +140,50 @@ export function CharacterAbilitiesPanel({
   const { data: defs } = useDefs();
   const { data: damageTypes = [] } = useDamageTypes();
   const { data: races = [] } = useRaces();
+  const { data: abilityCatalog = [] } = useAbilities();
+  const demonioAssignment = (loadout ?? []).find((assigned) => {
+    const catalogEntry = abilityCatalog.find((candidate) => candidate.id === assigned.ability_id);
+    return catalogEntry?.custom_script_key === "demonio_interno"
+      || catalogEntry?.name === "Demônio Interno"
+      || assigned.name === "Demônio Interno";
+  });
+  const demonioCatalogEntry = abilityCatalog.find((candidate) => candidate.id === demonioAssignment?.ability_id);
+  const demonioHeat = numericStateValue(demonioAssignment?.custom_state, "dano_superaquecimento");
+  const demonioReflectPercent = customNumberAttribute(
+    demonioCatalogEntry?.custom_attributes,
+    "porcentagem_maxima_dano_refletido",
+    50,
+  );
+  const demonioHpCostPercent = customNumberAttribute(
+    demonioCatalogEntry?.custom_attributes,
+    "percentual_hp_perdido_por_refletir",
+    10,
+  );
+  const { data: demonioHp, isError: demonioHpError } = useQuery({
+    queryKey: ["demonio-interno-hp", characterId],
+    enabled: !!demonioAssignment,
+    queryFn: async () => {
+      const [attributeResult, maximumResult] = await Promise.all([
+        supabase.from("character_attributes").select("current_value")
+          .eq("character_id", characterId).eq("attribute_key", "hp").maybeSingle(),
+        supabase.rpc("calculate_character_resource_max", {
+          _character_id: characterId,
+          _attribute_key: "hp",
+        }),
+      ]);
+      if (attributeResult.error) throw attributeResult.error;
+      if (maximumResult.error) throw maximumResult.error;
+      return {
+        current: Number(attributeResult.data?.current_value ?? 0),
+        maximum: Math.max(0, Number(maximumResult.data ?? 0)),
+      };
+    },
+    staleTime: 0,
+  });
+  const demonioBonusDamage = Math.floor(demonioHeat * demonioReflectPercent / 100);
+  const demonioHpCost = demonioHp
+    ? Math.ceil(demonioHp.maximum * demonioHpCostPercent / 100)
+    : null;
   const [targetId, setTargetId] = useState(characterId);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(true);
@@ -234,6 +294,55 @@ export function CharacterAbilitiesPanel({
                     </Button>
                   )}
                 </div>
+                {demonioAssignment?.id === ability.id && (
+                  <div className="mt-3 space-y-2 rounded-md border border-orange-500/35 bg-orange-500/5 p-3 text-xs">
+                    <div className="flex items-center gap-2 font-semibold text-orange-300">
+                      <Flame className="h-4 w-4" />
+                      Superaquecimento · estado atual
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="rounded border border-border/70 p-2">
+                        <div className="text-muted-foreground">Dano acumulado</div>
+                        <div className="mt-1 text-lg font-bold tabular text-orange-200">{demonioHeat}</div>
+                        <div className="text-muted-foreground">100% do dano final recebido é acumulado; não reduz o dano recebido.</div>
+                      </div>
+                      <div className="rounded border border-border/70 p-2">
+                        <div className="text-muted-foreground">Próximo ataque físico</div>
+                        <div className="mt-1 text-lg font-bold tabular text-orange-200">+{demonioBonusDamage} dano</div>
+                        <div className="text-muted-foreground">{demonioReflectPercent}% do acumulado, como dano bônus após defesa e mitigação.</div>
+                      </div>
+                      <div className="col-span-2 rounded border border-border/70 p-2">
+                        <div className="flex items-center gap-2 font-medium">
+                          <HeartPulse className="h-3.5 w-3.5 text-red-400" />
+                          Custo de HP por reflexão
+                        </div>
+                        <div className="mt-1 text-base font-bold tabular">
+                          {demonioHpError
+                            ? "Não foi possível calcular"
+                            : demonioHpCost === null
+                              ? "Calculando HP máximo…"
+                              : demonioHeat > 0 && demonioBonusDamage > 0
+                                ? `${demonioHpCost} HP`
+                                : "0 HP neste momento"}
+                          <span className="ml-1 text-xs font-normal text-muted-foreground">
+                            ({demonioHpCostPercent}% do HP máximo{demonioHp ? `: ${demonioHp.maximum} × ${demonioHpCostPercent}%` : ""})
+                          </span>
+                        </div>
+                        {demonioHp && (
+                          <div className="text-muted-foreground">
+                            HP atual: {demonioHp.current}/{demonioHp.maximum}. O custo é arredondado para cima e só é pago quando houver dano refletido.
+                          </div>
+                        )}
+                        {demonioHpError && (
+                          <div className="text-muted-foreground">Confira a conexão ou atualize a página para recalcular o custo.</div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-muted-foreground">
+                      O superaquecimento só é gasto ao refletir dano no próximo golpe físico; ataques não físicos não usam a reserva nem cobram HP.
+                    </div>
+                  </div>
+                )}
                 {ability.can_activate && ability.effects.length > 0 && (
                   <div className="mt-2 space-y-1 border-t border-border pt-2 text-xs text-muted-foreground">
                     <div className="font-semibold">Efeitos ao ativar</div>
