@@ -35,10 +35,15 @@ function Index() {
 
     const clearAuthResponseFromUrl = () => {
       // OAuth access tokens must not remain visible in the address bar.
+      const query = new URLSearchParams(window.location.search);
+      query.delete("code");
+      query.delete("error");
+      query.delete("error_description");
+      const search = query.toString();
       window.history.replaceState(
         window.history.state,
         document.title,
-        window.location.pathname + window.location.search,
+        window.location.pathname + (search ? `?${search}` : ""),
       );
     };
 
