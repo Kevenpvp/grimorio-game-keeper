@@ -533,6 +533,13 @@
       "when": 1792785600030,
       "tag": "0075_end_transformation_on_delete_fix_upload_policy_and_publish_realtime",
       "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1792785600031,
+      "tag": "0076_reset_transformation_effect_data_per_item",
+      "breakpoints": true
     }
   ]
 }
