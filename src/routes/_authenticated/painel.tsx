@@ -35,7 +35,7 @@ function Painel() {
 }
 
 function PlayerView({ userId }: { userId: string }) {
-  const { data: mine, isLoading } = useQuery({
+  const { data: mine, isLoading, error } = useQuery({
     queryKey: ["my-character", userId],
     queryFn: async () => {
       const { data, error } = await supabase.from("characters").select("id").eq("owner_id", userId).limit(1).maybeSingle();
@@ -44,6 +44,14 @@ function PlayerView({ userId }: { userId: string }) {
     },
   });
   if (isLoading) return <p className="text-muted-foreground">Carregando…</p>;
+  if (error) {
+    return (
+      <div className="panel mx-auto max-w-md p-8 text-center">
+        <h1 className="text-xl text-gold">Não foi possível carregar sua ficha</h1>
+        <p className="mt-2 text-sm text-muted-foreground">Tente atualizar a página. Se o problema continuar, avise o mestre.</p>
+      </div>
+    );
+  }
   if (!mine)
     return (
       <div className="panel mx-auto max-w-md p-8 text-center">

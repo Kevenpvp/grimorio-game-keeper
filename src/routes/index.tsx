@@ -21,9 +21,14 @@ export const Route = createFileRoute("/")({
 function Index() {
   const navigate = useNavigate();
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) navigate({ to: "/painel", replace: true });
+    const goToDashboard = () => navigate({ to: "/painel", replace: true });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) goToDashboard();
     });
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session) goToDashboard();
+    });
+    return () => listener.subscription.unsubscribe();
   }, [navigate]);
 
   return (
