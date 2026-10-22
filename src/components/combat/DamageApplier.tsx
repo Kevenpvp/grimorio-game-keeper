@@ -194,6 +194,14 @@ export function DamageApplier({ target, battleId = null, sources = [] }: {
         qc.invalidateQueries({ queryKey: ["character", target.id] }),
         qc.invalidateQueries({ queryKey: ["characters"] }),
         qc.invalidateQueries({ queryKey: ["my-character"] }),
+        // Damage can change Demônio Interno heat on both the target (received_dano)
+        // and the source (causou_dano), so refresh both the stored state and live HP cost.
+        qc.invalidateQueries({ queryKey: ["character-abilities", target.id] }),
+        ...(sourceCharacterId
+          ? [qc.invalidateQueries({ queryKey: ["character-abilities", sourceCharacterId] })]
+          : []),
+        qc.invalidateQueries({ queryKey: ["character-abilities-battle"] }),
+        qc.invalidateQueries({ queryKey: ["demonio-interno-hp"] }),
       ]);
     } finally {
       setApplyingDamage(false);
