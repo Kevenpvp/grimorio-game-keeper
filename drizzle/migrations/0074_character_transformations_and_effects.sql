@@ -327,7 +327,7 @@ BEGIN
   END LOOP;
   RETURN _group_count;
 END;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.end_character_transformation_internal(_character_id uuid, _transformation_id uuid, _force_standalone boolean DEFAULT false)
@@ -396,7 +396,7 @@ BEGIN
     _end_group_id,true,0
   );
 END;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.activate_character_transformation(_character_id uuid, _transformation_id uuid, _battle_id uuid)
@@ -526,7 +526,7 @@ BEGIN
 
   RETURN jsonb_build_object('ok',true,'transformation_id',_transformation_id,'cooldown_remaining',_transformation.cooldown_turns);
 END;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.tick_character_transformation_cooldowns()
@@ -553,7 +553,7 @@ BEGIN
   END LOOP;
   RETURN NEW;
 END;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.end_transformations_with_battle()
@@ -575,7 +575,7 @@ BEGIN
   IF TG_OP='DELETE' THEN RETURN OLD; END IF;
   RETURN NEW;
 END;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.set_character_transformation_image(_character_id uuid, _transformation_id uuid, _image_path text)
@@ -613,7 +613,7 @@ BEGIN
   ON CONFLICT (character_id,transformation_id)
   DO UPDATE SET image_path=EXCLUDED.image_path,updated_at=now();
 END;
-$function$
+$function$;
 
 
 
