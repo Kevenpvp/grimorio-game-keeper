@@ -15,6 +15,7 @@ export const DEMONIO_INTERNO_DEFAULT_ATTRIBUTES: CustomAbilityAttribute[] = [
 export const CUSTOM_ABILITY_SCRIPTS = [
   { key: "example", label: "Exemplo — registrar eventos (não altera o combate)" },
   { key: "demonio_interno", label: "Demônio Interno — acumula dano recebido e reflete no próximo ataque" },
+  { key: "coracao_corrompido", label: "Coração Corrompido — +20 Força enquanto estiver em cooldown e houver superaquecimento" },
 ] as const;
 
 export type CustomAbilityScriptKey = (typeof CUSTOM_ABILITY_SCRIPTS)[number]["key"];
