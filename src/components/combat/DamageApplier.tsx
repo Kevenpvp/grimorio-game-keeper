@@ -8,7 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 type DamageKind = "physical" | "magical" | "hybrid" | "true";
 type MagicLevel = "baixa" | "media" | "alta";
-type DamageType = { id: string; name: string };
+type DamageType = { id: string; name: string; category: "physical" | "magical" };
 
 export type DamageTarget = { id: string; name: string };
 type DamageSource = { id: string; name: string };
@@ -25,6 +25,7 @@ export function DamageApplier({ target, battleId = null, sources = [] }: {
   const [repeatCount, setRepeatCount] = useState("1");
   const [damageList, setDamageList] = useState("50, 35, 45, 86, 20, 10, 50");
   const [damageTypeId, setDamageTypeId] = useState("");
+  const [physicalDamageTypeId, setPhysicalDamageTypeId] = useState("");
   const [magicLevel, setMagicLevel] = useState<MagicLevel>("baixa");
   const [sourceCharacterId, setSourceCharacterId] = useState("");
   const [criticalDamage, setCriticalDamage] = useState(false);
@@ -33,13 +34,22 @@ export function DamageApplier({ target, battleId = null, sources = [] }: {
   const { data: damageTypes = [], isLoading: loadingTypes, error: typesError } = useQuery({
     queryKey: ["damage-types"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("damage_types").select("id,name").order("name");
+      const { data, error } = await supabase.from("damage_types").select("id,name,category").order("name");
       if (error) throw error;
       return data as DamageType[];
     },
   });
 
+  const magicalDamageTypes = damageTypes.filter((type) => type.category === "magical");
+  const physicalDamageTypes = damageTypes.filter((type) => type.category === "physical");
   const needsMagic = damageKind === "magical" || damageKind === "hybrid";
+  const needsPhysical = damageKind === "physical" || damageKind === "hybrid";
+  const selectedPhysicalDamageTypeId = physicalDamageTypes.some((type) => type.id === physicalDamageTypeId)
+    ? physicalDamageTypeId
+    : physicalDamageTypes[0]?.id ?? "";
+  const selectedMagicDamageTypeId = magicalDamageTypes.some((type) => type.id === damageTypeId)
+    ? damageTypeId
+    : magicalDamageTypes[0]?.id ?? "";
   const damageKindName = {
     physical: "Físico",
     magical: "Mágico",
@@ -69,9 +79,19 @@ export function DamageApplier({ target, battleId = null, sources = [] }: {
         return;
       }
     }
-    if (needsMagic && !damageTypeId) {
+    if (needsMagic && !selectedMagicDamageTypeId) {
       setCriticalDamage(false);
       toast.error("Selecione um tipo de dano mágico");
+      return;
+    }
+    if (needsPhysical && physicalDamageTypes.length > 0 && !selectedPhysicalDamageTypeId) {
+      setCriticalDamage(false);
+      toast.error("Selecione um tipo de dano físico");
+      return;
+    }
+    if (loadingTypes && (needsMagic || needsPhysical)) {
+      setCriticalDamage(false);
+      toast.error("Aguarde o carregamento dos tipos de dano");
       return;
     }
 
@@ -85,7 +105,8 @@ export function DamageApplier({ target, battleId = null, sources = [] }: {
           _battle_id: battleId,
           _character_id: target.id,
           _damage_kind: damageKind,
-          _damage_type_id: needsMagic ? damageTypeId : null,
+          _damage_type_id: needsMagic ? selectedMagicDamageTypeId : null,
+          _physical_damage_type_id: needsPhysical && physicalDamageTypes.length > 0 ? selectedPhysicalDamageTypeId : null,
           _damage_values: values,
           _magic_level: needsMagic ? magicLevel : null,
           _source_character_id: sourceCharacterId || null,
@@ -144,10 +165,17 @@ export function DamageApplier({ target, battleId = null, sources = [] }: {
       else if (damageKind === "magical") defenseText = `Defesa mágica: ${result.magical_defense}; magia ${magicLevel}`;
       else defenseText = `Defesa física: ${result.physical_defense}; Defesa mágica: ${result.magical_defense}; magia ${magicLevel}`;
 
-      const typeName = needsMagic
-        ? damageTypes.find((t) => t.id === damageTypeId)?.name ?? "mágico"
-        : damageKindName;
-      const damageDescription = damageKind === "hybrid" ? `dano híbrido (${typeName})` : damageKind === "magical" ? `dano mágico (${typeName})` : damageKind === "true" ? "dano verdadeiro" : "dano físico";
+      const magicTypeName = magicalDamageTypes.find((type) => type.id === selectedMagicDamageTypeId)?.name ?? "mágico";
+      const physicalTypeName = physicalDamageTypes.find((type) => type.id === selectedPhysicalDamageTypeId)?.name ?? "físico";
+      const damageDescription = damageKind === "hybrid"
+        ? `dano híbrido (físico: ${physicalTypeName}; mágico: ${magicTypeName})`
+        : damageKind === "magical"
+          ? `dano mágico (${magicTypeName})`
+          : damageKind === "true"
+            ? "dano verdadeiro"
+            : physicalDamageTypes.length > 0
+              ? `dano físico (${physicalTypeName})`
+              : "dano físico";
       const sourceName = sources.find((source) => source.id === sourceCharacterId)?.name;
       const hitSummary = result.final_damage_by_hit?.length
         ? " Dano final por golpe: " + result.final_damage_by_hit.join(", ") + "."
@@ -233,6 +261,17 @@ export function DamageApplier({ target, battleId = null, sources = [] }: {
             <option value="true">Verdadeiro — ignora as defesas</option>
           </select>
         </div>
+        {needsPhysical && physicalDamageTypes.length > 0 && (
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">Tipo físico</label>
+            <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+              value={selectedPhysicalDamageTypeId}
+              onChange={(e) => setPhysicalDamageTypeId(e.target.value)}>
+              <option value="">Selecione o tipo físico</option>
+              {physicalDamageTypes.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}
+            </select>
+          </div>
+        )}
         {needsMagic && (
           <>
             <div className="space-y-1">
@@ -243,7 +282,7 @@ export function DamageApplier({ target, battleId = null, sources = [] }: {
                 {damageTypes.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}
               </select>
               {loadingTypes && <p className="text-xs text-muted-foreground">Carregando tipos…</p>}
-              {typesError && <p className="text-xs text-destructive">Não foi possível carregar os tipos mágicos.</p>}
+              {typesError && <p className="text-xs text-destructive">Não foi possível carregar os tipos de dano.</p>}
             </div>
             <div className="space-y-1">
               <label className="text-xs text-muted-foreground">Nível da magia</label>
@@ -302,7 +341,10 @@ export function DamageApplier({ target, battleId = null, sources = [] }: {
           </span>
         </span>
       </label>
-      <Button disabled={applyingDamage || (needsMagic && (!damageTypeId || damageTypes.length === 0))}
+      <Button disabled={applyingDamage
+        || (needsMagic && (!selectedMagicDamageTypeId || magicalDamageTypes.length === 0))
+        || (needsPhysical && physicalDamageTypes.length > 0 && !selectedPhysicalDamageTypeId)
+        || (loadingTypes && (needsMagic || needsPhysical))}
         onClick={() => void applyDamage()}>
         {damageKind === "physical" ? <Shield className="mr-1 h-4 w-4" /> :
           damageKind === "magical" ? <Sparkles className="mr-1 h-4 w-4" /> :
