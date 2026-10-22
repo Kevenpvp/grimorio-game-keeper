@@ -13,11 +13,11 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedCombateRouteImport } from './routes/_authenticated/combate'
+import { Route as AuthenticatedHabilidadesRouteImport } from './routes/_authenticated/habilidades'
 import { Route as AuthenticatedPainelRouteImport } from './routes/_authenticated/painel'
 import { Route as AuthenticatedRacasRouteImport } from './routes/_authenticated/racas'
-import { Route as AuthenticatedVirtudesRouteImport } from './routes/_authenticated/virtudes'
-import { Route as AuthenticatedHabilidadesRouteImport } from './routes/_authenticated/habilidades'
 import { Route as AuthenticatedTiposDanoRouteImport } from './routes/_authenticated/tipos-dano'
+import { Route as AuthenticatedVirtudesRouteImport } from './routes/_authenticated/virtudes'
 import { Route as AuthenticatedFichaIdRouteImport } from './routes/_authenticated/ficha.$id'
 
 const IndexRoute = IndexRouteImport.update({
@@ -39,6 +39,12 @@ const AuthenticatedCombateRoute = AuthenticatedCombateRouteImport.update({
   path: '/combate',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedHabilidadesRoute =
+  AuthenticatedHabilidadesRouteImport.update({
+    id: '/habilidades',
+    path: '/habilidades',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedPainelRoute = AuthenticatedPainelRouteImport.update({
   id: '/painel',
   path: '/painel',
@@ -49,19 +55,14 @@ const AuthenticatedRacasRoute = AuthenticatedRacasRouteImport.update({
   path: '/racas',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedVirtudesRoute = AuthenticatedVirtudesRouteImport.update({
-  id: '/virtudes',
-  path: '/virtudes',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedHabilidadesRoute = AuthenticatedHabilidadesRouteImport.update({
-  id: '/habilidades',
-  path: '/habilidades',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
 const AuthenticatedTiposDanoRoute = AuthenticatedTiposDanoRouteImport.update({
   id: '/tipos-dano',
   path: '/tipos-dano',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedVirtudesRoute = AuthenticatedVirtudesRouteImport.update({
+  id: '/virtudes',
+  path: '/virtudes',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedFichaIdRoute = AuthenticatedFichaIdRouteImport.update({
@@ -74,21 +75,22 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/combate': typeof AuthenticatedCombateRoute
+  '/habilidades': typeof AuthenticatedHabilidadesRoute
   '/painel': typeof AuthenticatedPainelRoute
   '/racas': typeof AuthenticatedRacasRoute
-  '/virtudes': typeof AuthenticatedVirtudesRoute
-  '/habilidades': typeof AuthenticatedHabilidadesRoute
   '/tipos-dano': typeof AuthenticatedTiposDanoRoute
+  '/virtudes': typeof AuthenticatedVirtudesRoute
   '/ficha/$id': typeof AuthenticatedFichaIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/combate': typeof AuthenticatedCombateRoute
+  '/habilidades': typeof AuthenticatedHabilidadesRoute
   '/painel': typeof AuthenticatedPainelRoute
   '/racas': typeof AuthenticatedRacasRoute
+  '/tipos-dano': typeof AuthenticatedTiposDanoRoute
   '/virtudes': typeof AuthenticatedVirtudesRoute
-  '/habilidades': typeof AuthenticatedHabilidadesRoute
   '/ficha/$id': typeof AuthenticatedFichaIdRoute
 }
 export interface FileRoutesById {
@@ -97,28 +99,47 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/_authenticated/combate': typeof AuthenticatedCombateRoute
+  '/_authenticated/habilidades': typeof AuthenticatedHabilidadesRoute
   '/_authenticated/painel': typeof AuthenticatedPainelRoute
   '/_authenticated/racas': typeof AuthenticatedRacasRoute
-  '/_authenticated/virtudes': typeof AuthenticatedVirtudesRoute
-  '/_authenticated/habilidades': typeof AuthenticatedHabilidadesRoute
   '/_authenticated/tipos-dano': typeof AuthenticatedTiposDanoRoute
+  '/_authenticated/virtudes': typeof AuthenticatedVirtudesRoute
   '/_authenticated/ficha/$id': typeof AuthenticatedFichaIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/combate' | '/painel' | '/racas' | '/virtudes' | '/habilidades' | '/tipos-dano' | '/ficha/$id'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/combate'
+    | '/habilidades'
+    | '/painel'
+    | '/racas'
+    | '/tipos-dano'
+    | '/virtudes'
+    | '/ficha/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/combate' | '/painel' | '/racas' | '/virtudes' | '/habilidades' | '/tipos-dano' | '/ficha/$id'
+  to:
+    | '/'
+    | '/auth'
+    | '/combate'
+    | '/habilidades'
+    | '/painel'
+    | '/racas'
+    | '/tipos-dano'
+    | '/virtudes'
+    | '/ficha/$id'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
     | '/auth'
     | '/_authenticated/combate'
+    | '/_authenticated/habilidades'
     | '/_authenticated/painel'
     | '/_authenticated/racas'
+    | '/_authenticated/tipos-dano'
     | '/_authenticated/virtudes'
-    | '/_authenticated/habilidades'
     | '/_authenticated/ficha/$id'
   fileRoutesById: FileRoutesById
 }
@@ -158,6 +179,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedCombateRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/habilidades': {
+      id: '/_authenticated/habilidades'
+      path: '/habilidades'
+      fullPath: '/habilidades'
+      preLoaderRoute: typeof AuthenticatedHabilidadesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/painel': {
       id: '/_authenticated/painel'
       path: '/painel'
@@ -172,25 +200,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRacasRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/virtudes': {
-      id: '/_authenticated/virtudes'
-      path: '/virtudes'
-      fullPath: '/virtudes'
-      preLoaderRoute: typeof AuthenticatedVirtudesRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/habilidades': {
-      id: '/_authenticated/habilidades'
-      path: '/habilidades'
-      fullPath: '/habilidades'
-      preLoaderRoute: typeof AuthenticatedHabilidadesRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
     '/_authenticated/tipos-dano': {
       id: '/_authenticated/tipos-dano'
       path: '/tipos-dano'
       fullPath: '/tipos-dano'
       preLoaderRoute: typeof AuthenticatedTiposDanoRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/virtudes': {
+      id: '/_authenticated/virtudes'
+      path: '/virtudes'
+      fullPath: '/virtudes'
+      preLoaderRoute: typeof AuthenticatedVirtudesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/ficha/$id': {
@@ -205,21 +226,21 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedCombateRoute: typeof AuthenticatedCombateRoute
+  AuthenticatedHabilidadesRoute: typeof AuthenticatedHabilidadesRoute
   AuthenticatedPainelRoute: typeof AuthenticatedPainelRoute
   AuthenticatedRacasRoute: typeof AuthenticatedRacasRoute
-  AuthenticatedVirtudesRoute: typeof AuthenticatedVirtudesRoute
-  AuthenticatedHabilidadesRoute: typeof AuthenticatedHabilidadesRoute
   AuthenticatedTiposDanoRoute: typeof AuthenticatedTiposDanoRoute
+  AuthenticatedVirtudesRoute: typeof AuthenticatedVirtudesRoute
   AuthenticatedFichaIdRoute: typeof AuthenticatedFichaIdRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedCombateRoute: AuthenticatedCombateRoute,
+  AuthenticatedHabilidadesRoute: AuthenticatedHabilidadesRoute,
   AuthenticatedPainelRoute: AuthenticatedPainelRoute,
   AuthenticatedRacasRoute: AuthenticatedRacasRoute,
-  AuthenticatedVirtudesRoute: AuthenticatedVirtudesRoute,
-  AuthenticatedHabilidadesRoute: AuthenticatedHabilidadesRoute,
   AuthenticatedTiposDanoRoute: AuthenticatedTiposDanoRoute,
+  AuthenticatedVirtudesRoute: AuthenticatedVirtudesRoute,
   AuthenticatedFichaIdRoute: AuthenticatedFichaIdRoute,
 }
 
