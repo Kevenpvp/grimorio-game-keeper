@@ -477,6 +477,13 @@
       "when": 1792785600022,
       "tag": "0067_limit_damage_vulnerability_to_physical_and_magical_categories",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1792785600023,
+      "tag": "0068_damage_vulnerability_any_effect",
+      "breakpoints": true
     }
   ]
 }
