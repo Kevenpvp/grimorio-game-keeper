@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ImagePlus, Trash2, Upload, Sparkles } from "lucide-react";
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -12,6 +12,24 @@ type CharacterTransformationState = { transformation_id: string; image_path: str
 export function CharacterTransformationImages({ character, isMaster = false }: { character: Character; isMaster?: boolean }) {
   const db = supabase as any;
   const qc = useQueryClient();
+
+  useEffect(() => {
+    const channel = supabase
+      .channel(`character-transformations-${character.id}`)
+      .on("postgres_changes", {
+        event: "*",
+        schema: "public",
+        table: "character_transformations",
+        filter: `character_id=eq.${character.id}`,
+      }, () => {
+        void Promise.all([
+          qc.invalidateQueries({ queryKey: ["character-transformations", character.id] }),
+          qc.invalidateQueries({ queryKey: ["battle-character-transformations"] }),
+        ]);
+      })
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [character.id, qc]);
 
   const { data: catalog = [], isLoading: loadingCatalog } = useQuery<Transformation[]>({
     queryKey: ["transformations"],
