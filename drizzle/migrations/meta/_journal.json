@@ -463,6 +463,13 @@
       "when": 1792785600020,
       "tag": "0065_physical_damage_types_healing_whitelist_and_damage_vulnerability",
       "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1792785600021,
+      "tag": "0066_respect_reversal_whitelist_per_effect",
+      "breakpoints": true
     }
   ]
 }
