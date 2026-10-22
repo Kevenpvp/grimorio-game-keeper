@@ -554,6 +554,13 @@
       "when": 1792785600033,
       "tag": "0078_publish_transformation_catalog_and_grants_realtime",
       "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1792785600034,
+      "tag": "0079_fix_transformation_image_update_delete_storage_policies",
+      "breakpoints": true
     }
   ]
 }
