@@ -243,7 +243,7 @@ function RaceEditor({ race, defs, isNew, onSaved }: { race: Race; defs: Attribut
           allowedTypes={[
             "status", "regeneration", "mana_regeneration", "mana_used",
             "no_regen_hp", "no_regen_mana", "magic_prohibition", "stun",
-            "damage_dealt", "no_mana", "damage_reduction", "damage_received", "invincible", "healing_blocked", "magic_healing_reversal",
+            "damage_dealt", "no_mana", "damage_reduction", "damage_received", "damage_vulnerability", "invincible", "healing_blocked", "magic_healing_reversal",
           ] as AbilityEffectType[]}
           allowPermanentMagicProhibition
         />
