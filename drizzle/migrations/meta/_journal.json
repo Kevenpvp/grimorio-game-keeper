@@ -428,6 +428,13 @@
       "when": 1792785600015,
       "tag": "0060_coracao_corrompido_demonio_strength_synergy",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1792785600016,
+      "tag": "0061_sync_coracao_corrompido_on_activation_changes",
+      "breakpoints": true
     }
   ]
 }
