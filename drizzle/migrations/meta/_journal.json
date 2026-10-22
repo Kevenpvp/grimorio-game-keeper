@@ -519,6 +519,13 @@
       "when": 1792785600028,
       "tag": "0073_publish_damage_over_time_templates_realtime",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1792785600029,
+      "tag": "0074_character_transformations_and_effects",
+      "breakpoints": true
     }
   ]
 }
