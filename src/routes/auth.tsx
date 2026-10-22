@@ -23,7 +23,7 @@ export const Route = createFileRoute("/auth")({
 
 function AuthPage() {
   const navigate = useNavigate();
-  const [mode, setMode] = useState<"in" | "up">("in");
+  const [mode, setMode] = useState<"in" | "up" | "reset">("in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
@@ -45,7 +45,7 @@ function AuthPage() {
       if (mode === "in") {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-      } else {
+      } else if (mode === "up") {
         const { error } = await supabase.auth.signUp({
           email,
           password,
@@ -53,6 +53,13 @@ function AuthPage() {
         });
         if (error) throw error;
         setSent(true);
+      } else {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/auth`,
+        });
+        if (error) throw error;
+        toast.success("E-mail de recuperação enviado! Verifique sua caixa de entrada.");
+        setMode("in");
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Falha na autenticação");
@@ -62,11 +69,36 @@ function AuthPage() {
   }
 
   async function google() {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: window.location.origin },
-    });
-    if (error) toast.error("Não foi possível entrar com Google");
+    setBusy(true);
+    try {
+      const isFramed = typeof window !== "undefined" && window.self !== window.top;
+      if (isFramed) {
+        // Dentro do iframe do preview do Lovable, o Google bloqueia exibição via 403 / iframe.
+        // Abrimos em uma nova aba para permitir autenticação normal do Google.
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: "google",
+          options: {
+            redirectTo: window.location.origin,
+            skipBrowserRedirect: true,
+          },
+        });
+        if (error) throw error;
+        if (data?.url) {
+          window.open(data.url, "_blank");
+          toast.info("Janela de login com Google aberta em nova aba. Conclua o login nela.");
+        }
+      } else {
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: "google",
+          options: { redirectTo: window.location.origin },
+        });
+        if (error) throw error;
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Não foi possível entrar com Google");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -74,7 +106,9 @@ function AuthPage() {
       <div className="panel w-full max-w-sm p-6">
         <div className="mb-6 text-center">
           <Swords className="mx-auto mb-2 h-8 w-8 text-gold" />
-          <h1 className="text-2xl text-gold">{mode === "in" ? "Entrar" : "Criar conta"}</h1>
+          <h1 className="text-2xl text-gold">
+            {mode === "in" ? "Entrar" : mode === "up" ? "Criar conta" : "Recuperar senha"}
+          </h1>
         </div>
         {sent ? (
           <p className="text-center text-sm text-muted-foreground">
@@ -92,25 +126,52 @@ function AuthPage() {
               <Label htmlFor="email">E-mail</Label>
               <Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="pw">Senha</Label>
-              <Input id="pw" type="password" minLength={6} required value={password} onChange={(e) => setPassword(e.target.value)} />
-            </div>
+            {mode !== "reset" && (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="pw">Senha</Label>
+                  {mode === "in" && (
+                    <button
+                      type="button"
+                      className="text-xs text-muted-foreground hover:text-gold"
+                      onClick={() => setMode("reset")}
+                    >
+                      Esqueceu a senha?
+                    </button>
+                  )}
+                </div>
+                <Input id="pw" type="password" minLength={6} required value={password} onChange={(e) => setPassword(e.target.value)} />
+              </div>
+            )}
             <Button type="submit" className="w-full" disabled={busy}>
-              {mode === "in" ? "Entrar" : "Criar conta"}
+              {mode === "in" ? "Entrar" : mode === "up" ? "Criar conta" : "Enviar link de recuperação"}
             </Button>
-            <Button type="button" variant="outline" className="w-full" onClick={google}>
-              Continuar com Google
-            </Button>
+            {mode === "in" && (
+              <Button type="button" variant="outline" className="w-full" onClick={google} disabled={busy}>
+                Continuar com Google
+              </Button>
+            )}
           </form>
         )}
-        <button
-          type="button"
-          className="mt-4 w-full text-center text-sm text-muted-foreground hover:text-gold"
-          onClick={() => { setMode(mode === "in" ? "up" : "in"); setSent(false); }}
-        >
-          {mode === "in" ? "Não tem conta? Cadastre-se" : "Já tem conta? Entrar"}
-        </button>
+        <div className="mt-4 flex flex-col items-center gap-1 text-center text-sm text-muted-foreground">
+          {mode === "in" ? (
+            <button
+              type="button"
+              className="hover:text-gold"
+              onClick={() => { setMode("up"); setSent(false); }}
+            >
+              Não tem conta? Cadastre-se
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="hover:text-gold"
+              onClick={() => { setMode("in"); setSent(false); }}
+            >
+              Já tem conta? Entrar
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
