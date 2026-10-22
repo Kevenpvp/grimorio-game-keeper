@@ -316,6 +316,13 @@ function makeApi(
       context.estado = asObject(data);
     },
 
+    async sincronizarBonusCoracaoCorrompido() {
+      const { error } = await service.rpc("sync_coracao_corrompido_strength_effect", {
+        _character_id: context.caster.id,
+      });
+      if (error) throw error;
+    },
+
     async ajustarEstadoNumerico(input: { chave: string; delta: number; minimo?: number }) {
       const characterAbilityId = context.habilidade.idNaFicha;
       if (!characterAbilityId) throw new Error("Este evento não está vinculado a uma habilidade da ficha.");
