@@ -28,6 +28,7 @@ type Transformation = {
   id: string;
   name: string;
   description: string | null;
+  duration_turns: number;
   cooldown_turns: number;
   mana_cost: number;
   modifiers: Json;
@@ -71,7 +72,8 @@ function TransformationsPage() {
     const { data, error } = await db.from("transformations").insert({
       name: "Nova transformação",
       description: "",
-      cooldown_turns: 3,
+      duration_turns: 3,
+      cooldown_turns: 15,
       mana_cost: 0,
       modifiers: {},
       effects: [],
@@ -156,6 +158,7 @@ function TransformationEditor({
   const db = supabase as any;
   const [name, setName] = useState(transformation.name);
   const [description, setDescription] = useState(transformation.description ?? "");
+  const [duration, setDuration] = useState(transformation.duration_turns);
   const [cooldown, setCooldown] = useState(transformation.cooldown_turns);
   const [manaCost, setManaCost] = useState(transformation.mana_cost);
   const [modifiers, setModifiers] = useState<Record<string, number>>(() => parseModifiers(transformation.modifiers));
@@ -165,12 +168,13 @@ function TransformationEditor({
   useEffect(() => {
     setName(transformation.name);
     setDescription(transformation.description ?? "");
+    setDuration(transformation.duration_turns);
     setCooldown(transformation.cooldown_turns);
     setManaCost(transformation.mana_cost);
     setModifiers(parseModifiers(transformation.modifiers));
     setEffects(parseAbilityEffects(transformation.effects));
     setEndEffects(parseAbilityEffects(transformation.end_effects));
-  }, [transformation.id, transformation.name, transformation.description, transformation.cooldown_turns, transformation.mana_cost, transformation.modifiers, transformation.effects, transformation.end_effects]);
+  }, [transformation.id, transformation.name, transformation.description, transformation.duration_turns, transformation.cooldown_turns, transformation.mana_cost, transformation.modifiers, transformation.effects, transformation.end_effects]);
 
   async function save() {
     if (!name.trim()) { toast.error("Informe o nome da transformação"); return; }
@@ -186,7 +190,8 @@ function TransformationEditor({
     const { error } = await db.from("transformations").update({
       name: name.trim(),
       description: description.trim() || null,
-      cooldown_turns: Math.max(1, Math.min(1000, Math.floor(Number(cooldown) || 1))),
+      duration_turns: Math.max(1, Math.min(1000, Math.floor(Number(duration) || 1))),
+      cooldown_turns: Math.max(0, Math.min(1000, Math.floor(Number(cooldown) || 0))),
       mana_cost: Math.max(0, Math.min(1000000, Math.floor(Number(manaCost) || 0))),
       modifiers: cleanModifiers,
       effects: effects as unknown as Json,
@@ -229,8 +234,12 @@ function TransformationEditor({
           <Input value={name} onChange={(event) => setName(event.target.value)} />
         </div>
         <div className="space-y-1.5">
-          <Label className="flex items-center gap-1"><Clock3 className="h-3.5 w-3.5" /> Duração / cooldown (turnos)</Label>
-          <Input type="number" min={1} max={1000} value={cooldown} onChange={(event) => setCooldown(Number(event.target.value))} />
+          <Label className="flex items-center gap-1"><Clock3 className="h-3.5 w-3.5" /> Duração da transformação (turnos)</Label>
+          <Input type="number" min={1} max={1000} value={duration} onChange={(event) => setDuration(Number(event.target.value))} />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="flex items-center gap-1"><Clock3 className="h-3.5 w-3.5" /> Cooldown para reutilizar (turnos)</Label>
+          <Input type="number" min={0} max={1000} value={cooldown} onChange={(event) => setCooldown(Number(event.target.value))} />
         </div>
         <div className="space-y-1.5">
           <Label className="flex items-center gap-1"><Droplets className="h-3.5 w-3.5" /> Custo de Mana (0 = grátis)</Label>
