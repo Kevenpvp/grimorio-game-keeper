@@ -435,8 +435,22 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
 
   const update = async (patch: { current_character_id?: string | null; target_character_id?: string | null; active?: boolean; name?: string }) => {
     const { error } = await supabase.from("battles").update(patch).eq("id", battle.id);
-    if (error) toast.error(error.message);
-    qc.invalidateQueries({ queryKey: ["battles"] });
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    await qc.invalidateQueries({ queryKey: ["battles"] });
+    if (patch.active === false) {
+      // The database clears Demônio Interno's per-character state when combat ends.
+      // Refresh cached ability state so the finished battle no longer displays old heat.
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["character-abilities"] }),
+        qc.invalidateQueries({ queryKey: ["character-abilities-battle"] }),
+        qc.invalidateQueries({ queryKey: ["battle-character-public-states"] }),
+      ]);
+      toast.success("Batalha encerrada; superaquecimento do Demônio Interno reiniciado.");
+    }
   };
 
 
