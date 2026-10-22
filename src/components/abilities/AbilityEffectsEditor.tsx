@@ -338,7 +338,7 @@ export function AbilityEffectsEditor({
                     Duração do buff/debuff aplicado (turnos)
                     <Input type="number" min="1" max="1000"
                       value={effect.damage_vulnerability_applied_duration ?? 1}
-                      onChange={(e) => patch(index, { damage_vulnerability_applied_duration: Math.max(1, Math.min(1000, Math.floor(Number(e.target.value) || 1)) })} />
+                      onChange={(e) => patch(index, { damage_vulnerability_applied_duration: Math.max(1, Math.min(1000, Math.floor(Number(e.target.value) || 1))) })} />
                   </label>
                 </fieldset>
               )}
