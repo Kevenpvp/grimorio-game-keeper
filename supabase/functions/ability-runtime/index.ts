@@ -658,9 +658,11 @@ async function applyDamageWithScripts(
   const hookErrors: string[] = [];
   let hooksProcessed = 0;
 
-  // causou_dano runs after ordinary source buffs, defense, and mitigation are calculated.
+  // causou_dano represents an attack attempt, not only damage that passed defense.
+  // Run it even when the ordinary hit is 0 so scripts such as Demônio Interno can
+  // add their stored reflection as post-defense damage and charge its HP cost.
   // Scripts can replace per-hit final values; the target HP is re-synchronized from hp_before.
-  if (sourceId && tracker.total > 0) {
+  if (sourceId) {
     const result = await runDamageScriptHooksSafely(service, tracker, sourceId, targetId, "causou_dano");
     hooksProcessed += result.processed;
     hookErrors.push(...result.errors);
