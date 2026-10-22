@@ -484,6 +484,13 @@
       "when": 1792785600023,
       "tag": "0068_damage_vulnerability_any_effect",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1792785600024,
+      "tag": "0069_fix_vulnerability_physical_mitigation_insert",
+      "breakpoints": true
     }
   ]
 }
