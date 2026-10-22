@@ -47,6 +47,7 @@ export function TransformationGrantPicker({ scope, traitId }: { scope: Scope; tr
     }
     toast.success(checked ? "Transformação concedida" : "Transformação removida");
     await Promise.all([
+      qc.invalidateQueries({ queryKey: [table] }),
       qc.invalidateQueries({ queryKey: [table, traitId] }),
       qc.invalidateQueries({ queryKey: ["character-transformations"] }),
       qc.invalidateQueries({ queryKey: ["battle-character-transformations"] }),
