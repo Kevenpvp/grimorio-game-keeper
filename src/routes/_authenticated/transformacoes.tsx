@@ -274,6 +274,7 @@ function TransformationEditor({
           defs={defs}
           allowHealing
           allowPeriodicHealing
+          hideDuration
         />
       </div>
       <div className="rounded-md border border-border p-3">
