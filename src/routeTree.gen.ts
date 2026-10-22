@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedCombateRouteImport } from './routes/_authenticated/combate'
+import { Route as AuthenticatedDotsRouteImport } from './routes/_authenticated/dots'
 import { Route as AuthenticatedHabilidadesRouteImport } from './routes/_authenticated/habilidades'
 import { Route as AuthenticatedPainelRouteImport } from './routes/_authenticated/painel'
 import { Route as AuthenticatedRacasRouteImport } from './routes/_authenticated/racas'
@@ -37,6 +38,11 @@ const AuthRoute = AuthRouteImport.update({
 const AuthenticatedCombateRoute = AuthenticatedCombateRouteImport.update({
   id: '/combate',
   path: '/combate',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedDotsRoute = AuthenticatedDotsRouteImport.update({
+  id: '/dots',
+  path: '/dots',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedHabilidadesRoute =
@@ -75,6 +81,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/combate': typeof AuthenticatedCombateRoute
+  '/dots': typeof AuthenticatedDotsRoute
   '/habilidades': typeof AuthenticatedHabilidadesRoute
   '/painel': typeof AuthenticatedPainelRoute
   '/racas': typeof AuthenticatedRacasRoute
@@ -86,6 +93,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/combate': typeof AuthenticatedCombateRoute
+  '/dots': typeof AuthenticatedDotsRoute
   '/habilidades': typeof AuthenticatedHabilidadesRoute
   '/painel': typeof AuthenticatedPainelRoute
   '/racas': typeof AuthenticatedRacasRoute
@@ -99,6 +107,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/_authenticated/combate': typeof AuthenticatedCombateRoute
+  '/_authenticated/dots': typeof AuthenticatedDotsRoute
   '/_authenticated/habilidades': typeof AuthenticatedHabilidadesRoute
   '/_authenticated/painel': typeof AuthenticatedPainelRoute
   '/_authenticated/racas': typeof AuthenticatedRacasRoute
@@ -112,6 +121,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/combate'
+    | '/dots'
     | '/habilidades'
     | '/painel'
     | '/racas'
@@ -123,6 +133,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/combate'
+    | '/dots'
     | '/habilidades'
     | '/painel'
     | '/racas'
@@ -135,6 +146,7 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/auth'
     | '/_authenticated/combate'
+    | '/_authenticated/dots'
     | '/_authenticated/habilidades'
     | '/_authenticated/painel'
     | '/_authenticated/racas'
@@ -177,6 +189,13 @@ declare module '@tanstack/react-router' {
       path: '/combate'
       fullPath: '/combate'
       preLoaderRoute: typeof AuthenticatedCombateRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/dots': {
+      id: '/_authenticated/dots'
+      path: '/dots'
+      fullPath: '/dots'
+      preLoaderRoute: typeof AuthenticatedDotsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/habilidades': {
@@ -226,6 +245,7 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedCombateRoute: typeof AuthenticatedCombateRoute
+  AuthenticatedDotsRoute: typeof AuthenticatedDotsRoute
   AuthenticatedHabilidadesRoute: typeof AuthenticatedHabilidadesRoute
   AuthenticatedPainelRoute: typeof AuthenticatedPainelRoute
   AuthenticatedRacasRoute: typeof AuthenticatedRacasRoute
@@ -236,6 +256,7 @@ interface AuthenticatedRouteRouteChildren {
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedCombateRoute: AuthenticatedCombateRoute,
+  AuthenticatedDotsRoute: AuthenticatedDotsRoute,
   AuthenticatedHabilidadesRoute: AuthenticatedHabilidadesRoute,
   AuthenticatedPainelRoute: AuthenticatedPainelRoute,
   AuthenticatedRacasRoute: AuthenticatedRacasRoute,
