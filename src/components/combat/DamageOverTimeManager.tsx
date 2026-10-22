@@ -42,7 +42,7 @@ export function DamageOverTimeManager({
   fighters,
   active,
 }: {
-  battleId: string;
+  battleId: string | null;
   fighters: FighterOption[];
   active: boolean;
 }) {
@@ -152,8 +152,8 @@ export function DamageOverTimeManager({
   }
 
   async function applyDot() {
-    if (!active) {
-      toast.error("Esta batalha já foi encerrada");
+    if (!battleId || !active) {
+      toast.error("Selecione uma batalha ativa para aplicar o DoT");
       return;
     }
     if (!selectedTemplate || !targetId) {
@@ -303,7 +303,7 @@ export function DamageOverTimeManager({
                 </label>
               </>
             )}
-            <Button block onClick={() => void createTemplate()} disabled={savingTemplate || !templateName.trim() || (templateKind === "physical" ? !templatePhysicalTypeId : !templateMagicTypeId)}>
+            <Button className="w-full" onClick={() => void createTemplate()} disabled={savingTemplate || !templateName.trim() || (templateKind === "physical" ? !templatePhysicalTypeId : !templateMagicTypeId)}>
               <Plus className="mr-1 h-4 w-4" /> {savingTemplate ? "Salvando…" : "Salvar modelo de DoT"}
             </Button>
           </div>
@@ -311,6 +311,11 @@ export function DamageOverTimeManager({
 
         <div className="space-y-3 rounded-md border border-border p-3">
           <h3 className="font-semibold">Aplicar DoT no combate</h3>
+          {(!battleId || !active) && (
+            <p className="rounded border border-amber-500/30 bg-amber-500/5 p-2 text-xs text-muted-foreground">
+              Os modelos podem ser cadastrados a qualquer momento. Selecione uma batalha ativa no topo da página para aplicar um DoT.
+            </p>
+          )}
           <label className={fieldLabel}>
             Modelo
             <select className={fieldClass} value={selectedTemplateId} onChange={(event) => setSelectedTemplateId(event.target.value)} disabled={templates.length === 0}>
@@ -360,7 +365,7 @@ export function DamageOverTimeManager({
               </>
             ) : "Cadastre ou selecione um modelo antes de aplicar."}
           </div>
-          <Button block onClick={() => void applyDot()} disabled={!active || applyingDot || !selectedTemplate || !targetId}>
+          <Button className="w-full" onClick={() => void applyDot()} disabled={!battleId || !active || applyingDot || !selectedTemplate || !targetId}>
             <Timer className="mr-1 h-4 w-4" /> {applyingDot ? "Aplicando…" : "Aplicar DoT"}
           </Button>
         </div>
