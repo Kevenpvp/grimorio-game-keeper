@@ -264,6 +264,7 @@ function CombatPage() {
       )}
       {isMaster && (
         <DamageOverTimeManager
+          mode="combat"
           battleId={battle?.active ? battle.id : null}
           fighters={(battle?.battle_participants ?? []).flatMap((participant) => {
             const character = participant.characters as { id?: string; name?: string } | null;
