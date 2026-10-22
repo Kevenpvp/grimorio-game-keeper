@@ -316,9 +316,12 @@ function makeApi(
       context.estado = asObject(data);
     },
 
-    async sincronizarBonusCoracaoCorrompido() {
+    async sincronizarBonusCoracaoCorrompido(bonusForca?: number) {
       const { error } = await service.rpc("sync_coracao_corrompido_strength_effect", {
         _character_id: context.caster.id,
+        _bonus_strength: bonusForca === undefined || bonusForca === null
+          ? null
+          : finiteNumber(bonusForca, "ForçaBonus", 0, 1_000_000),
       });
       if (error) throw error;
     },
@@ -466,6 +469,8 @@ type DamageRpcResult = {
   hp_before: number;
   hp_after: number;
   final_damage_by_hit?: number[];
+  /** Per-hit amount after defenses/mitigation but before Invencível blocks HP loss. */
+  damage_without_invincible_by_hit?: number[];
   /** Whether base damage was blocked by an active Invencível effect. */
   is_invincible?: boolean;
   [key: string]: unknown;
@@ -486,6 +491,10 @@ type DamageTracker = {
   rawValues: number[];
   finalValues: number[];
   total: number;
+  /** Damage that would have reached HP after defense/mitigation if Invencível were absent. */
+  potentialFinalValues: number[];
+  potentialTotal: number;
+  isInvincible: boolean;
   hpBefore: number;
   hpAfter: number;
   call: DamageCall;
@@ -550,6 +559,9 @@ async function runDamageScriptHooks(
           danoBrutoPorGolpe: [...tracker.rawValues],
           danoFinalPorGolpe: [...tracker.finalValues],
           danoFinalTotal: tracker.total,
+          danoPotencialSemInvencivelPorGolpe: [...tracker.potentialFinalValues],
+          danoPotencialSemInvencivelTotal: tracker.potentialTotal,
+          bloqueadoPorInvencivel: tracker.isInvincible,
           hpAntes: tracker.hpBefore,
           hpDepois: tracker.hpAfter,
         },
@@ -656,11 +668,19 @@ async function applyDamageWithScripts(
   const finalValues = base.final_damage_by_hit.map((value) =>
     finiteNumber(value, "Dano calculado", 0, critical ? 2_000_000 : 1_000_000)
   );
+  const potentialFinalValues = Array.isArray(base.damage_without_invincible_by_hit)
+    ? base.damage_without_invincible_by_hit.map((value) =>
+        finiteNumber(value, "Dano potencial calculado", 0, critical ? 2_000_000 : 1_000_000)
+      )
+    : [...finalValues];
   const tracker: DamageTracker = {
     call,
     rawValues,
     finalValues,
     total: finalValues.reduce((sum, value) => sum + Math.round(value), 0),
+    potentialFinalValues,
+    potentialTotal: potentialFinalValues.reduce((sum, value) => sum + Math.round(value), 0),
+    isInvincible: base.is_invincible === true,
     hpBefore: Number(base.hp_before ?? 0),
     hpAfter: Number(base.hp_after ?? 0),
   };
@@ -677,8 +697,10 @@ async function applyDamageWithScripts(
     hookErrors.push(...result.errors);
   }
 
-  // received damage observes the final amount after all causou_dano scripts have modified it.
-  if (tracker.total > 0) {
+  // Received-damage scripts normally require positive final damage. Demônio Interno
+  // is the exception: when Invencível blocks HP loss, it accumulates the damage that
+  // would have passed defense and mitigation, without applying that damage to HP.
+  if (tracker.total > 0 || (tracker.isInvincible && tracker.potentialTotal > 0)) {
     const result = await runDamageScriptHooksSafely(service, tracker, targetId, sourceId, "recebeu_dano");
     hooksProcessed += result.processed;
     hookErrors.push(...result.errors);
