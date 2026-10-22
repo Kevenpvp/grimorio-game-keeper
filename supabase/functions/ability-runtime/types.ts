@@ -3,6 +3,7 @@ export type AbilityScriptEventType =
   | "habilidade_ativada"
   | "efeito_aplicado_no_caster"
   | "efeito_removido_no_caster"
+  | "habilidade_saiu_do_cooldown"
   | "recebeu_dano"
   | "causou_dano";
 
@@ -77,6 +78,8 @@ export interface AbilityScriptApi {
     quantidade: number;
   }): Promise<void>;
   atualizarEstado(patch: Record<string, unknown>): Promise<void>;
+  /** Synchronize Coração Corrompido's temporary +20 Strength when its cooldown and Demonio Interno heat satisfy the rule. */
+  sincronizarBonusCoracaoCorrompido(): Promise<void>;
   /** Atomically adjust a numeric per-ability state value and enforce a lower bound. */
   ajustarEstadoNumerico(input: { chave: string; delta: number; minimo?: number }): Promise<number>;
   /** Read current and maximum resource values for the Caster or Alvo. */
