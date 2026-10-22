@@ -229,6 +229,8 @@ export function DamageApplier({ target, battleId = null, sources = [] }: {
           ? [qc.invalidateQueries({ queryKey: ["character-abilities", sourceCharacterId] })]
           : []),
         qc.invalidateQueries({ queryKey: ["character-abilities-battle"] }),
+        // Vulnerabilidade de Dano may create a new status effect after this hit.
+        qc.invalidateQueries({ queryKey: ["battle-effects"] }),
         qc.invalidateQueries({ queryKey: ["demonio-interno-hp"] }),
       ]);
     } finally {
