@@ -11,7 +11,11 @@ import type { AbilityScript } from "../types.ts";
  */
 const demonioInterno: AbilityScript = {
   async "recebeu_dano"(context, api) {
-    const damageReceived = Math.max(0, Math.floor(context.dano?.danoFinalTotal ?? 0));
+    const damageReceived = Math.max(0, Math.floor(
+      context.dano?.bloqueadoPorInvencivel
+        ? context.dano?.danoPotencialSemInvencivelTotal ?? 0
+        : context.dano?.danoFinalTotal ?? 0
+    ));
     if (damageReceived <= 0) return;
 
     const nextHeat = await api.ajustarEstadoNumerico({
@@ -21,6 +25,7 @@ const demonioInterno: AbilityScript = {
     });
     api.registrarLog("Demônio Interno acumulou superaquecimento", {
       danoRecebido: damageReceived,
+      bloqueadoPorInvencivel: context.dano?.bloqueadoPorInvencivel === true,
       superaquecimentoTotal: nextHeat,
     });
     // Notify the paired Coração Corrompido script/rule immediately after the stack changes.
