@@ -334,7 +334,7 @@ export function DamageOverTimeManager({
           <h3 className="font-semibold">Aplicar DoT no combate</h3>
           {(!battleId || !active) && (
             <p className="rounded border border-amber-500/30 bg-amber-500/5 p-2 text-xs text-muted-foreground">
-              Os modelos podem ser cadastrados a qualquer momento. Selecione uma batalha ativa no topo da página para aplicar um DoT.
+              Os modelos são cadastrados separadamente na página <strong>Dano por Turno</strong>. Selecione uma batalha ativa no topo da página para aplicar um DoT.
             </p>
           )}
           <label className={fieldLabel}>
@@ -384,7 +384,9 @@ export function DamageOverTimeManager({
                   {amountMode === "percent" ? `${amount || "0"}% do HP máximo` : `${amount || "0"} de dano bruto`} por turno, durante {duration || "0"} turno(s).
                 </div>
               </>
-            ) : "Cadastre ou selecione um modelo antes de aplicar."}
+            ) : templates.length === 0
+              ? "Nenhum modelo cadastrado. Abra a página Dano por Turno no menu do mestre para registrar o primeiro."
+              : "Selecione um modelo antes de aplicar."}
           </div>
           <Button className="w-full" onClick={() => void applyDot()} disabled={!battleId || !active || applyingDot || !selectedTemplate || !targetId}>
             <Timer className="mr-1 h-4 w-4" /> {applyingDot ? "Aplicando…" : "Aplicar DoT"}
