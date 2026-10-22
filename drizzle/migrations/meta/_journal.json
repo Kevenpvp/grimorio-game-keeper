@@ -505,6 +505,13 @@
       "when": 1792785600026,
       "tag": "0071_fix_vulnerability_required_mitigation_scope",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1792785600027,
+      "tag": "0072_damage_over_time_templates_and_turn_ticks",
+      "breakpoints": true
     }
   ]
 }
