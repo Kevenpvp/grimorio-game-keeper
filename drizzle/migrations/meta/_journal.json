@@ -442,6 +442,13 @@
       "when": 1792785600017,
       "tag": "0062_start_ability_cooldown_after_activation",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1792785600018,
+      "tag": "0063_preserve_coracao_strength_bonus_during_ability_edits",
+      "breakpoints": true
     }
   ]
 }
