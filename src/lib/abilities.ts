@@ -53,7 +53,9 @@ export type AbilityEffectDefinition = {
   damage_vulnerability_physical_type_ids?: string[];
   damage_vulnerability_magic_type_ids?: string[];
   damage_vulnerability_magic_levels?: DamageMagicLevel[];
-  /** Duration of the status buff/debuff created when the vulnerability triggers. */
+  /** Any normal effect(s) to apply when the vulnerability trigger matches. Nested vulnerability triggers are not allowed. */
+  damage_vulnerability_effects?: AbilityEffectDefinition[];
+  /** Duration of persistent effects created when the vulnerability triggers. */
   damage_vulnerability_applied_duration?: number;
   magic_healing_reversal_damage_mode?: "healing_amount" | "custom" | "both";
   magic_healing_reversal_custom_damage?: number;
@@ -83,13 +85,13 @@ export type Ability = Tables<"abilities">;
 export type CharacterAbilityRow = Tables<"character_abilities">;
 export type CharacterAbility = Omit<CharacterAbilityRow, "effects" | "passive_effects" | "end_effects"> & { effects: AbilityEffectDefinition[]; passive_effects: AbilityEffectDefinition[]; end_effects: AbilityEffectDefinition[] };
 
-export function parseAbilityEffects(value: unknown): AbilityEffectDefinition[] {
+export function parseAbilityEffects(value: unknown, nested = false): AbilityEffectDefinition[] {
   if (!Array.isArray(value)) return [];
   const validTypes: AbilityEffectType[] = ["status", "regeneration", "mana_regeneration", "mana_used", "no_regen_hp", "no_regen_mana", "magic_prohibition", "stun", "damage_dealt", "damage_reduction", "damage_received", "damage_vulnerability", "no_mana", "healing", "invincible", "healing_blocked", "magic_healing_reversal"];
   return value.flatMap((item): AbilityEffectDefinition[] => {
     if (!item || typeof item !== "object") return [];
     const raw = item as Record<string, unknown>;
-    if (!validTypes.includes(raw.effect_type as AbilityEffectType)) return [];
+    if (!validTypes.includes(raw.effect_type as AbilityEffectType) || (nested && raw.effect_type === "damage_vulnerability")) return [];
     const effectType = raw.effect_type as AbilityEffectType;
     const polarity = effectType === "no_mana" || effectType === "healing_blocked" || effectType === "magic_prohibition" || effectType === "magic_healing_reversal" || effectType === "damage_received"
       ? "debuff"
@@ -150,6 +152,24 @@ export function parseAbilityEffects(value: unknown): AbilityEffectDefinition[] {
         : [],
       damage_vulnerability_applied_duration: Number.isFinite(Number(raw.damage_vulnerability_applied_duration))
         ? Math.max(1, Math.min(1000, Math.floor(Number(raw.damage_vulnerability_applied_duration)))) : 1,
+      ...(effectType === "damage_vulnerability" ? {
+        damage_vulnerability_effects: parseAbilityEffects(
+          Array.isArray(raw.damage_vulnerability_effects) && raw.damage_vulnerability_effects.length > 0
+            ? raw.damage_vulnerability_effects
+            : [{
+                name: typeof raw.name === "string" ? raw.name : "Efeito aplicado",
+                effect_type: "status",
+                attribute_key: typeof raw.attribute_key === "string" ? raw.attribute_key : "strength",
+                polarity: raw.polarity === "buff" ? "buff" : "debuff",
+                value_mode: raw.value_mode === "percent" ? "percent" : "fixed",
+                amount: Number.isFinite(Number(raw.amount)) ? Number(raw.amount) : 10,
+                duration: Number.isFinite(Number(raw.damage_vulnerability_applied_duration))
+                  ? Number(raw.damage_vulnerability_applied_duration) : 1,
+                damage_scope: "any",
+              }],
+          true,
+        ),
+      } : {}),
       target_scope: raw.target_scope === "caster" || raw.target_scope === "both" ? raw.target_scope : "target",
       apply_both_on_activation: raw.apply_both_on_activation === true,
       healing_timing: raw.healing_timing === "per_turn" ? "per_turn" : "instant",
