@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { raceMods, useDefs, useMe, useRaces, type AttributeDef, type Race } from "@/lib/sheets";
 import { parseAbilityEffects, useAbilities, type AbilityEffectDefinition, type AbilityEffectType } from "@/lib/abilities";
 import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
+import { TransformationGrantPicker } from "@/components/transformations/TransformationGrantPicker";
 import type { Json } from "@/integrations/supabase/types";
 
 export const Route = createFileRoute("/_authenticated/racas")({
@@ -229,6 +230,7 @@ function RaceEditor({ race, defs, isNew, onSaved }: { race: Race; defs: Attribut
           </div>
         )}
       </div>
+      <TransformationGrantPicker scope="race" traitId={race.id} />
       <div className="rounded-md border border-border p-3">
         <AbilityEffectsEditor
           effects={startingEffects}
