@@ -120,6 +120,7 @@ type CharacterTransformationState = {
   image_path: string | null;
   active: boolean;
   cooldown_remaining: number;
+  active_duration_remaining: number;
   active_effect_group_id: string | null;
 };
 
@@ -371,7 +372,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
     enabled: fighterIds.length > 0,
     queryFn: async () => {
       const { data, error } = await db.from("character_transformations")
-        .select("character_id,transformation_id,image_path,active,cooldown_remaining,active_effect_group_id")
+        .select("character_id,transformation_id,image_path,active,cooldown_remaining,active_duration_remaining,active_effect_group_id")
         .in("character_id", fighterIds);
       if (error) throw error;
       return data ?? [];
@@ -654,21 +655,9 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
           const activeTransformation = activeTransformationState
             ? transformationCatalog.find((transformation) => transformation.id === activeTransformationState.transformation_id)
             : undefined;
-          const activeTransformationEffectDurations = activeTransformationState
-            ? effects
-                .filter((effect) =>
-                  effect.character_id === f.id
-                  && effect.effect_group_id === activeTransformationState.active_effect_group_id
-                  && effect.is_end_effect !== true
-                )
-                .map((effect) => Number(effect.duration))
-                .filter((duration) => Number.isFinite(duration) && duration > 0)
-            : [];
-          const activeTransformationRemaining = activeTransformationState
-            ? activeTransformationEffectDurations.length > 0
-              ? Math.min(...activeTransformationEffectDurations)
-              : activeTransformation?.duration_turns ?? activeTransformationState.cooldown_remaining
-            : 0;
+          const activeTransformationRemaining = activeTransformationState?.active_duration_remaining
+            ?? activeTransformation?.duration_turns
+            ?? 0;
           const transformationImage = activeTransformationState?.image_path || f.photo_path;
           const availableTransformations = availableTransformationsFor(f);
           return (
