@@ -459,6 +459,8 @@ type DamageRpcResult = {
   hp_before: number;
   hp_after: number;
   final_damage_by_hit?: number[];
+  /** Whether base damage was blocked by an active Invencível effect. */
+  is_invincible?: boolean;
   [key: string]: unknown;
 };
 
@@ -659,10 +661,10 @@ async function applyDamageWithScripts(
   let hooksProcessed = 0;
 
   // causou_dano represents an attack attempt, not only damage that passed defense.
-  // Run it even when the ordinary hit is 0 so scripts such as Demônio Interno can
-  // add their stored reflection as post-defense damage and charge its HP cost.
+  // Run it with 0 ordinary damage (e.g. equal damage and defense) so Demônio Interno
+  // can reflect its stored heat and pay HP. Never let post-defense scripts bypass Invencível.
   // Scripts can replace per-hit final values; the target HP is re-synchronized from hp_before.
-  if (sourceId) {
+  if (sourceId && base.is_invincible !== true) {
     const result = await runDamageScriptHooksSafely(service, tracker, sourceId, targetId, "causou_dano");
     hooksProcessed += result.processed;
     hookErrors.push(...result.errors);
