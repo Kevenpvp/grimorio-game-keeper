@@ -583,6 +583,30 @@ async function runDamageScriptHooks(
   return { processed, errors };
 }
 
+/**
+ * A base damage RPC has already committed before custom hooks run. A failure
+ * while loading hook rows must be reported in damage_result instead of turning
+ * the whole request into HTTP 400 and misleading the UI into thinking damage failed.
+ */
+async function runDamageScriptHooksSafely(
+  service: ReturnType<typeof createClient>,
+  tracker: DamageTracker,
+  ownerCharacterId: string,
+  oppositeCharacterId: string | null,
+  eventType: "causou_dano" | "recebeu_dano",
+): Promise<{ processed: number; errors: string[] }> {
+  try {
+    return await runDamageScriptHooks(service, tracker, ownerCharacterId, oppositeCharacterId, eventType);
+  } catch (error) {
+    const message = errorMessage(error);
+    console.error("Could not load custom damage hooks:", eventType, message);
+    return {
+      processed: 0,
+      errors: [`Não foi possível consultar os scripts de dano (${eventType}): ${message.slice(0, 400)}`],
+    };
+  }
+}
+
 async function applyDamageWithScripts(
   body: ObjectValue,
   userClient: ReturnType<typeof createClient>,
@@ -637,14 +661,14 @@ async function applyDamageWithScripts(
   // causou_dano runs after ordinary source buffs, defense, and mitigation are calculated.
   // Scripts can replace per-hit final values; the target HP is re-synchronized from hp_before.
   if (sourceId && tracker.total > 0) {
-    const result = await runDamageScriptHooks(service, tracker, sourceId, targetId, "causou_dano");
+    const result = await runDamageScriptHooksSafely(service, tracker, sourceId, targetId, "causou_dano");
     hooksProcessed += result.processed;
     hookErrors.push(...result.errors);
   }
 
   // received damage observes the final amount after all causou_dano scripts have modified it.
   if (tracker.total > 0) {
-    const result = await runDamageScriptHooks(service, tracker, targetId, sourceId, "recebeu_dano");
+    const result = await runDamageScriptHooksSafely(service, tracker, targetId, sourceId, "recebeu_dano");
     hooksProcessed += result.processed;
     hookErrors.push(...result.errors);
   }
