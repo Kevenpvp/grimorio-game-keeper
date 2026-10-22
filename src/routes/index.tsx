@@ -21,79 +21,95 @@ export const Route = createFileRoute("/")({
 
 function Index() {
   const navigate = useNavigate();
-  // Se a URL contém token OAuth (#access_token=) ou código (?code=), o usuário acabou de autenticar via Google.
-  // Mantemos a tela em estado de carregamento/autenticação até que a sessão seja confirmada e o redirecionamento ocorra.
-  const [checking, setChecking] = useState(() => {
-    if (typeof window === "undefined") return false;
-    const hasHashToken = window.location.hash.includes("access_token");
-    const hasQueryCode = window.location.search.includes("code=");
-    return hasHashToken || hasQueryCode;
-  });
-  const [isInitialCheck, setIsInitialCheck] = useState(true);
+  const [checking, setChecking] = useState(true);
+  const [callbackFailed, setCallbackFailed] = useState(false);
 
   useEffect(() => {
-    let unmounted = false;
+    let active = true;
+    let finished = false;
 
-    // Tratamento de erros retornados na URL (ex: #error=access_denied)
-    if (typeof window !== "undefined" && window.location.hash.includes("error")) {
-      const params = new URLSearchParams(window.location.hash.slice(1));
-      const errorMsg = params.get("error_description") || params.get("error");
-      if (errorMsg) {
-        toast.error(`Falha na autenticação: ${decodeURIComponent(errorMsg)}`);
-      }
+    const hasHashResponse = window.location.hash.includes("access_token") ||
+      window.location.hash.includes("error");
+    const hasCodeResponse = new URLSearchParams(window.location.search).has("code");
+    const hasAuthResponse = hasHashResponse || hasCodeResponse;
+
+    const clearAuthResponseFromUrl = () => {
+      // OAuth access tokens must not remain visible in the address bar.
+      window.history.replaceState(
+        window.history.state,
+        document.title,
+        window.location.pathname + window.location.search,
+      );
+    };
+
+    const goToDashboard = () => {
+      if (!active || finished) return;
+      finished = true;
+      clearAuthResponseFromUrl();
+      setTimeout(() => {
+        // Leave Supabase's auth callback first. Navigating inside the callback
+        // can race the SDK's session lock and leave the preview on its loader.
+        if (active) navigate({ to: "/painel", replace: true });
+      }, 0);
+    };
+
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const oauthError = hashParams.get("error_description") || hashParams.get("error");
+    if (oauthError) {
+      finished = true;
+      clearAuthResponseFromUrl();
+      toast.error("O login com Google não foi concluído. Tente entrar novamente.");
       setChecking(false);
-      setIsInitialCheck(false);
+      setCallbackFailed(true);
       return;
     }
 
-    const goToDashboard = () => {
-      if (!unmounted) {
-        navigate({ to: "/painel", replace: true });
-      }
-    };
-
-    // Escuta mudanças de sessão emitidas pelo Supabase
-    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session) {
-        goToDashboard();
-      } else if (event === "SIGNED_OUT") {
-        setChecking(false);
-        setIsInitialCheck(false);
-      }
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) goToDashboard();
     });
 
-    // Checagem imediata de sessão existente no storage
-    supabase.auth.getSession().then(({ data }) => {
-      if (unmounted) return;
+    // The Supabase client parses and persists the OAuth callback during
+    // initialization. A valid session should immediately take the user to the panel.
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (!active || finished) return;
       if (data.session) {
         goToDashboard();
-      } else {
-        const hasHashToken = typeof window !== "undefined" && window.location.hash.includes("access_token");
-        const hasQueryCode = typeof window !== "undefined" && window.location.search.includes("code=");
-        if (!hasHashToken && !hasQueryCode) {
-          setChecking(false);
-        }
-        setIsInitialCheck(false);
+        return;
+      }
+
+      // Without OAuth parameters, an ordinary visit should not wait for the timeout.
+      if (!hasAuthResponse) {
+        finished = true;
+        setChecking(false);
+        if (error) console.warn("[Grimório] Não foi possível restaurar a sessão.", error);
+      }
+      // When OAuth parameters exist, allow the auth listener a few seconds to
+      // receive the session. The timeout below prevents an infinite spinner.
+    }).catch((error) => {
+      if (!active || finished) return;
+      console.warn("[Grimório] Falha ao verificar sessão.", error);
+      if (!hasAuthResponse) {
+        finished = true;
+        setChecking(false);
       }
     });
 
-    // Timeout de segurança para nunca travar a tela caso a hash seja inválida
-    const timeout = setTimeout(() => {
-      if (!unmounted && checking) {
-        setChecking(false);
-        setIsInitialCheck(false);
-      }
-    }, 8000);
+    const timeout = window.setTimeout(() => {
+      if (!active || finished) return;
+      finished = true;
+      if (hasAuthResponse) clearAuthResponseFromUrl();
+      setChecking(false);
+      setCallbackFailed(hasAuthResponse);
+    }, hasAuthResponse ? 12000 : 8000);
 
     return () => {
-      unmounted = true;
-      clearTimeout(timeout);
+      active = false;
+      window.clearTimeout(timeout);
       listener.subscription.unsubscribe();
     };
-  }, [navigate, checking]);
+  }, [navigate]);
 
-  // Enquanto estiver autenticando (ex.: voltando do Google com o token) ou checando sessão inicial
-  if (checking || isInitialCheck) {
+  if (checking) {
     return (
       <div className="flex min-h-screen items-center justify-center px-4">
         <div className="panel w-full max-w-sm p-8 text-center space-y-4 animate-in fade-in duration-300">
@@ -104,7 +120,9 @@ function Index() {
           <div className="space-y-1">
             <h1 className="text-2xl font-bold text-gold">Conectando ao Grimório...</h1>
             <p className="text-sm text-muted-foreground">
-              Autenticando sua conta. Você será redirecionado para o painel em instantes.
+              {callbackFailed
+                ? "Não foi possível concluir o login."
+                : "Verificando sua sessão. Isso deve levar apenas alguns segundos."}
             </p>
           </div>
         </div>
@@ -118,10 +136,12 @@ function Index() {
         <Swords className="mx-auto mb-6 h-12 w-12 text-gold" />
         <h1 className="text-4xl font-bold text-gold md:text-5xl">Grimório</h1>
         <p className="mt-4 text-lg text-muted-foreground">
-          As fichas da sua campanha, guardadas pelo mestre e consultadas pelos jogadores durante a sessão.
+          {callbackFailed
+            ? "O login não terminou corretamente. Tente entrar novamente."
+            : "As fichas da sua campanha, guardadas pelo mestre e consultadas pelos jogadores durante a sessão."}
         </p>
         <Button asChild size="lg" className="mt-8">
-          <Link to="/auth">Entrar</Link>
+          <Link to="/auth">{callbackFailed ? "Voltar ao login" : "Entrar"}</Link>
         </Button>
       </div>
     </div>
