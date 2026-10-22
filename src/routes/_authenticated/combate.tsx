@@ -14,6 +14,7 @@ import { Portrait } from "@/components/sheet/CharacterSheetView";
 import { StatBar } from "@/components/sheet/StatBar";
 import { cn } from "@/lib/utils";
 import { DamageApplier } from "@/components/combat/DamageApplier";
+import { DamageOverTimeManager } from "@/components/combat/DamageOverTimeManager";
 import { CharacterAbilitiesPanel } from "@/components/abilities/CharacterAbilities";
 import { passiveEffectTypeActive, passiveRegenerationModifiers, passiveStatusModifiers, useBattleCharacterAbilities, useCharacterAbilities, useDamageTypes } from "@/lib/abilities";
 
@@ -32,7 +33,7 @@ export const Route = createFileRoute("/_authenticated/combate")({
 });
 
 type Attr = { attribute_key: string; current_value: number; max_value: number; points: number; bonus: number };
-type BattleEffect = { id: string; battle_id: string | null; character_id: string; name: string; effect_type: 'status' | 'regeneration' | 'mana_used' | 'no_regen_hp' | 'no_regen_mana' | 'magic_prohibition' | 'no_mana' | 'stun' | 'damage_dealt' | 'damage_reduction' | 'healing' | 'invincible' | 'healing_blocked'; attribute_key: string | null; polarity: 'buff' | 'debuff'; value_mode: 'percent' | 'fixed'; amount: number; duration: number; duration_scope: 'individual' | 'global'; until_combat_end: boolean; effect_data?: Json; damage_scope?: 'any' | 'physical' | 'magical'; damage_reduction_scope?: 'physical' | 'magical'; damage_reduction_type_id?: string | null; damage_reduction_magic_level?: 'baixa' | 'media' | 'alta' | null; damage_reduction_type_ids?: string[] | null; damage_reduction_magic_levels?: ('baixa' | 'media' | 'alta')[] | null; source_character_ability_id?: string | null; source_race_id?: string | null; source_race_effect_index?: number | null; effect_group_id?: string | null; is_end_effect?: boolean };
+type BattleEffect = { id: string; battle_id: string | null; character_id: string; name: string; effect_type: 'status' | 'regeneration' | 'mana_used' | 'no_regen_hp' | 'no_regen_mana' | 'magic_prohibition' | 'no_mana' | 'stun' | 'damage_dealt' | 'damage_reduction' | 'healing' | 'invincible' | 'healing_blocked' | 'damage_vulnerability' | 'damage_over_time'; attribute_key: string | null; polarity: 'buff' | 'debuff'; value_mode: 'percent' | 'fixed'; amount: number; duration: number; duration_scope: 'individual' | 'global'; until_combat_end: boolean; effect_data?: Json; damage_scope?: 'any' | 'physical' | 'magical'; damage_reduction_scope?: 'physical' | 'magical'; damage_reduction_type_id?: string | null; damage_reduction_magic_level?: 'baixa' | 'media' | 'alta' | null; damage_reduction_type_ids?: string[] | null; damage_reduction_magic_levels?: ('baixa' | 'media' | 'alta')[] | null; source_character_ability_id?: string | null; source_race_id?: string | null; source_race_effect_index?: number | null; effect_group_id?: string | null; is_end_effect?: boolean };
 function damageReductionSummary(effect: BattleEffect, damageTypes: { id: string; name: string }[]) {
   const selectedTypeIds = effect.damage_reduction_type_ids ?? (effect.damage_reduction_type_id ? [effect.damage_reduction_type_id] : []);
   const selectedLevels = effect.damage_reduction_magic_levels ?? (effect.damage_reduction_magic_level ? [effect.damage_reduction_magic_level] : []);
@@ -44,6 +45,23 @@ function damageReductionSummary(effect: BattleEffect, damageTypes: { id: string;
     : selectedLevels.map((level) => level === "baixa" ? "baixa" : level === "media" ? "média" : "alta").join(", ");
   const scope = effect.damage_reduction_scope === "magical" ? `mágica (${typeNames}; grau(s) ${levelNames})` : "física";
   return `Mitigação ${scope}: ${effect.value_mode === "percent" ? `${effect.amount}%` : `${effect.amount} fixos`} reduzidos depois da defesa`;
+}
+
+function damageOverTimeSummary(effect: BattleEffect, damageTypes: { id: string; name: string }[]) {
+  const raw = effect.effect_data;
+  const config: Record<string, Json | undefined> =
+    raw && typeof raw === "object" && !Array.isArray(raw)
+      ? raw as Record<string, Json | undefined>
+      : {};
+  const physical = config.damage_kind === "physical";
+  const typeId = String(physical ? config.physical_damage_type_id ?? "" : config.damage_type_id ?? "");
+  const typeName = damageTypes.find((type) => type.id === typeId)?.name ?? (physical ? "tipo físico removido" : "tipo mágico removido");
+  const mode = config.damage_mode === "percent" ? "percent" : "fixed";
+  const rawAmount = Number(config.damage_amount ?? effect.amount);
+  const amount = Number.isFinite(rawAmount) ? rawAmount : Number(effect.amount);
+  const level = config.magic_level === "baixa" ? "baixa" : config.magic_level === "media" ? "média" : config.magic_level === "alta" ? "alta" : null;
+  const typeLabel = physical ? `Físico · ${typeName}` : `Mágico · ${typeName}${level ? ` · magia ${level}` : ""}`;
+  return `DoT — ${typeLabel}: ${mode === "percent" ? `${amount}% do HP máximo` : `${amount} fixos`} por turno`;
 }
 
 
@@ -243,6 +261,16 @@ function CombatPage() {
           )}
           {battle && <BattleView key={battle.id} battle={battle} isMaster={isMaster} userId={me.user.id} />}
         </>
+      )}
+      {isMaster && (
+        <DamageOverTimeManager
+          battleId={battle?.active ? battle.id : null}
+          fighters={(battle?.battle_participants ?? []).flatMap((participant) => {
+            const character = participant.characters as { id?: string; name?: string } | null;
+            return character?.id && character.name ? [{ id: character.id, name: character.name }] : [];
+          })}
+          active={!!battle?.active}
+        />
       )}
     </div>
   );
@@ -752,6 +780,8 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
             const details = [
               effect.effect_type === "status" ? `${effect.polarity === "buff" ? "Buff" : "Debuff"} de ${defs.find(d => d.key === effect.attribute_key)?.label ?? effect.attribute_key} (${effect.value_mode === "percent" ? `${effect.polarity === "debuff" ? "-" : "+"}${effect.amount}%` : `${effect.polarity === "debuff" ? "-" : "+"}${effect.amount} pontos`})` :
               effect.effect_type === "regeneration" ? `${effect.polarity === "buff" ? "Buff" : "Debuff"} de regeneração de ${effect.attribute_key === "hp" ? "HP" : "Mana"}: ${effect.value_mode === "percent" ? `${effect.polarity === "debuff" ? "-" : "+"}${effect.amount}%` : `${effect.polarity === "debuff" ? "-" : "+"}${effect.amount} fixos`}` :
+              effect.effect_type === "damage_over_time" ? damageOverTimeSummary(effect, damageTypes) :
+              effect.effect_type === "damage_vulnerability" ? "Vulnerabilidade de Dano: aplica efeitos ao receber dano compatível" :
               effect.effect_type === "healing" ? periodicHealingSummary(effect) : effect.effect_type === "invincible" ? "Invencível: não recebe nenhum dano enquanto estiver ativo" : effect.effect_type === "healing_blocked" ? "Bloqueio de Cura: impede receber curas de habilidades" : effect.effect_type === "no_regen_hp" ? "Impede regeneração de HP" :
               effect.effect_type === "no_regen_mana" ? "Impede regeneração de Mana" : effect.effect_type === "no_mana" ? "Sem Mana: Mana zerada e habilidades mágicas/que usam Mana bloqueadas" : effect.effect_type === "damage_reduction" ? damageReductionSummary(effect, damageTypes) : effect.effect_type === "mana_used" ? `Mana usada ${effect.polarity === "buff" ? "−" : "+"}${effect.value_mode === "percent" ? `${effect.amount}%` : `${effect.amount} Mana`}` : effect.effect_type === "damage_dealt" ? `${effect.polarity === "buff" ? "Buff" : "Debuff"} de dano ${effect.damage_scope === "physical" ? "físico" : effect.damage_scope === "magical" ? "mágico" : "qualquer dano"}: ${effect.polarity === "debuff" ? "-" : "+"}${effect.value_mode === "percent" ? `${effect.amount}%` : `${effect.amount} de dano`}` : effect.effect_type === "magic_prohibition" ? "Proibição de magia: não pode usar habilidades que consomem Mana" : "Stun (apenas visual)"
             ];
