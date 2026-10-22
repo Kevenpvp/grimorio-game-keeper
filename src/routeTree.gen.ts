@@ -14,6 +14,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedCombateRouteImport } from './routes/_authenticated/combate'
 import { Route as AuthenticatedDotsRouteImport } from './routes/_authenticated/dots'
+import { Route as AuthenticatedTransformacoesRouteImport } from './routes/_authenticated/transformacoes'
 import { Route as AuthenticatedHabilidadesRouteImport } from './routes/_authenticated/habilidades'
 import { Route as AuthenticatedPainelRouteImport } from './routes/_authenticated/painel'
 import { Route as AuthenticatedRacasRouteImport } from './routes/_authenticated/racas'
@@ -43,6 +44,11 @@ const AuthenticatedCombateRoute = AuthenticatedCombateRouteImport.update({
 const AuthenticatedDotsRoute = AuthenticatedDotsRouteImport.update({
   id: '/dots',
   path: '/dots',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedTransformacoesRoute = AuthenticatedTransformacoesRouteImport.update({
+  id: '/transformacoes',
+  path: '/transformacoes',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedHabilidadesRoute =
@@ -82,6 +88,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/combate': typeof AuthenticatedCombateRoute
   '/dots': typeof AuthenticatedDotsRoute
+  '/transformacoes': typeof AuthenticatedTransformacoesRoute
   '/habilidades': typeof AuthenticatedHabilidadesRoute
   '/painel': typeof AuthenticatedPainelRoute
   '/racas': typeof AuthenticatedRacasRoute
@@ -108,6 +115,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_authenticated/combate': typeof AuthenticatedCombateRoute
   '/_authenticated/dots': typeof AuthenticatedDotsRoute
+  '/_authenticated/transformacoes': typeof AuthenticatedTransformacoesRoute
   '/_authenticated/habilidades': typeof AuthenticatedHabilidadesRoute
   '/_authenticated/painel': typeof AuthenticatedPainelRoute
   '/_authenticated/racas': typeof AuthenticatedRacasRoute
@@ -122,6 +130,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/combate'
     | '/dots'
+    | '/transformacoes'
     | '/habilidades'
     | '/painel'
     | '/racas'
@@ -147,6 +156,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/_authenticated/combate'
     | '/_authenticated/dots'
+    | '/_authenticated/transformacoes'
     | '/_authenticated/habilidades'
     | '/_authenticated/painel'
     | '/_authenticated/racas'
@@ -198,6 +208,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDotsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/transformacoes': {
+      id: '/_authenticated/transformacoes'
+      path: '/transformacoes'
+      fullPath: '/transformacoes'
+      preLoaderRoute: typeof AuthenticatedTransformacoesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/habilidades': {
       id: '/_authenticated/habilidades'
       path: '/habilidades'
@@ -246,6 +263,7 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedCombateRoute: typeof AuthenticatedCombateRoute
   AuthenticatedDotsRoute: typeof AuthenticatedDotsRoute
+  AuthenticatedTransformacoesRoute: typeof AuthenticatedTransformacoesRoute
   AuthenticatedHabilidadesRoute: typeof AuthenticatedHabilidadesRoute
   AuthenticatedPainelRoute: typeof AuthenticatedPainelRoute
   AuthenticatedRacasRoute: typeof AuthenticatedRacasRoute
@@ -257,6 +275,7 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedCombateRoute: AuthenticatedCombateRoute,
   AuthenticatedDotsRoute: AuthenticatedDotsRoute,
+  AuthenticatedTransformacoesRoute: AuthenticatedTransformacoesRoute,
   AuthenticatedHabilidadesRoute: AuthenticatedHabilidadesRoute,
   AuthenticatedPainelRoute: AuthenticatedPainelRoute,
   AuthenticatedRacasRoute: AuthenticatedRacasRoute,
