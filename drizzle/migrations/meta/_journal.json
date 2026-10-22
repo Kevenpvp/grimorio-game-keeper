@@ -400,6 +400,13 @@
       "when": 1792785600011,
       "tag": "0056_refill_hp_after_race_change",
       "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1792785600012,
+      "tag": "0057_reset_demonio_heat_after_battle_end",
+      "breakpoints": true
     }
   ]
 }
