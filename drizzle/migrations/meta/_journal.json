@@ -512,6 +512,13 @@
       "when": 1792785600027,
       "tag": "0072_damage_over_time_templates_and_turn_ticks",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1792785600028,
+      "tag": "0073_publish_damage_over_time_templates_realtime",
+      "breakpoints": true
     }
   ]
 }
