@@ -41,10 +41,13 @@ export function DamageOverTimeManager({
   battleId,
   fighters,
   active,
+  mode = "combat",
 }: {
   battleId: string | null;
   fighters: FighterOption[];
   active: boolean;
+  /** "templates" manages persistent master templates; "combat" only applies a saved template. */
+  mode?: "templates" | "combat";
 }) {
   const queryClient = useQueryClient();
   const { data: physicalTypes = [] } = useDamageTypes("physical");
@@ -238,15 +241,16 @@ export function DamageOverTimeManager({
   return (
     <section className="panel space-y-4 p-4">
       <h2 className="flex items-center gap-2 text-xl text-gold">
-        <Flame className="h-5 w-5" /> Dano por Turno (DoT)
+        <Flame className="h-5 w-5" /> {mode === "templates" ? "Modelos de Dano por Turno (DoT)" : "Aplicar Dano por Turno (DoT)"}
       </h2>
       <p className="text-sm text-muted-foreground">
-        Cadastre modelos de dano uma vez e aplique-os durante o combate. O DoT causa dano no turno do alvo,
-        passa pela defesa e mitigação do tipo escolhido e perde duração depois de causar o dano final.
-        Percentual é calculado sobre o HP máximo atual do alvo.
+        {mode === "templates"
+          ? "Cadastre modelos persistentes de DoT para reutilizar em qualquer batalha. Os modelos ficam salvos no banco até serem excluídos."
+          : "Aplique um modelo de DoT salvo a um alvo da batalha ativa. O dano passa pela defesa e mitigação do tipo escolhido; o percentual é calculado sobre o HP máximo atual do alvo."}
       </p>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className={mode === "templates" ? "grid gap-4" : "grid gap-4 lg:grid-cols-2"}>
+        {mode === "templates" && (
         <div className="space-y-3 rounded-md border border-border p-3">
           <h3 className="font-semibold">Modelos registrados pelo mestre</h3>
           {isLoading ? <p className="text-xs text-muted-foreground">Carregando modelos…</p> : null}
@@ -324,6 +328,8 @@ export function DamageOverTimeManager({
           </div>
         </div>
 
+        )}
+        {mode === "combat" && (
         <div className="space-y-3 rounded-md border border-border p-3">
           <h3 className="font-semibold">Aplicar DoT no combate</h3>
           {(!battleId || !active) && (
@@ -384,6 +390,7 @@ export function DamageOverTimeManager({
             <Timer className="mr-1 h-4 w-4" /> {applyingDot ? "Aplicando…" : "Aplicar DoT"}
           </Button>
         </div>
+        )}
       </div>
     </section>
   );
