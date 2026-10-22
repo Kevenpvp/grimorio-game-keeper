@@ -29,6 +29,7 @@ import { StatBar } from "@/components/sheet/StatBar";
 import { DamageApplier } from "@/components/combat/DamageApplier";
 import { passiveEffectTypeActive, passiveStatusModifiers, statusEffectModifiers, useCharacterAbilities, useCharacterActiveEffects } from "@/lib/abilities";
 import { CharacterAbilitiesManager, CharacterAbilitiesPanel } from "@/components/abilities/CharacterAbilities";
+import { CharacterTransformationImages } from "@/components/transformations/CharacterTransformationImages";
 
 export const Route = createFileRoute("/_authenticated/ficha/$id")({
   head: () => ({
@@ -63,6 +64,7 @@ function FichaPage() {
     return (
       <div className="space-y-6">
         <RacePicker character={data.character} isMaster={false} />
+        <CharacterTransformationImages character={data.character} />
         <CharacterAbilitiesPanel characterId={data.character.id} characterName={data.character.name} mode="sheet" canUse={false} />
         <CharacterSheetView character={data.character} attrs={data.attrs} defs={defs} />
         {/* Keep this panel before normal points: physical grants must be visible to the player without being buried below the regular allocation panel. */}
@@ -242,6 +244,7 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
           </section>
 
           <RacePicker character={character} isMaster />
+          <CharacterTransformationImages character={character} isMaster />
           <CharacterAbilitiesManager characterId={character.id} />
 
           <DamageApplier target={{ id: character.id, name: character.name }} />
