@@ -45,6 +45,29 @@ function asObject(value: unknown): ObjectValue {
     : {};
 }
 
+/** Convert PostgREST and other plain-object errors into readable messages. */
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string") return error;
+
+  if (error && typeof error === "object") {
+    const record = error as Record<string, unknown>;
+    const details = ["message", "details", "hint", "code"]
+      .map((key) => record[key])
+      .filter((value): value is string => typeof value === "string" && value.trim().length > 0);
+    if (details.length > 0) return [...new Set(details)].join(" — ");
+
+    try {
+      const serialized = JSON.stringify(error);
+      if (serialized && serialized !== "{}") return serialized;
+    } catch {
+      // Fall through to a safe generic message for circular objects.
+    }
+  }
+
+  return String(error);
+}
+
 function finiteNumber(value: unknown, label: string, minimum = -1_000_000, maximum = 1_000_000) {
   const number = Number(value);
   if (!Number.isFinite(number) || number < minimum || number > maximum) {
@@ -552,7 +575,7 @@ async function runDamageScriptHooks(
       await handler(context, api);
       processed += 1;
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = errorMessage(error);
       console.error("Custom damage hook failed:", eventId, scriptKey, eventType, message);
       errors.push(`${scriptKey} (${eventType}): ${message.slice(0, 400)}`);
     }
@@ -683,7 +706,7 @@ Deno.serve(async (request) => {
     try {
       damageResult = await applyDamageWithScripts(body, userClient, service);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = errorMessage(error);
       console.error("Apply damage request failed:", message);
       return respond({ error: message }, 400);
     }
@@ -742,7 +765,7 @@ Deno.serve(async (request) => {
         if (updateError) throw updateError;
         processed += 1;
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
+        const message = errorMessage(error);
         console.error("Custom ability script failed:", event.id, event.script_key, event.event_type, message);
         // Do not immediately replay a script which may already have performed a partial action.
         // Crashed workers can still be reclaimed from stale 'processing' after five minutes.
