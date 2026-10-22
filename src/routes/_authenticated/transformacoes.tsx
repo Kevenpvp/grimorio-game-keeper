@@ -191,7 +191,7 @@ function TransformationEditor({
       name: name.trim(),
       description: description.trim() || null,
       duration_turns: Math.max(1, Math.min(1000, Math.floor(Number(duration) || 1))),
-      cooldown_turns: Math.max(0, Math.min(1000, Math.floor(Number(cooldown) || 0))),
+      cooldown_turns: Math.max(1, Math.min(1000, Math.floor(Number(cooldown) || 1))),
       mana_cost: Math.max(0, Math.min(1000000, Math.floor(Number(manaCost) || 0))),
       modifiers: cleanModifiers,
       effects: effects as unknown as Json,
@@ -239,7 +239,7 @@ function TransformationEditor({
         </div>
         <div className="space-y-1.5">
           <Label className="flex items-center gap-1"><Clock3 className="h-3.5 w-3.5" /> Cooldown para reutilizar (turnos)</Label>
-          <Input type="number" min={0} max={1000} value={cooldown} onChange={(event) => setCooldown(Number(event.target.value))} />
+          <Input type="number" min={1} max={1000} value={cooldown} onChange={(event) => setCooldown(Number(event.target.value))} />
         </div>
         <div className="space-y-1.5">
           <Label className="flex items-center gap-1"><Droplets className="h-3.5 w-3.5" /> Custo de Mana (0 = grátis)</Label>
