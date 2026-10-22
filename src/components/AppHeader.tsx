@@ -49,6 +49,9 @@ export function AppHeader() {
                 <Link to="/dots" className="flex whitespace-nowrap items-center gap-1 text-muted-foreground hover:text-gold">
                   <Flame className="h-3.5 w-3.5" /> Dano por turno
                 </Link>
+                <Link to="/transformacoes" className="flex whitespace-nowrap items-center gap-1 text-muted-foreground hover:text-gold">
+                  <Sparkles className="h-3.5 w-3.5" /> Transformações
+                </Link>
               </>
             )}
             {me && (
@@ -92,6 +95,9 @@ export function AppHeader() {
                 </Link>
                 <Link to="/dots" className={navClass} onClick={() => setMobileOpen(false)}>
                   <span className="flex items-center gap-2"><Flame className="h-4 w-4" /> Dano por turno</span>
+                </Link>
+                <Link to="/transformacoes" className={navClass} onClick={() => setMobileOpen(false)}>
+                  <span className="flex items-center gap-2"><Sparkles className="h-4 w-4" /> Transformações</span>
                 </Link>
               </>
             )}
