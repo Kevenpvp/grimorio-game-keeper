@@ -540,6 +540,13 @@
       "when": 1792785600031,
       "tag": "0076_reset_transformation_effect_data_per_item",
       "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1792785600032,
+      "tag": "0077_transformation_effects_supply_required_mitigation_scope",
+      "breakpoints": true
     }
   ]
 }
