@@ -2,7 +2,7 @@ import type { Json } from "@/integrations/supabase/types";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient, type QueryClient, type QueryKey } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { Crosshair, Dices, Plus, Swords, Trash2, Copy, Footprints, RotateCw, Minus, Brain, Activity } from "lucide-react";
+import { ChevronDown, ChevronUp, Crosshair, Dices, Plus, Swords, Trash2, Copy, Footprints, RotateCw, Minus, Brain, Activity } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -246,6 +246,17 @@ function CombatPage() {
         <h1 className="flex items-center gap-2 text-3xl text-gold"><Swords className="h-7 w-7" /> Modo de Combate</h1>
         {isMaster && <Button onClick={create}><Plus className="mr-1 h-4 w-4" /> Nova batalha</Button>}
       </div>
+      {isMaster && (
+        <DamageOverTimeManager
+          mode="combat"
+          battleId={battle?.active ? battle.id : null}
+          fighters={(battle?.battle_participants ?? []).flatMap((participant) => {
+            const character = participant.characters as { id?: string; name?: string } | null;
+            return character?.id && character.name ? [{ id: character.id, name: character.name }] : [];
+          })}
+          active={!!battle?.active}
+        />
+      )}
       {list.length === 0 ? (
         <p className="text-muted-foreground">{isMaster ? "Nenhuma batalha criada." : "Seu personagem não está em nenhuma batalha agora."}</p>
       ) : (
@@ -262,17 +273,6 @@ function CombatPage() {
           {battle && <BattleView key={battle.id} battle={battle} isMaster={isMaster} userId={me.user.id} />}
         </>
       )}
-      {isMaster && (
-        <DamageOverTimeManager
-          mode="combat"
-          battleId={battle?.active ? battle.id : null}
-          fighters={(battle?.battle_participants ?? []).flatMap((participant) => {
-            const character = participant.characters as { id?: string; name?: string } | null;
-            return character?.id && character.name ? [{ id: character.id, name: character.name }] : [];
-          })}
-          active={!!battle?.active}
-        />
-      )}
     </div>
   );
 }
@@ -288,11 +288,27 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
   const [selectedTargetIds, setSelectedTargetIds] = useState<string[]>(() => battle.target_character_id ? [battle.target_character_id] : []);
   const [manaRegenSettings, setManaRegenSettings] = useState<Record<string, { mode: "percent" | "fixed"; amount: string }>>({});
   const [advancingTurnKeys, setAdvancingTurnKeys] = useState<Set<string>>(() => new Set());
+  // Keep cards compact by default; expand detailed abilities/resources independently per character.
+  const [expandedFighterIds, setExpandedFighterIds] = useState<Set<string>>(() => new Set());
   const fighters = useMemo(
-    () => battle.battle_participants.slice().sort((a, b) => a.sort_order - b.sort_order).map((p) => {
+    () => battle.battle_participants.slice().sort((a, b) => {
+      const characterA = a.characters as { id?: string; name?: string } | null;
+      const characterB = b.characters as { id?: string; name?: string } | null;
+      const idA = characterA?.id ?? "";
+      const idB = characterB?.id ?? "";
+      const actorA = idA === battle.current_character_id;
+      const actorB = idB === battle.current_character_id;
+      if (actorA !== actorB) return actorA ? -1 : 1;
+
+      const orderDiff = Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0);
+      if (orderDiff !== 0) return orderDiff;
+
+      const nameDiff = String(characterA?.name ?? "").localeCompare(String(characterB?.name ?? ""), "pt-BR");
+      return nameDiff || idA.localeCompare(idB);
+    }).map((p) => {
       const character = p.characters as Fighter;
       return { ...character, character_attributes: character?.character_attributes ?? [], participant_turn_count: p.turn_count ?? 0 };
-    }).filter((f) => !!f.id),
+    }).filter((fighter) => !!fighter.id),
     [battle],
   );
   const fighterIds = useMemo(() => fighters.map((fighter) => fighter.id), [fighters]);
@@ -515,11 +531,12 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
       </div>
       {!isMaster && <h2 className="text-xl text-gold">{battle.name}</h2>}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {fighters.map((f) => {
           const isActor = f.id === actor?.id;
           const isTarget = selectedTargetIds.includes(f.id) && f.id !== actor?.id;
           const isOwnFighter = isMaster || f.owner_id === userId;
+          const isExpanded = expandedFighterIds.has(f.id);
           const hp = f.character_attributes.find((a) => a.attribute_key === "hp");
           const mana = f.character_attributes.find((a) => a.attribute_key === "mana");
           const hpMaximum = isOwnFighter ? val(f, "hp") : 0;
@@ -528,63 +545,81 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
           const manaCurrent = isOwnFighter ? mana?.current_value ?? 0 : 0;
           const publicState = publicStateByCharacter.get(f.id);
           return (
-            <div key={f.id} className={cn("panel space-y-2 p-4", isActor && "border-gold ring-1 ring-gold", isTarget && "border-blood ring-1 ring-blood")}>
-              <div className="flex gap-3">
-                <Portrait path={f.photo_path} name={f.name} className="h-20 w-16 shrink-0" />
-                <div className="min-w-0 flex-1 space-y-1">
-                  <div className="truncate font-display text-lg text-gold">{f.name}</div>
-                  <div className="truncate text-xs text-muted-foreground">{f.player_name || "NPC"}</div>
-                  {isActor && <div className="text-xs font-semibold text-gold">⚔ Na vez</div>}
-                  {isTarget && <div className="text-xs font-semibold text-blood">◎ Alvo selecionado</div>}
+            <div key={f.id} className={cn("panel space-y-2 p-3", isActor && "border-gold ring-1 ring-gold", isTarget && "border-blood ring-1 ring-blood")}>
+              <div className="flex items-center gap-2">
+                <Portrait path={f.photo_path} name={f.name} className="h-12 w-10 shrink-0" />
+                <div className="min-w-0 flex-1 space-y-0.5">
+                  <div className="truncate font-display text-base text-gold">{f.name}</div>
+                  <div className="truncate text-[11px] text-muted-foreground">{f.player_name || "NPC"}</div>
+                  {isActor && <div className="text-[11px] font-semibold text-gold">⚔ Na vez · primeiro da lista</div>}
+                  {isTarget && <div className="text-[11px] font-semibold text-blood">◎ Alvo selecionado</div>}
                 </div>
               </div>
+
               {isOwnFighter
                 ? <Bar label="HP" cur={hpCurrent} max={hpMaximum} tone="bg-blood" />
-                : <HiddenResourceState label="Estado" value={publicState?.hp_state ?? "Carregando..."} />}
-              {isOwnFighter && defs.filter((d) => d.key !== "hp" && d.key !== "mana" && d.show_bar).map((d) => {
-                const attr = f.character_attributes.find((a) => a.attribute_key === d.key);
-                return <Bar key={d.key} label={d.label} cur={attr?.current_value ?? val(f, d.key)} max={val(f, d.key)} tone="bg-sky-500" />;
-              })}
+                : <HiddenResourceState label="HP" value={publicState?.hp_state ?? "Carregando..."} />}
               {isOwnFighter
                 ? <Bar label="Mana" cur={manaCurrent} max={manaMaximum} tone="bg-arcane" />
                 : <HiddenResourceState label="Mana" value={publicState?.mana_state ?? "Carregando..."} />}
-              <CharacterAbilitiesPanel characterId={f.id} characterName={f.name} mode="combat"
-                canUse={isMaster && battle.active} showActiveEffects={isOwnFighter} battleId={battle.id}
-                targets={fighters.map((target) => ({ id: target.id, name: target.name }))} />
-              {isOwnFighter && <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="rounded border border-border p-2"><span className="text-muted-foreground">Corpo</span><div className="font-semibold">{f.body}%</div></div>
-                <div className="rounded border border-border p-2"><span className="text-muted-foreground">Sanidade</span><div className="font-semibold">{f.sanity}%</div></div>
-              </div>}
-              {isOwnFighter && <div className="grid grid-cols-2 gap-2 text-xs">
-                {defs.filter((d) => !d.show_bar && !["hp", "mana"].includes(d.key)).map((d) => (
-                  <div key={d.key} className="rounded border border-border p-2"><span className="text-muted-foreground">{d.label}</span><div className="font-semibold">{val(f, d.key)}</div></div>
-                ))}
-              </div>}
-              {isMaster && <CombatResourceEditor fighter={f} val={val} effects={effects.filter(e => e.character_id === f.id)} defs={defs} onAddEffect={(effect) => void addEffect(f.id, effect)} onRemoveEffect={async (id) => { const { error } = await supabase.from("battle_effects").delete().eq("id", id); if (error) toast.error(error.message); await qc.invalidateQueries({ queryKey: ["battle-effects", battle.id] }); await qc.invalidateQueries({ queryKey: ["character-active-effects"] }); }} hpRegenBlocked={blocked(f.id, "no_regen_hp")} manaRegenBlocked={blocked(f.id, "no_regen_mana") || blocked(f.id, "no_mana")} manaRegenMode={manaRegenSettings[f.id]?.mode ?? "percent"} manaRegenAmount={manaRegenSettings[f.id]?.amount ?? "0"} onManaRegenModeChange={(mode) => setManaRegen(f.id, { mode })} onManaRegenAmountChange={(amount) => setManaRegen(f.id, { amount })} /> }
-              <div className="flex flex-wrap items-center justify-between gap-2 rounded border border-border p-2">
-                <span className="text-xs text-muted-foreground">Turnos individuais: {f.participant_turn_count ?? 0}</span>
-                {isMaster && <Button size="sm" variant="outline" disabled={!battle.active || advancingTurnKeys.has("__global__") || advancingTurnKeys.has(f.id)} onClick={() => void advanceCombatTurn(f.id)}><RotateCw className="mr-1 h-3.5 w-3.5" /> {advancingTurnKeys.has(f.id) ? "Avançando..." : "Avançar turno"}</Button>}
-              </div>
-              {isMaster && (
-                <div className="flex gap-2 pt-1">
-                  <Button size="sm" variant={isActor ? "default" : "outline"} onClick={() => {
-                    const next = selectedTargetIds.filter((id) => id !== f.id);
-                    setSelectedTargetIds(next);
-                    void update({ current_character_id: f.id, target_character_id: next[0] ?? null });
-                  }}>
-                    <Swords className="mr-1 h-3.5 w-3.5" /> Vez
-                  </Button>
-                  <Button size="sm" variant={isTarget ? "destructive" : "outline"} disabled={isActor} onClick={() => toggleTarget(f.id)}>
-                    <Crosshair className="mr-1 h-3.5 w-3.5" /> {isTarget ? "Remover alvo" : "Selecionar alvo"}
-                  </Button>
-                </div>
+
+              {isExpanded && (
+                <>
+                  {isOwnFighter && defs.filter((d) => d.key !== "hp" && d.key !== "mana" && d.show_bar).map((d) => {
+                    const attr = f.character_attributes.find((a) => a.attribute_key === d.key);
+                    return <Bar key={d.key} label={d.label} cur={attr?.current_value ?? val(f, d.key)} max={val(f, d.key)} tone="bg-sky-500" />;
+                  })}
+                  <CharacterAbilitiesPanel characterId={f.id} characterName={f.name} mode="combat"
+                    canUse={isMaster && battle.active} showActiveEffects={isOwnFighter} battleId={battle.id}
+                    targets={fighters.map((target) => ({ id: target.id, name: target.name }))} />
+                  {isOwnFighter && <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="rounded border border-border p-2"><span className="text-muted-foreground">Corpo</span><div className="font-semibold">{f.body}%</div></div>
+                    <div className="rounded border border-border p-2"><span className="text-muted-foreground">Sanidade</span><div className="font-semibold">{f.sanity}%</div></div>
+                  </div>}
+                  {isOwnFighter && <div className="grid grid-cols-2 gap-2 text-xs">
+                    {defs.filter((d) => !d.show_bar && !["hp", "mana"].includes(d.key)).map((d) => (
+                      <div key={d.key} className="rounded border border-border p-2"><span className="text-muted-foreground">{d.label}</span><div className="font-semibold">{val(f, d.key)}</div></div>
+                    ))}
+                  </div>}
+                  {isMaster && <CombatResourceEditor fighter={f} val={val} effects={effects.filter(e => e.character_id === f.id)} defs={defs} onAddEffect={(effect) => void addEffect(f.id, effect)} onRemoveEffect={async (id) => { const { error } = await supabase.from("battle_effects").delete().eq("id", id); if (error) toast.error(error.message); await qc.invalidateQueries({ queryKey: ["battle-effects", battle.id] }); await qc.invalidateQueries({ queryKey: ["character-active-effects"] }); }} hpRegenBlocked={blocked(f.id, "no_regen_hp")} manaRegenBlocked={blocked(f.id, "no_regen_mana") || blocked(f.id, "no_mana")} manaRegenMode={manaRegenSettings[f.id]?.mode ?? "percent"} manaRegenAmount={manaRegenSettings[f.id]?.amount ?? "0"} onManaRegenModeChange={(mode) => setManaRegen(f.id, { mode })} onManaRegenAmountChange={(amount) => setManaRegen(f.id, { amount })} />}
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded border border-border p-2">
+                    <span className="text-xs text-muted-foreground">Turnos individuais: {f.participant_turn_count ?? 0}</span>
+                    {isMaster && <Button size="sm" variant="outline" disabled={!battle.active || advancingTurnKeys.has("__global__") || advancingTurnKeys.has(f.id)} onClick={() => void advanceCombatTurn(f.id)}><RotateCw className="mr-1 h-3.5 w-3.5" /> {advancingTurnKeys.has(f.id) ? "Avançando..." : "Avançar turno"}</Button>}
+                  </div>
+                </>
               )}
+
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                {isMaster && (
+                  <>
+                    <Button size="sm" className="flex-1" variant={isActor ? "default" : "outline"} onClick={() => {
+                      const next = selectedTargetIds.filter((id) => id !== f.id);
+                      setSelectedTargetIds(next);
+                      void update({ current_character_id: f.id, target_character_id: next[0] ?? null });
+                    }}>
+                      <Swords className="mr-1 h-3.5 w-3.5" /> Vez
+                    </Button>
+                    <Button size="sm" className="flex-1" variant={isTarget ? "destructive" : "outline"} disabled={isActor} onClick={() => toggleTarget(f.id)}>
+                      <Crosshair className="mr-1 h-3.5 w-3.5" /> {isTarget ? "Remover alvo" : "Selecionar alvo"}
+                    </Button>
+                  </>
+                )}
+                <Button size="sm" variant="ghost" className={isMaster ? "" : "ml-auto"} onClick={() => setExpandedFighterIds((current) => {
+                  const next = new Set(current);
+                  if (next.has(f.id)) next.delete(f.id);
+                  else next.add(f.id);
+                  return next;
+                })}>
+                  {isExpanded ? <ChevronUp className="mr-1 h-3.5 w-3.5" /> : <ChevronDown className="mr-1 h-3.5 w-3.5" />}
+                  {isExpanded ? "Recolher" : "Detalhes"}
+                </Button>
+              </div>
             </div>
           );
         })}
       </div>
 
-      {isMaster && (actor ? (
+            {isMaster && (actor ? (
         <Actions battleId={battle.id} actor={actor} targets={targets} fighters={fighters} defs={defs} val={val} />
       ) : (
         <p className="text-sm text-muted-foreground">Selecione a opção "Vez" de um personagem para abrir as ações e o teste de esquiva.</p>
