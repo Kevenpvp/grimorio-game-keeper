@@ -191,6 +191,15 @@ function useLiveBattles(isMaster: boolean, userId: string | undefined) {
       .on("postgres_changes", { event: "*", schema: "public", table: "character_transformations" }, () => {
         scheduleCombatRefresh(qc, ["character-transformations"], ["battle-character-transformations"], ["battles"]);
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "transformations" }, () => {
+        scheduleCombatRefresh(qc, ["transformations"], ["battle-character-transformations"]);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "race_transformations" }, () => {
+        scheduleCombatRefresh(qc, ["battle-race-transformations"], ["battles"]);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "virtue_transformations" }, () => {
+        scheduleCombatRefresh(qc, ["battle-virtue-transformations"], ["battles"]);
+      })
       .on("postgres_changes", { event: "*", schema: "public", table: "abilities" }, () => {
         scheduleCombatRefresh(qc, ["abilities"]);
       })
