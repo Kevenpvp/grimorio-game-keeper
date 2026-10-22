@@ -22,6 +22,7 @@ const effectTypeLabels: Record<AbilityEffectType, string> = {
   invincible: "Invencível — não recebe dano",
   healing_blocked: "Bloqueio de Cura — não recebe curas de habilidades",
   magic_healing_reversal: "Reversão de Cura — cura mágica vira dano",
+  damage_vulnerability: "Vulnerabilidade de Dano — aplica buff/debuff ao receber tipos de dano específicos",
 };
 
 export function AbilityEffectsEditor({
@@ -57,7 +58,8 @@ export function AbilityEffectsEditor({
   permanentNote?: string;
 }) {
   const isPermanent = permanent ?? isPassive ?? false;
-  const { data: damageTypes = [] } = useDamageTypes();
+  const { data: damageTypes = [] } = useDamageTypes("magical");
+  const { data: physicalDamageTypes = [] } = useDamageTypes("physical");
   const { data: races = [] } = useRaces();
   const effectEditorId = useId();
 
@@ -83,11 +85,19 @@ export function AbilityEffectsEditor({
       damage_reduction_scope: "physical",
       damage_reduction_type_id: null,
       damage_reduction_magic_level: null,
-      damage_reduction_type_ids: damageTypes[0] ? [damageTypes[0].id] : [],
-      damage_reduction_magic_levels: ["baixa"],
+      damage_dealt_physical_type_ids: [],
+      damage_reduction_type_ids: [],
+      damage_reduction_magic_levels: [],
       damage_received_scope: "any",
       damage_received_type_ids: [],
+      damage_received_physical_type_ids: [],
       damage_received_magic_levels: [],
+      damage_vulnerability_scope: "any",
+      damage_vulnerability_physical_type_ids: [],
+      damage_vulnerability_magic_type_ids: [],
+      damage_vulnerability_magic_levels: [],
+      damage_vulnerability_applied_duration: 1,
+      magic_healing_whitelist_type_ids: [],
       damage_received_race_id: null,
       target_scope: "target",
       apply_both_on_activation: false,
@@ -138,15 +148,22 @@ export function AbilityEffectsEditor({
         const isNoMana = effect.effect_type === "no_mana";
         const isDamageReduction = effect.effect_type === "damage_reduction";
         const isDamageReceived = effect.effect_type === "damage_received";
+        const isDamageVulnerability = effect.effect_type === "damage_vulnerability";
         const isHealing = effect.effect_type === "healing";
         const isMagicHealingReversal = effect.effect_type === "magic_healing_reversal";
         const selectedReductionTypeIds = effect.damage_reduction_type_ids ?? (effect.damage_reduction_type_id ? [effect.damage_reduction_type_id] : []);
         const selectedReductionMagicLevels = effect.damage_reduction_magic_levels ?? (effect.damage_reduction_magic_level ? [effect.damage_reduction_magic_level] : []);
         const selectedDamageReceivedTypeIds = effect.damage_received_type_ids ?? [];
+        const selectedDamageReceivedPhysicalTypeIds = effect.damage_received_physical_type_ids ?? [];
         const selectedDamageReceivedLevels = effect.damage_received_magic_levels ?? [];
+        const selectedDamageDealtPhysicalTypeIds = effect.damage_dealt_physical_type_ids ?? [];
+        const selectedVulnerabilityPhysicalTypeIds = effect.damage_vulnerability_physical_type_ids ?? [];
+        const selectedVulnerabilityMagicTypeIds = effect.damage_vulnerability_magic_type_ids ?? [];
+        const selectedVulnerabilityMagicLevels = effect.damage_vulnerability_magic_levels ?? [];
         const selectedMagicHealTypeIds = effect.magic_healing_type_ids ?? [];
         const selectedMagicHealLevels = effect.magic_healing_magic_levels ?? [];
-        const needsAttribute = effect.effect_type === "status" || effect.effect_type === "regeneration";
+        const selectedMagicHealWhitelistTypeIds = effect.magic_healing_whitelist_type_ids ?? [];
+        const needsAttribute = effect.effect_type === "status" || effect.effect_type === "regeneration" || isDamageVulnerability;
         const needsValue = needsAttribute || effect.effect_type === "mana_regeneration" || effect.effect_type === "mana_used" || effect.effect_type === "damage_dealt" || isDamageReduction || isDamageReceived;
         function patchHealingOption(
           resourceKey: "hp" | "mana" | "body" | "sanity",
@@ -222,17 +239,149 @@ export function AbilityEffectsEditor({
                   Aplicar em ambos ao ativar (Caster e Alvo)
                 </label>
               )}
+              {isDamageVulnerability && (
+                <fieldset className="space-y-3 rounded-md border border-border p-3 sm:col-span-2">
+                  <legend className="px-1 text-sm font-semibold text-gold">Configuração da Vulnerabilidade de Dano</legend>
+                  <p className="text-xs text-muted-foreground">
+                    Enquanto este gatilho estiver ativo, quando o personagem receber dano compatível, o atributo e o buff/debuff escolhidos acima serão aplicados pelo tempo configurado abaixo.
+                  </p>
+                  <label className="block space-y-1 text-xs font-medium">
+                    Categoria de dano que ativa o gatilho
+                    <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                      value={effect.damage_vulnerability_scope ?? "any"}
+                      onChange={(e) => patch(index, { damage_vulnerability_scope: e.target.value as DamageScope })}>
+                      <option value="physical">Dano físico</option>
+                      <option value="magical">Dano mágico</option>
+                      <option value="any">Qualquer categoria (físico ou mágico)</option>
+                    </select>
+                  </label>
+                  {(effect.damage_vulnerability_scope === "physical" || effect.damage_vulnerability_scope === "any") && (
+                    <fieldset className="space-y-2 text-xs">
+                      <legend className="font-medium">Tipos físicos que ativam o gatilho</legend>
+                      <label className="flex items-center gap-2 rounded-md border border-border px-2 py-2">
+                        <input type="radio" name={`${effectEditorId}-vuln-fisico-${index}`}
+                          checked={selectedVulnerabilityPhysicalTypeIds.length === 0}
+                          onChange={() => patch(index, { damage_vulnerability_physical_type_ids: [] })} />
+                        Todos os tipos físicos
+                      </label>
+                      {physicalDamageTypes.length > 0 && (
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {physicalDamageTypes.map((type) => (
+                            <label key={type.id} className="flex items-center gap-2 rounded-md border border-border px-2 py-2">
+                              <input type="checkbox" checked={selectedVulnerabilityPhysicalTypeIds.includes(type.id)}
+                                onChange={(e) => {
+                                  const next = e.target.checked
+                                    ? [...selectedVulnerabilityPhysicalTypeIds, type.id]
+                                    : selectedVulnerabilityPhysicalTypeIds.filter((id) => id !== type.id);
+                                  patch(index, { damage_vulnerability_physical_type_ids: next });
+                                }} />
+                              {type.name}
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </fieldset>
+                  )}
+                  {(effect.damage_vulnerability_scope === "magical" || effect.damage_vulnerability_scope === "any") && (
+                    <>
+                      <fieldset className="space-y-2 text-xs">
+                        <legend className="font-medium">Tipos mágicos que ativam o gatilho</legend>
+                        <label className="flex items-center gap-2 rounded-md border border-border px-2 py-2">
+                          <input type="radio" name={`${effectEditorId}-vuln-magico-${index}`}
+                            checked={selectedVulnerabilityMagicTypeIds.length === 0}
+                            onChange={() => patch(index, { damage_vulnerability_magic_type_ids: [] })} />
+                          Todos os tipos mágicos
+                        </label>
+                        {damageTypes.length > 0 && (
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            {damageTypes.map((type) => (
+                              <label key={type.id} className="flex items-center gap-2 rounded-md border border-border px-2 py-2">
+                                <input type="checkbox" checked={selectedVulnerabilityMagicTypeIds.includes(type.id)}
+                                  onChange={(e) => {
+                                    const next = e.target.checked
+                                      ? [...selectedVulnerabilityMagicTypeIds, type.id]
+                                      : selectedVulnerabilityMagicTypeIds.filter((id) => id !== type.id);
+                                    patch(index, { damage_vulnerability_magic_type_ids: next });
+                                  }} />
+                                {type.name}
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </fieldset>
+                      <fieldset className="space-y-2 text-xs">
+                        <legend className="font-medium">Nível da magia</legend>
+                        <label className="flex items-center gap-2 rounded-md border border-border px-2 py-2">
+                          <input type="radio" name={`${effectEditorId}-vuln-niveis-${index}`}
+                            checked={selectedVulnerabilityMagicLevels.length === 0}
+                            onChange={() => patch(index, { damage_vulnerability_magic_levels: [] })} />
+                          Qualquer nível
+                        </label>
+                        <div className="grid gap-2 sm:grid-cols-3">
+                          {([[ "baixa", "Baixa" ], [ "media", "Média" ], [ "alta", "Alta" ]] as const).map(([level, label]) => (
+                            <label key={level} className="flex items-center gap-2 rounded-md border border-border px-2 py-2">
+                              <input type="checkbox" checked={selectedVulnerabilityMagicLevels.includes(level)}
+                                onChange={(e) => {
+                                  const next = e.target.checked
+                                    ? [...selectedVulnerabilityMagicLevels, level]
+                                    : selectedVulnerabilityMagicLevels.filter((value) => value !== level);
+                                  patch(index, { damage_vulnerability_magic_levels: next });
+                                }} />
+                              {label}
+                            </label>
+                          ))}
+                        </div>
+                      </fieldset>
+                    </>
+                  )}
+                  <label className="block space-y-1 text-xs font-medium">
+                    Duração do buff/debuff aplicado (turnos)
+                    <Input type="number" min="1" max="1000"
+                      value={effect.damage_vulnerability_applied_duration ?? 1}
+                      onChange={(e) => patch(index, { damage_vulnerability_applied_duration: Math.max(1, Math.min(1000, Math.floor(Number(e.target.value) || 1)) })} />
+                  </label>
+                </fieldset>
+              )}
               {isDamageDealt && (
-                <label className="space-y-1 text-xs font-medium">
-                  Tipo de dano afetado
-                  <select aria-label="Tipo de dano afetado pelo buff/debuff" className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
-                    value={effect.damage_scope ?? "any"}
-                    onChange={(e) => patch(index, { damage_scope: e.target.value as DamageScope })}>
-                    <option value="physical">Físico</option>
-                    <option value="magical">Mágico</option>
-                    <option value="any">Qualquer dano</option>
-                  </select>
-                </label>
+                <>
+                  <label className="space-y-1 text-xs font-medium">
+                    Tipo de dano afetado
+                    <select aria-label="Tipo de dano afetado pelo buff/debuff" className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                      value={effect.damage_scope ?? "any"}
+                      onChange={(e) => patch(index, { damage_scope: e.target.value as DamageScope })}>
+                      <option value="physical">Físico</option>
+                      <option value="magical">Mágico</option>
+                      <option value="any">Qualquer dano</option>
+                    </select>
+                  </label>
+                  {effect.damage_scope === "physical" && (
+                    <fieldset className="space-y-2 text-xs sm:col-span-2">
+                      <legend className="font-medium">Tipos físicos afetados pelo Dano Causado</legend>
+                      <label className="flex items-center gap-2 rounded-md border border-border px-2 py-2">
+                        <input type="radio" name={`${effectEditorId}-dano-causado-fisico-${index}`}
+                          checked={selectedDamageDealtPhysicalTypeIds.length === 0}
+                          onChange={() => patch(index, { damage_dealt_physical_type_ids: [] })} />
+                        Todos os tipos físicos
+                      </label>
+                      {physicalDamageTypes.length === 0
+                        ? <p className="text-amber-500">Nenhum tipo físico cadastrado; o efeito vale para todos os danos físicos.</p>
+                        : <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                            {physicalDamageTypes.map((type) => (
+                              <label key={type.id} className="flex items-center gap-2 rounded-md border border-border px-2 py-2">
+                                <input type="checkbox" checked={selectedDamageDealtPhysicalTypeIds.includes(type.id)}
+                                  onChange={(e) => {
+                                    const next = e.target.checked
+                                      ? [...selectedDamageDealtPhysicalTypeIds, type.id]
+                                      : selectedDamageDealtPhysicalTypeIds.filter((id) => id !== type.id);
+                                    patch(index, { damage_dealt_physical_type_ids: next });
+                                  }} />
+                                {type.name}
+                              </label>
+                            ))}
+                          </div>}
+                    </fieldset>
+                  )}
+                </>
               )}
               {isDamageReduction && (
                 <>
@@ -246,15 +395,11 @@ export function AbilityEffectsEditor({
                           damage_reduction_scope: scope,
                           damage_reduction_type_id: null,
                           damage_reduction_magic_level: null,
-                          damage_reduction_type_ids: scope === "magical"
-                            ? (effect.damage_reduction_scope === "magical"
-                              ? (effect.damage_reduction_type_ids ?? (effect.damage_reduction_type_id ? [effect.damage_reduction_type_id] : []))
-                              : damageTypes[0] ? [damageTypes[0].id] : [])
-                            : null,
+                          damage_reduction_type_ids: scope === effect.damage_reduction_scope
+                            ? selectedReductionTypeIds
+                            : [],
                           damage_reduction_magic_levels: scope === "magical"
-                            ? (effect.damage_reduction_scope === "magical"
-                              ? (effect.damage_reduction_magic_levels ?? (effect.damage_reduction_magic_level ? [effect.damage_reduction_magic_level] : []))
-                              : ["baixa"])
+                            ? (effect.damage_reduction_scope === "magical" ? selectedReductionMagicLevels : [])
                             : null,
                           polarity: "buff",
                         });
@@ -263,6 +408,33 @@ export function AbilityEffectsEditor({
                       <option value="magical">Mágico</option>
                     </select>
                   </label>
+                  {effect.damage_reduction_scope === "physical" && (
+                    <fieldset className="space-y-2 text-xs sm:col-span-2">
+                      <legend className="font-medium">Tipos físicos mitigados</legend>
+                      <label className="flex items-center gap-2 rounded-md border border-border px-2 py-2">
+                        <input type="radio" name={`${effectEditorId}-mitigacao-fisica-${index}`} checked={selectedReductionTypeIds.length === 0}
+                          onChange={() => patch(index, { damage_reduction_type_ids: [], damage_reduction_type_id: null, polarity: "buff" })} />
+                        Todos os tipos físicos
+                      </label>
+                      <p className="text-muted-foreground">{selectedReductionTypeIds.length === 0 ? "A redução afeta todos os tipos físicos." : `${selectedReductionTypeIds.length} tipo(s) físico(s) selecionado(s).`}</p>
+                      {physicalDamageTypes.length === 0
+                        ? <p className="text-amber-500">Nenhum tipo físico cadastrado; a mitigação vale para todo dano físico.</p>
+                        : <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                            {physicalDamageTypes.map((type) => (
+                              <label key={type.id} className="flex items-center gap-2 rounded-md border border-border px-2 py-2">
+                                <input type="checkbox" checked={selectedReductionTypeIds.includes(type.id)}
+                                  onChange={(e) => {
+                                    const next = e.target.checked
+                                      ? [...selectedReductionTypeIds, type.id]
+                                      : selectedReductionTypeIds.filter((id) => id !== type.id);
+                                    patch(index, { damage_reduction_type_ids: next, damage_reduction_type_id: null, polarity: "buff" });
+                                  }} />
+                                {type.name}
+                              </label>
+                            ))}
+                          </div>}
+                    </fieldset>
+                  )}
                   {effect.damage_reduction_scope === "magical" && (
                     <>
                       <fieldset className="space-y-2 text-xs sm:col-span-2">
@@ -328,6 +500,7 @@ export function AbilityEffectsEditor({
                         patch(index, {
                           damage_received_scope: scope,
                           damage_received_type_ids: effect.damage_received_type_ids ?? [],
+                          damage_received_physical_type_ids: effect.damage_received_physical_type_ids ?? [],
                           damage_received_magic_levels: effect.damage_received_magic_levels ?? [],
                           damage_received_race_id: scope === "race" ? (effect.damage_received_race_id ?? races[0]?.id ?? null) : effect.damage_received_race_id ?? null,
                           polarity: "debuff",
@@ -349,6 +522,33 @@ export function AbilityEffectsEditor({
                         {races.map((race) => <option key={race.id} value={race.id}>{race.name}</option>)}
                       </select>
                     </label>
+                  )}
+                  {effect.damage_received_scope === "physical" && (
+                    <fieldset className="space-y-2 text-xs sm:col-span-2">
+                      <legend className="font-medium">Tipos físicos que aumentam o dano recebido</legend>
+                      <label className="flex items-center gap-2 rounded-md border border-border px-2 py-2">
+                        <input type="radio" name={`${effectEditorId}-dano-recebido-fisico-${index}`}
+                          checked={selectedDamageReceivedPhysicalTypeIds.length === 0}
+                          onChange={() => patch(index, { damage_received_physical_type_ids: [] })} />
+                        Todos os tipos físicos
+                      </label>
+                      {physicalDamageTypes.length === 0
+                        ? <p className="text-amber-500">Nenhum tipo físico cadastrado; o efeito vale para todo dano físico.</p>
+                        : <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                            {physicalDamageTypes.map((type) => (
+                              <label key={type.id} className="flex items-center gap-2 rounded-md border border-border px-2 py-2">
+                                <input type="checkbox" checked={selectedDamageReceivedPhysicalTypeIds.includes(type.id)}
+                                  onChange={(e) => {
+                                    const next = e.target.checked
+                                      ? [...selectedDamageReceivedPhysicalTypeIds, type.id]
+                                      : selectedDamageReceivedPhysicalTypeIds.filter((id) => id !== type.id);
+                                    patch(index, { damage_received_physical_type_ids: next });
+                                  }} />
+                                {type.name}
+                              </label>
+                            ))}
+                          </div>}
+                    </fieldset>
                   )}
                   {effect.damage_received_scope === "magical" && (
                     <>
@@ -434,6 +634,26 @@ export function AbilityEffectsEditor({
                                     ? [...selectedMagicHealTypeIds, type.id]
                                     : selectedMagicHealTypeIds.filter((id) => id !== type.id);
                                   patch(index, { magic_healing_type_ids: next });
+                                }} />
+                              {type.name}
+                            </label>
+                          ))}
+                        </div>}
+                  </fieldset>
+                  <fieldset className="space-y-2">
+                    <legend className="text-xs font-medium">Whitelist — curas que nunca serão revertidas</legend>
+                    <p className="text-xs text-muted-foreground">Se a cura usar um desses tipos mágicos, ela será aplicada normalmente e não causará dano por Reversão de Cura. Nenhum tipo selecionado significa whitelist vazia.</p>
+                    {damageTypes.length === 0
+                      ? <p className="text-xs text-amber-500">Nenhum tipo mágico cadastrado.</p>
+                      : <div className="grid gap-2 sm:grid-cols-2">
+                          {damageTypes.map((type) => (
+                            <label key={type.id} className="flex items-center gap-2 rounded-md border border-border px-2 py-2 text-xs">
+                              <input type="checkbox" checked={selectedMagicHealWhitelistTypeIds.includes(type.id)}
+                                onChange={(e) => {
+                                  const next = e.target.checked
+                                    ? [...selectedMagicHealWhitelistTypeIds, type.id]
+                                    : selectedMagicHealWhitelistTypeIds.filter((id) => id !== type.id);
+                                  patch(index, { magic_healing_whitelist_type_ids: next });
                                 }} />
                               {type.name}
                             </label>
@@ -665,7 +885,7 @@ export function AbilityEffectsEditor({
                   </label>
                   {!effect.until_combat_end && (
                     <label className="space-y-1 text-xs font-medium">
-                      {isHealing ? "Duração do buff de cura (turnos)" : "Duração do efeito (turnos)"}
+                      {isHealing ? "Duração do buff de cura (turnos)" : isDamageVulnerability ? "Duração da vulnerabilidade (turnos)" : "Duração do efeito (turnos)"}
                       <Input type="number" min="1" value={effect.duration} onChange={(e) => patch(index, { duration: Math.max(1, Math.floor(Number(e.target.value) || 1)) })} />
                     </label>
                   )}
