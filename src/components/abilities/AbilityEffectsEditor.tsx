@@ -38,6 +38,8 @@ export function AbilityEffectsEditor({
   allowedTypes,
   allowPermanentMagicProhibition = false,
   permanentNote,
+  hideDuration = false,
+  hideTargeting = false,
 }: {
   effects: AbilityEffectDefinition[];
   onChange: (effects: AbilityEffectDefinition[]) => void;
@@ -54,6 +56,10 @@ export function AbilityEffectsEditor({
   allowedTypes?: AbilityEffectType[];
   /** Magic prohibition can be permanent when tied to a race, even though passive abilities omit it. */
   allowPermanentMagicProhibition?: boolean;
+  /** Hide duration controls when a parent trigger supplies the applied duration. */
+  hideDuration?: boolean;
+  /** Hide target selectors when the effect always applies to the affected character. */
+  hideTargeting?: boolean;
   /** Customize the permanent-effect note for non-ability owners such as races. */
   permanentNote?: string;
 }) {
@@ -163,7 +169,8 @@ export function AbilityEffectsEditor({
         const selectedMagicHealTypeIds = effect.magic_healing_type_ids ?? [];
         const selectedMagicHealLevels = effect.magic_healing_magic_levels ?? [];
         const selectedMagicHealWhitelistTypeIds = effect.magic_healing_whitelist_type_ids ?? [];
-        const needsAttribute = effect.effect_type === "status" || effect.effect_type === "regeneration" || isDamageVulnerability;
+        const selectedVulnerabilityEffects = effect.damage_vulnerability_effects ?? [];
+        const needsAttribute = effect.effect_type === "status" || effect.effect_type === "regeneration";
         const needsValue = needsAttribute || effect.effect_type === "mana_regeneration" || effect.effect_type === "mana_used" || effect.effect_type === "damage_dealt" || isDamageReduction || isDamageReceived;
         function patchHealingOption(
           resourceKey: "hp" | "mana" | "body" | "sanity",
@@ -198,7 +205,27 @@ export function AbilityEffectsEditor({
                     healing_sanity_enabled: type === "healing" ? (effect.healing_sanity_enabled ?? false) : effect.healing_sanity_enabled,
                     healing_damage_type_id: type === "healing" ? (effect.healing_damage_type_id ?? damageTypes[0]?.id ?? null) : effect.healing_damage_type_id,
                     healing_magic_level: type === "healing" ? (effect.healing_magic_level ?? "baixa") : effect.healing_magic_level,
-                    attribute_key: type === "mana_regeneration" ? "mana" : type === "regeneration" ? "hp" : type === "status" ? firstStatusKey() : null,
+                    attribute_key: type === "mana_regeneration" ? "mana" : type === "regeneration" ? "hp" : type === "status" || type === "damage_vulnerability" ? firstStatusKey() : null,
+                    damage_vulnerability_effects: type === "damage_vulnerability"
+                      ? (effect.damage_vulnerability_effects?.length ? effect.damage_vulnerability_effects : [{
+                          name: "Efeito ao receber dano",
+                          effect_type: "status",
+                          attribute_key: firstStatusKey(),
+                          polarity: "debuff",
+                          value_mode: "fixed",
+                          amount: 10,
+                          duration: 1,
+                          damage_scope: "any",
+                          damage_reduction_scope: "physical",
+                          damage_reduction_type_ids: [],
+                          damage_reduction_magic_levels: [],
+                          damage_dealt_physical_type_ids: [],
+                          damage_received_scope: "any",
+                          damage_received_type_ids: [],
+                          damage_received_physical_type_ids: [],
+                          damage_received_magic_levels: [],
+                        }])
+                      : effect.damage_vulnerability_effects,
                     polarity: type === "magic_prohibition" || type === "no_mana" || type === "healing_blocked" || type === "magic_healing_reversal" || type === "damage_received"
                       ? "debuff"
                       : type === "damage_reduction" || type === "invincible" ? "buff" : effect.polarity,
@@ -220,7 +247,7 @@ export function AbilityEffectsEditor({
                     (allowHealing || value !== "healing"))
                   .map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select>
-              {!isPermanent && (
+              {!isPermanent && !hideTargeting && (
                 <label className="space-y-1 text-xs font-medium">
                   Aplicar efeito em
                   <select aria-label="Aplicar efeito em" className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
@@ -232,7 +259,7 @@ export function AbilityEffectsEditor({
                   </select>
                 </label>
               )}
-              {!isPermanent && (
+              {!isPermanent && !hideTargeting && (
                 <label className="flex items-center gap-2 text-xs font-medium sm:col-span-2">
                   <input type="checkbox" checked={effect.apply_both_on_activation ?? false}
                     onChange={(e) => patch(index, { apply_both_on_activation: e.target.checked })} />
@@ -243,7 +270,7 @@ export function AbilityEffectsEditor({
                 <fieldset className="space-y-3 rounded-md border border-border p-3 sm:col-span-2">
                   <legend className="px-1 text-sm font-semibold text-gold">Configuração da Vulnerabilidade de Dano</legend>
                   <p className="text-xs text-muted-foreground">
-                    Enquanto este gatilho estiver ativo, quando o personagem receber dano compatível, o atributo e o buff/debuff escolhidos acima serão aplicados pelo tempo configurado abaixo.
+                    Quando o dano corresponder aos filtros, o Grimório aplicará os efeitos configurados abaixo ao personagem atingido. Você pode combinar mais de um efeito; a Vulnerabilidade de Dano não pode ser escolhida dentro dela mesma para evitar gatilhos recursivos.
                   </p>
                   <label className="block space-y-1 text-xs font-medium">
                     Categoria de dano que ativa o gatilho
@@ -334,11 +361,27 @@ export function AbilityEffectsEditor({
                       </fieldset>
                     </>
                   )}
+                  <div className="space-y-2 sm:col-span-2">
+                    <h3 className="text-sm font-semibold text-gold">Efeitos aplicados pelo gatilho</h3>
+                    <AbilityEffectsEditor
+                      effects={selectedVulnerabilityEffects}
+                      onChange={(next) => patch(index, { damage_vulnerability_effects: next })}
+                      defs={defs}
+                      title="Efeitos que serão aplicados"
+                      description="Escolha qualquer efeito compatível com uma duração temporária."
+                      allowedTypes={Object.keys(effectTypeLabels).filter((value) => value !== "damage_vulnerability") as AbilityEffectType[]}
+                      allowHealing
+                      allowPeriodicHealing
+                      hideDuration
+                      hideTargeting
+                    />
+                  </div>
                   <label className="block space-y-1 text-xs font-medium">
-                    Duração do buff/debuff aplicado (turnos)
+                    Duração dos efeitos aplicados (turnos)
                     <Input type="number" min="1" max="1000"
                       value={effect.damage_vulnerability_applied_duration ?? 1}
                       onChange={(e) => patch(index, { damage_vulnerability_applied_duration: Math.max(1, Math.min(1000, Math.floor(Number(e.target.value) || 1))) })} />
+                    <span className="text-[11px] text-muted-foreground">Esta duração se aplica aos efeitos persistentes criados pelo gatilho. Uma cura instantânea, por sua natureza, ocorre na hora; use cura por rodada se quiser recuperação durante os turnos.</span>
                   </label>
                 </fieldset>
               )}
@@ -870,7 +913,7 @@ export function AbilityEffectsEditor({
                   </label>
                 </>
               )}
-              {!isPermanent && (!isHealing || (effect.healing_timing ?? "instant") === "per_turn") && (
+              {!isPermanent && !hideDuration && (!isHealing || (effect.healing_timing ?? "instant") === "per_turn") && (
                 <>
                   <label className="space-y-1 text-xs font-medium">
                     Duração do efeito
