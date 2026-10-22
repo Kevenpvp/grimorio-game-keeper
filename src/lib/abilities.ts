@@ -2,12 +2,13 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Tables } from "@/integrations/supabase/types";
 import { supabase } from "@/integrations/supabase/client";
 
-export type AbilityEffectType = "status" | "regeneration" | "mana_regeneration" | "mana_used" | "no_regen_hp" | "no_regen_mana" | "magic_prohibition" | "stun" | "damage_dealt" | "damage_reduction" | "damage_received" | "no_mana" | "healing" | "invincible" | "healing_blocked" | "magic_healing_reversal";
+export type AbilityEffectType = "status" | "regeneration" | "mana_regeneration" | "mana_used" | "no_regen_hp" | "no_regen_mana" | "magic_prohibition" | "stun" | "damage_dealt" | "damage_reduction" | "damage_received" | "damage_vulnerability" | "no_mana" | "healing" | "invincible" | "healing_blocked" | "magic_healing_reversal";
 export type DamageScope = "any" | "physical" | "magical";
 export type DamageReductionScope = "physical" | "magical";
 export type DamageReceivedScope = "any" | "physical" | "magical" | "race";
 export type DamageMagicLevel = "baixa" | "media" | "alta";
-export type DamageTypeOption = Pick<Tables<"damage_types">, "id" | "name">;
+export type DamageTypeCategory = "physical" | "magical";
+export type DamageTypeOption = Pick<Tables<"damage_types">, "id" | "name" | "category">;
 export type AbilityEffectDefinition = {
   /** Which character receives this effect when the ability is activated. */
   target_scope?: "caster" | "target" | "both";
@@ -38,9 +39,22 @@ export type AbilityEffectDefinition = {
   /** Metadata reserved for future race interactions with healing magic. */
   healing_damage_type_id?: string | null;
   healing_magic_level?: DamageMagicLevel | null;
-  /** Empty lists mean all magic types / all grades for Reversão de Cura. */
+  /** Empty list means all magical types for Reversão de Cura. */
   magic_healing_type_ids?: string[];
   magic_healing_magic_levels?: DamageMagicLevel[];
+  /** Whitelisted healing magic types bypass Reversão de Cura completely. */
+  magic_healing_whitelist_type_ids?: string[];
+  /** Physical types affected by Dano Causado when damage_scope is physical. */
+  damage_dealt_physical_type_ids?: string[];
+  /** Physical types affected by Dano Recebido when damage_received_scope is physical. */
+  damage_received_physical_type_ids?: string[];
+  /** Damage category/type matching that activates Vulnerabilidade de Dano. */
+  damage_vulnerability_scope?: DamageScope;
+  damage_vulnerability_physical_type_ids?: string[];
+  damage_vulnerability_magic_type_ids?: string[];
+  damage_vulnerability_magic_levels?: DamageMagicLevel[];
+  /** Duration of the status buff/debuff created when the vulnerability triggers. */
+  damage_vulnerability_applied_duration?: number;
   magic_healing_reversal_damage_mode?: "healing_amount" | "custom" | "both";
   magic_healing_reversal_custom_damage?: number;
   name: string;
@@ -71,7 +85,7 @@ export type CharacterAbility = Omit<CharacterAbilityRow, "effects" | "passive_ef
 
 export function parseAbilityEffects(value: unknown): AbilityEffectDefinition[] {
   if (!Array.isArray(value)) return [];
-  const validTypes: AbilityEffectType[] = ["status", "regeneration", "mana_regeneration", "mana_used", "no_regen_hp", "no_regen_mana", "magic_prohibition", "stun", "damage_dealt", "damage_reduction", "damage_received", "no_mana", "healing", "invincible", "healing_blocked", "magic_healing_reversal"];
+  const validTypes: AbilityEffectType[] = ["status", "regeneration", "mana_regeneration", "mana_used", "no_regen_hp", "no_regen_mana", "magic_prohibition", "stun", "damage_dealt", "damage_reduction", "damage_received", "damage_vulnerability", "no_mana", "healing", "invincible", "healing_blocked", "magic_healing_reversal"];
   return value.flatMap((item): AbilityEffectDefinition[] => {
     if (!item || typeof item !== "object") return [];
     const raw = item as Record<string, unknown>;
@@ -104,6 +118,9 @@ export function parseAbilityEffects(value: unknown): AbilityEffectDefinition[] {
       duration: Number.isFinite(duration) ? Math.max(1, Math.floor(duration)) : 1,
       until_combat_end: raw.until_combat_end === true,
       damage_scope: raw.damage_scope === "physical" || raw.damage_scope === "magical" ? raw.damage_scope : "any",
+      damage_dealt_physical_type_ids: Array.isArray(raw.damage_dealt_physical_type_ids)
+        ? [...new Set(raw.damage_dealt_physical_type_ids.filter((value): value is string => typeof value === "string"))]
+        : [],
       damage_reduction_scope: raw.damage_reduction_scope === "magical" ? "magical" : "physical",
       damage_reduction_type_id: null,
       damage_reduction_magic_level: null,
@@ -113,10 +130,26 @@ export function parseAbilityEffects(value: unknown): AbilityEffectDefinition[] {
       damage_received_type_ids: Array.isArray(raw.damage_received_type_ids)
         ? [...new Set(raw.damage_received_type_ids.filter((value): value is string => typeof value === "string"))]
         : [],
+      damage_received_physical_type_ids: Array.isArray(raw.damage_received_physical_type_ids)
+        ? [...new Set(raw.damage_received_physical_type_ids.filter((value): value is string => typeof value === "string"))]
+        : [],
       damage_received_magic_levels: Array.isArray(raw.damage_received_magic_levels)
         ? [...new Set(raw.damage_received_magic_levels.filter((value): value is DamageMagicLevel => validMagicLevels.includes(value as DamageMagicLevel)))]
         : [],
       damage_received_race_id: typeof raw.damage_received_race_id === "string" ? raw.damage_received_race_id : null,
+      damage_vulnerability_scope: raw.damage_vulnerability_scope === "physical" || raw.damage_vulnerability_scope === "magical"
+        ? raw.damage_vulnerability_scope : "any",
+      damage_vulnerability_physical_type_ids: Array.isArray(raw.damage_vulnerability_physical_type_ids)
+        ? [...new Set(raw.damage_vulnerability_physical_type_ids.filter((value): value is string => typeof value === "string"))]
+        : [],
+      damage_vulnerability_magic_type_ids: Array.isArray(raw.damage_vulnerability_magic_type_ids)
+        ? [...new Set(raw.damage_vulnerability_magic_type_ids.filter((value): value is string => typeof value === "string"))]
+        : [],
+      damage_vulnerability_magic_levels: Array.isArray(raw.damage_vulnerability_magic_levels)
+        ? [...new Set(raw.damage_vulnerability_magic_levels.filter((value): value is DamageMagicLevel => validMagicLevels.includes(value as DamageMagicLevel)))]
+        : [],
+      damage_vulnerability_applied_duration: Number.isFinite(Number(raw.damage_vulnerability_applied_duration))
+        ? Math.max(1, Math.min(1000, Math.floor(Number(raw.damage_vulnerability_applied_duration)))) : 1,
       target_scope: raw.target_scope === "caster" || raw.target_scope === "both" ? raw.target_scope : "target",
       apply_both_on_activation: raw.apply_both_on_activation === true,
       healing_timing: raw.healing_timing === "per_turn" ? "per_turn" : "instant",
@@ -150,6 +183,9 @@ export function parseAbilityEffects(value: unknown): AbilityEffectDefinition[] {
       magic_healing_magic_levels: Array.isArray(raw.magic_healing_magic_levels)
         ? [...new Set(raw.magic_healing_magic_levels.filter((value): value is DamageMagicLevel => validMagicLevels.includes(value as DamageMagicLevel)))]
         : [],
+      magic_healing_whitelist_type_ids: Array.isArray(raw.magic_healing_whitelist_type_ids)
+        ? [...new Set(raw.magic_healing_whitelist_type_ids.filter((value): value is string => typeof value === "string"))]
+        : [],
       magic_healing_reversal_damage_mode: raw.magic_healing_reversal_damage_mode === "custom" || raw.magic_healing_reversal_damage_mode === "both"
         ? raw.magic_healing_reversal_damage_mode : "healing_amount",
       magic_healing_reversal_custom_damage: Math.max(0, Math.min(1_000_000,
@@ -158,11 +194,13 @@ export function parseAbilityEffects(value: unknown): AbilityEffectDefinition[] {
   });
 }
 
-export function useDamageTypes() {
+export function useDamageTypes(category?: DamageTypeCategory) {
   return useQuery({
-    queryKey: ["damage-types"],
+    queryKey: ["damage-types", category ?? "all"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("damage_types").select("id,name").order("name");
+      let query = supabase.from("damage_types").select("id,name,category").order("name");
+      if (category) query = query.eq("category", category);
+      const { data, error } = await query;
       if (error) throw error;
       return (data ?? []) as DamageTypeOption[];
     },
