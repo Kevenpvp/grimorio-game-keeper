@@ -421,6 +421,13 @@
       "when": 1792785600014,
       "tag": "0059_return_invincibility_flag_from_damage_calculation",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1792785600015,
+      "tag": "0060_coracao_corrompido_demonio_strength_synergy",
+      "breakpoints": true
     }
   ]
 }
