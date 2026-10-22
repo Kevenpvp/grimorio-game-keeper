@@ -552,6 +552,54 @@ export type Database = {
           },
         ]
       }
+      damage_over_time_templates: {
+        Row: {
+          created_at: string
+          damage_kind: string
+          damage_type_id: string | null
+          id: string
+          magic_level: string | null
+          name: string
+          physical_damage_type_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          damage_kind: string
+          damage_type_id?: string | null
+          id?: string
+          magic_level?: string | null
+          name: string
+          physical_damage_type_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          damage_kind?: string
+          damage_type_id?: string | null
+          id?: string
+          magic_level?: string | null
+          name?: string
+          physical_damage_type_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "damage_over_time_templates_damage_type_id_fkey"
+            columns: ["damage_type_id"]
+            isOneToOne: false
+            referencedRelation: "damage_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "damage_over_time_templates_physical_damage_type_id_fkey"
+            columns: ["physical_damage_type_id"]
+            isOneToOne: false
+            referencedRelation: "damage_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       damage_types: {
         Row: {
           category: string
