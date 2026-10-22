@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { traitMods, useDefs, useMe, useVirtues, type AttributeDef, type Virtue } from "@/lib/sheets";
 import { useAbilities } from "@/lib/abilities";
+import { TransformationGrantPicker } from "@/components/transformations/TransformationGrantPicker";
 
 export const Route = createFileRoute("/_authenticated/virtudes")({
   head: () => ({
@@ -228,6 +229,7 @@ function VirtueEditor({ virtue, defs, isNew, onSaved }: { virtue: Virtue; defs: 
           </div>
         )}
       </div>
+      <TransformationGrantPicker scope="virtue" traitId={virtue.id} />
       <div className="flex gap-2">
         <Button onClick={() => void save()}>{isNew ? "Salvar nova virtude" : "Salvar"}</Button>
         <Button variant="destructive" onClick={() => void remove()}><Trash2 className="mr-1 h-4 w-4" /> Excluir</Button>
