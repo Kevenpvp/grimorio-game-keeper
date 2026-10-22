@@ -554,16 +554,19 @@ export type Database = {
       }
       damage_types: {
         Row: {
+          category: string
           created_at: string
           id: string
           name: string
         }
         Insert: {
+          category?: string
           created_at?: string
           id?: string
           name: string
         }
         Update: {
+          category?: string
           created_at?: string
           id?: string
           name?: string
@@ -780,6 +783,7 @@ export type Database = {
           _damage_values: Json
           _magic_level: string | null
           _source_character_id?: string | null
+          _physical_damage_type_id?: string | null
         }
         Returns: Json
       }
@@ -792,8 +796,28 @@ export type Database = {
           _damage_values: Json
           _magic_level: string | null
           _source_character_id?: string | null
+          _physical_damage_type_id?: string | null
         }
         Returns: Json
+      }
+      trigger_damage_vulnerability_effects: {
+        Args: {
+          _battle_id: string | null
+          _character_id: string
+          _damage_kind: string
+          _physical_damage_type_id: string | null
+          _damage_type_id: string | null
+          _magic_level: string | null
+          _damage_total: number
+        }
+        Returns: number
+      }
+      sync_coracao_corrompido_strength_effect_with_bonus: {
+        Args: {
+          _character_id: string
+          _bonus_strength: number
+        }
+        Returns: undefined
       }
       choose_character_traits: {
         Args: { _character_id: string; _race_id: string; _virtue_id: string }
