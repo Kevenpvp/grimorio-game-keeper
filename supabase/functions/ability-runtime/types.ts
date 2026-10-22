@@ -28,6 +28,10 @@ export interface AbilityDamageContext {
   danoBrutoPorGolpe: number[];
   danoFinalPorGolpe: number[];
   danoFinalTotal: number;
+  /** Per-hit damage after defenses/mitigation but before Invencível suppresses HP loss. */
+  danoPotencialSemInvencivelPorGolpe?: number[];
+  danoPotencialSemInvencivelTotal?: number;
+  bloqueadoPorInvencivel?: boolean;
   hpAntes: number;
   hpDepois: number;
 }
@@ -78,8 +82,8 @@ export interface AbilityScriptApi {
     quantidade: number;
   }): Promise<void>;
   atualizarEstado(patch: Record<string, unknown>): Promise<void>;
-  /** Synchronize Coração Corrompido's temporary +20 Strength when its cooldown and Demonio Interno heat satisfy the rule. */
-  sincronizarBonusCoracaoCorrompido(): Promise<void>;
+  /** Synchronize Coração Corrompido's configured temporary Strength bonus; omit to read the saved attribute. */
+  sincronizarBonusCoracaoCorrompido(bonusForca?: number): Promise<void>;
   /** Atomically adjust a numeric per-ability state value and enforce a lower bound. */
   ajustarEstadoNumerico(input: { chave: string; delta: number; minimo?: number }): Promise<number>;
   /** Read current and maximum resource values for the Caster or Alvo. */
