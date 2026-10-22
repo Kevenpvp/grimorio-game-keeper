@@ -547,6 +547,13 @@
       "when": 1792785600032,
       "tag": "0077_transformation_effects_supply_required_mitigation_scope",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1792785600033,
+      "tag": "0078_publish_transformation_catalog_and_grants_realtime",
+      "breakpoints": true
     }
   ]
 }
