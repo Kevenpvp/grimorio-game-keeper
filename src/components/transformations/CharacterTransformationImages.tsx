@@ -103,7 +103,6 @@ function TransformationImageCard({
   const db = supabase as any;
   const inputRef = useRef<HTMLInputElement>(null);
   const imageUrl = usePhotoUrl(state?.image_path);
-  const [unused] = [0];
   async function upload(file: File) {
     if (!file.type.startsWith("image/")) { toast.error("Escolha um arquivo de imagem"); return; }
     if (file.size > 8 * 1024 * 1024) { toast.error("A imagem deve ter no máximo 8 MB"); return; }
