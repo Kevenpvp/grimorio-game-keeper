@@ -11,7 +11,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useDefs, useMe, type AttributeDef } from "@/lib/sheets";
 import { parseAbilityEffects, type AbilityEffectDefinition } from "@/lib/abilities";
 import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
-import { TransformationGrantPicker } from "@/components/transformations/TransformationGrantPicker";
 import type { Json } from "@/integrations/supabase/types";
 
 export const Route = createFileRoute("/_authenticated/transformacoes")({
@@ -311,62 +310,5 @@ function TransformationEditor({
         <Button variant="destructive" onClick={() => void remove()}><Trash2 className="mr-1 h-4 w-4" /> Excluir</Button>
       </div>
     </section>
-  );
-}
-
-function TransformationGrantList({ transformationId, scope }: { transformationId: string; scope: "race" | "virtue" }) {
-  const db = supabase as any;
-  const qc = useQueryClient();
-  const { data: races = [] } = useQuery<Array<{id:string;name:string}>>({
-    queryKey: ["races"],
-    queryFn: async () => {
-      const { data, error } = await db.from("races").select("id,name").order("name");
-      if (error) throw error; return data ?? [];
-    },
-    enabled: scope === "race",
-  });
-  const { data: virtues = [] } = useQuery<Array<{id:string;name:string}>>({
-    queryKey: ["virtues"],
-    queryFn: async () => {
-      const { data, error } = await db.from("virtues").select("id,name").order("name");
-      if (error) throw error; return data ?? [];
-    },
-    enabled: scope === "virtue",
-  });
-  const table = scope === "race" ? "race_transformations" : "virtue_transformations";
-  const key = scope === "race" ? "race_id" : "virtue_id";
-  const { data: links = [], isLoading } = useQuery<Array<{[key:string]:string}>>({
-    queryKey: [table, "for-transformation", transformationId],
-    queryFn: async () => {
-      const { data, error } = await db.from(table).select(key).eq("transformation_id", transformationId);
-      if (error) throw error; return data ?? [];
-    },
-  });
-  const options = scope === "race" ? races : virtues;
-  const selected = new Set(links.map((link) => link[key]));
-
-  async function toggle(id: string, checked: boolean) {
-    const result = checked
-      ? await db.from(table).insert({ [key]: id, transformation_id: transformationId })
-      : await db.from(table).delete().eq(key, id).eq("transformation_id", transformationId);
-    if (result.error) { toast.error(result.error.message); return; }
-    await Promise.all([
-      qc.invalidateQueries({ queryKey: [table] }),
-      qc.invalidateQueries({ queryKey: [table, "for-transformation", transformationId] }),
-    ]);
-  }
-
-  return (
-    <div className="space-y-2">
-      <p className="text-xs font-medium text-muted-foreground">{scope === "race" ? "Raças que concedem" : "Virtudes que concedem"}</p>
-      {isLoading ? <p className="text-xs text-muted-foreground">Carregando…</p> : options.length === 0 ? <p className="text-xs text-muted-foreground">Nenhuma opção cadastrada.</p> : (
-        <div className="grid gap-2 sm:grid-cols-2">
-          {options.map((option) => <label key={option.id} className="flex items-center gap-2 rounded border border-border px-2 py-2 text-sm">
-            <input type="checkbox" checked={selected.has(option.id)} onChange={(event) => void toggle(option.id, event.target.checked)} />
-            <span>{option.name}</span>
-          </label>)}
-        </div>
-      )}
-    </div>
   );
 }
