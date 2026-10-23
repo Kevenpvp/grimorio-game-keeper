@@ -3,7 +3,7 @@ import { Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useRaces, type AttributeDef } from "@/lib/sheets";
-import { useDamageTypes, type AbilityEffectDefinition, type AbilityEffectType, type DamageScope, type DamageReductionScope, type DamageReceivedScope, type DamageMagicLevel } from "@/lib/abilities";
+import { useDamageTypes, useDotTemplates, type AbilityEffectDefinition, type AbilityEffectType, type DamageScope, type DamageReductionScope, type DamageReceivedScope, type DamageMagicLevel } from "@/lib/abilities";
 
 const effectTypeLabels: Record<AbilityEffectType, string> = {
   status: "Buff/debuff de atributo",
@@ -23,6 +23,11 @@ const effectTypeLabels: Record<AbilityEffectType, string> = {
   healing_blocked: "Bloqueio de Cura — não recebe curas de habilidades",
   magic_healing_reversal: "Reversão de Cura — cura mágica vira dano",
   damage_vulnerability: "Vulnerabilidade de Dano — aplica buff/debuff ao receber tipos de dano específicos",
+  mental_control_immunity: "Imunidade a Controle Mental",
+  mental_control_chance: "Potência de Controle Mental",
+  mental_control_resistance: "Resistência a Controle Mental",
+  dot_immunity: "Imunidade a DoTs",
+  invisibility: "Invisibilidade (visual)",
 };
 
 export function AbilityEffectsEditor({
@@ -67,6 +72,7 @@ export function AbilityEffectsEditor({
   const { data: damageTypes = [] } = useDamageTypes("magical");
   const { data: physicalDamageTypes = [] } = useDamageTypes("physical");
   const { data: races = [] } = useRaces();
+  const { data: dotTemplates = [] } = useDotTemplates();
   const effectEditorId = useId();
 
   function patch(index: number, values: Partial<AbilityEffectDefinition>) {
@@ -87,6 +93,9 @@ export function AbilityEffectsEditor({
       amount: 10,
       duration: 2,
       until_combat_end: false,
+      remove_on_attack: false,
+      dot_immunity_scope: "all",
+      dot_immunity_template_ids: [],
       damage_scope: "any",
       damage_reduction_scope: "physical",
       damage_reduction_type_id: null,
@@ -157,6 +166,8 @@ export function AbilityEffectsEditor({
         const isDamageVulnerability = effect.effect_type === "damage_vulnerability";
         const isHealing = effect.effect_type === "healing";
         const isMagicHealingReversal = effect.effect_type === "magic_healing_reversal";
+        const isDotImmunity = effect.effect_type === "dot_immunity";
+        const isMentalControlModifier = effect.effect_type === "mental_control_chance" || effect.effect_type === "mental_control_resistance";
         const selectedReductionTypeIds = effect.damage_reduction_type_ids ?? (effect.damage_reduction_type_id ? [effect.damage_reduction_type_id] : []);
         const selectedReductionMagicLevels = effect.damage_reduction_magic_levels ?? (effect.damage_reduction_magic_level ? [effect.damage_reduction_magic_level] : []);
         const selectedDamageReceivedTypeIds = effect.damage_received_type_ids ?? [];
@@ -171,7 +182,7 @@ export function AbilityEffectsEditor({
         const selectedMagicHealWhitelistTypeIds = effect.magic_healing_whitelist_type_ids ?? [];
         const selectedVulnerabilityEffects = effect.damage_vulnerability_effects ?? [];
         const needsAttribute = effect.effect_type === "status" || effect.effect_type === "regeneration";
-        const needsValue = needsAttribute || effect.effect_type === "mana_regeneration" || effect.effect_type === "mana_used" || effect.effect_type === "damage_dealt" || isDamageReduction || isDamageReceived;
+        const needsValue = needsAttribute || effect.effect_type === "mana_regeneration" || effect.effect_type === "mana_used" || effect.effect_type === "damage_dealt" || isDamageReduction || isDamageReceived || isMentalControlModifier;
         function patchHealingOption(
           resourceKey: "hp" | "mana" | "body" | "sanity",
           field: "enabled" | "mode" | "amount",
@@ -228,7 +239,11 @@ export function AbilityEffectsEditor({
                       : effect.damage_vulnerability_effects,
                     polarity: type === "magic_prohibition" || type === "no_mana" || type === "healing_blocked" || type === "magic_healing_reversal" || type === "damage_received"
                       ? "debuff"
-                      : type === "damage_reduction" || type === "invincible" ? "buff" : effect.polarity,
+                      : type === "damage_reduction" || type === "invincible" || type === "mental_control_immunity" || type === "mental_control_chance" || type === "mental_control_resistance" || type === "dot_immunity" || type === "invisibility" ? "buff" : effect.polarity,
+                    value_mode: type === "mental_control_chance" || type === "mental_control_resistance" ? "percent" : effect.value_mode,
+                    amount: type === "mental_control_chance" || type === "mental_control_resistance" ? (effect.amount || 50) : effect.amount,
+                    dot_immunity_scope: type === "dot_immunity" ? (effect.dot_immunity_scope || "all") : effect.dot_immunity_scope,
+                    dot_immunity_template_ids: type === "dot_immunity" ? (effect.dot_immunity_template_ids || []) : effect.dot_immunity_template_ids,
                     damage_reduction_scope: type === "damage_reduction" ? "physical" : effect.damage_reduction_scope,
                     damage_reduction_type_id: null,
                     damage_reduction_magic_level: null,
@@ -888,6 +903,51 @@ export function AbilityEffectsEditor({
                   </p>
                 </fieldset>
               )}
+              {isDotImmunity && (
+                <fieldset className="space-y-2 rounded-md border border-border p-3 sm:col-span-2">
+                  <legend className="text-xs font-semibold">Quais DoTs são bloqueados?</legend>
+                  {([
+                    ["all", "Todos os DoTs"],
+                    ["physical", "Somente DoTs físicos"],
+                    ["magical", "Somente DoTs mágicos"],
+                    ["specific", "Selecionar DoTs específicos"],
+                  ] as const).map(([scope, label]) => (
+                    <label key={scope} className="flex items-center gap-2 text-sm">
+                      <input type="radio" name={effectEditorId + "-dot-immunity-" + index}
+                        checked={(effect.dot_immunity_scope ?? "all") === scope}
+                        onChange={() => patch(index, { dot_immunity_scope: scope })} />
+                      {label}
+                    </label>
+                  ))}
+                  {(effect.dot_immunity_scope ?? "all") === "specific" && (
+                    dotTemplates.length ? (
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {dotTemplates.map((dot) => (
+                          <label key={dot.id} className="flex items-start gap-2 rounded-md border border-border px-2 py-2 text-xs">
+                            <input type="checkbox" className="mt-0.5"
+                              checked={(effect.dot_immunity_template_ids ?? []).includes(dot.id)}
+                              onChange={(event) => patch(index, { dot_immunity_template_ids: event.target.checked
+                                ? Array.from(new Set([...(effect.dot_immunity_template_ids ?? []), dot.id]))
+                                : (effect.dot_immunity_template_ids ?? []).filter((id) => id !== dot.id) })} />
+                            <span>
+                              <span className="block font-medium">{dot.name}</span>
+                              <span className="text-muted-foreground">{dot.damage_kind === "physical" ? "Físico" : "Mágico"}</span>
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    ) : <p className="text-xs text-muted-foreground">Nenhum modelo de DoT cadastrado.</p>
+                  )}
+                </fieldset>
+              )}
+              {isMentalControlModifier && (
+                <p className="text-xs text-muted-foreground sm:col-span-2">
+                  {effect.effect_type === "mental_control_chance"
+                    ? "Potência de Controle Mental reduz o modificador do dado de resistência. Percentuais se acumulam multiplicativamente: dois efeitos de 50% deixam 25% do modificador original."
+                    : "Resistência a Controle Mental aumenta o modificador do dado para evitar controle mental. Percentuais se multiplicam entre si."}
+                  {" "}Valores fixos ajustam diretamente o modificador do dado.
+                </p>
+              )}
               {needsAttribute && (
                 <select aria-label="Atributo afetado" className="h-9 min-w-0 rounded-md border border-input bg-background px-2 text-sm" value={effect.attribute_key ?? (effect.effect_type === "regeneration" ? "hp" : "strength")}
                   onChange={(e) => patch(index, { attribute_key: e.target.value })}>
@@ -934,6 +994,14 @@ export function AbilityEffectsEditor({
                   )}
                 </>
               )}
+              <label className="flex items-start gap-2 text-xs sm:col-span-2">
+                <input type="checkbox" className="mt-0.5" checked={effect.remove_on_attack ?? false}
+                  onChange={(event) => patch(index, { remove_on_attack: event.target.checked })} />
+                <span>
+                  <span className="font-medium">Remover ao atacar</span>
+                  <span className="block text-muted-foreground">Este efeito termina quando o personagem usa uma habilidade ou causa dano por um ataque.</span>
+                </span>
+              </label>
               {isPermanent && <p className="self-end text-xs text-muted-foreground">{permanentNote ?? "Efeito permanente enquanto a habilidade estiver atribuída."}</p>}
               {isMagicProhibition && <p className="self-end text-xs text-amber-500 sm:col-span-2">Debuff: impede a ativação de habilidades mágicas ou que consomem Mana enquanto durar.</p>}
               {isNoMana && <p className="self-end text-xs text-amber-500 sm:col-span-2">Debuff: zera a Mana atual e máxima enquanto durar e bloqueia habilidades mágicas ou que gastem Mana. Não é possível mudar sua polaridade.</p>}
