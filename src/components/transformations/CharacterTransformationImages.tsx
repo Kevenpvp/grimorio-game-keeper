@@ -278,7 +278,7 @@ function TransformationImageCard({
   }
 
   return (
-    <div className="flex gap-3 rounded-md border border-border p-3">
+    <div className="flex flex-wrap gap-3 rounded-md border border-border p-3">
       <div className="h-28 w-20 shrink-0 overflow-hidden rounded-md border border-border bg-muted">
         {imageUrl ? <img src={imageUrl} alt={transformation.name} className="h-full w-full object-cover" /> : (
           <div className="flex h-full flex-col items-center justify-center gap-1 text-muted-foreground">
@@ -317,7 +317,7 @@ function TransformationImageCard({
         </div>
       </div>
       {isPersonal && editPersonal && (
-        <div className="mt-3 space-y-3 rounded-md border border-gold/30 p-3">
+        <div className="mt-3 w-full basis-full space-y-3 rounded-md border border-gold/30 p-3">
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1"><Label>Nome</Label><Input value={name} onChange={(event) => setName(event.target.value)} /></div>
             <div className="space-y-1"><Label>Duração (turnos)</Label><Input type="number" min={1} max={1000} value={duration} onChange={(event) => setDuration(event.target.value)} /></div>
