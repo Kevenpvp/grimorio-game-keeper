@@ -83,7 +83,7 @@ export function PointsDistribution({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-lg text-gold">Distribuição de Pontos</h2>
-          <p className="mt-1 text-xs text-muted-foreground">Escolha a origem para que os pontos investidos sejam removidos junto com a raça ou virtude correspondente.</p>
+          <p className="mt-1 text-xs text-muted-foreground">Escolha a origem para que os pontos investidos sejam vinculados à raça, classe ou virtude correspondente.</p>
         </div>
         <div className="rounded-md border border-gold/50 px-4 py-2 text-center">
           <div className="text-xs uppercase tracking-wider text-muted-foreground">Pontos desta origem</div>
@@ -93,7 +93,7 @@ export function PointsDistribution({
           <span>Origem dos pontos</span>
           <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
             value={source} disabled={busy}
-            onChange={(e) => { setSource(e.target.value as "race" | "virtue" | "base"); setAlloc({}); }}>
+            onChange={(e) => { setSource(e.target.value as "race" | "virtue" | "class" | "base"); setAlloc({}); }}>
             <option value="race">Raça ({raceRemaining} disponíveis)</option>
             <option value="virtue">Virtude ({virtueRemaining} disponíveis)</option>
             <option value="class">Classe ({classRemaining} disponíveis)</option>
