@@ -7,7 +7,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useClasses, useDefs, type Character, type ClassTrait } from "@/lib/sheets";
 import { parseAbilityEffects, useAbilities } from "@/lib/abilities";
 import { ModsList } from "@/components/sheet/RacePicker";
-import { TransformationGrantPicker } from "@/components/transformations/TransformationGrantPicker";
 
 export function ClassPicker({ character, isMaster }: { character: Character; isMaster: boolean }) {
   const qc = useQueryClient();
@@ -19,22 +18,6 @@ export function ClassPicker({ character, isMaster }: { character: Character; isM
     queryKey: ["class-abilities", "character-picker"],
     queryFn: async () => {
       const { data, error } = await db.from("class_abilities").select("class_id,ability_id");
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
-  const { data: transformationCatalog = [] } = useQuery<Array<{ id: string; name: string }>>({
-    queryKey: ["transformations", "class-picker"],
-    queryFn: async () => {
-      const { data, error } = await db.from("transformations").select("id,name").order("name");
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
-  const { data: classTransformationRows = [] } = useQuery<Array<{ class_id: string; transformation_id: string }>>({
-    queryKey: ["class-transformations", "all-class-picker"],
-    queryFn: async () => {
-      const { data, error } = await db.from("class_transformations").select("class_id,transformation_id");
       if (error) throw error;
       return data ?? [];
     },
@@ -98,7 +81,6 @@ export function ClassPicker({ character, isMaster }: { character: Character; isM
             const selected = pendingClassId === classTrait.id;
             const lockedForPlayer = !isMaster && !!character.class_id && classTrait.id !== character.class_id;
             const grantedAbilities = abilities.filter((ability) => classAbilityRows.some((row) => row.class_id === classTrait.id && row.ability_id === ability.id));
-            const grantedTransformations = transformationCatalog.filter((transformation) => classTransformationRows.some((row) => row.class_id === classTrait.id && row.transformation_id === transformation.id));
             return (
               <article key={classTrait.id} className={`rounded-lg border p-3 transition-colors ${selected ? "border-gold bg-gold/5" : "border-border"}`}>
                 <div className="flex items-start justify-between gap-2">
@@ -115,7 +97,6 @@ export function ClassPicker({ character, isMaster }: { character: Character; isM
                     race={classTrait}
                     defs={defs}
                     abilities={grantedAbilities}
-                    transformations={grantedTransformations}
                     startingEffects={parseAbilityEffects(classTrait.starting_effects)}
                   />
                 </div>
@@ -124,7 +105,6 @@ export function ClassPicker({ character, isMaster }: { character: Character; isM
           })}
         </div>
       )}
-      {isMaster && pendingClassId && <TransformationGrantPicker scope="class" traitId={pendingClassId} />}
     </section>
   );
 }
