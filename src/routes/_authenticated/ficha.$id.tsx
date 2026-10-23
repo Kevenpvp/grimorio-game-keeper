@@ -28,6 +28,7 @@ import { ClassPicker } from "@/components/sheet/ClassPicker";
 import { AttrIcon, barTone } from "@/components/sheet/icons";
 import { StatBar } from "@/components/sheet/StatBar";
 import { DamageApplier } from "@/components/combat/DamageApplier";
+import { CharacterSheetEffectsManager } from "@/components/sheet/CharacterSheetEffectsManager";
 import { passiveEffectTypeActive, passiveStatusModifiers, statusEffectModifiers, useCharacterAbilities, useCharacterActiveEffects } from "@/lib/abilities";
 import { CharacterAbilitiesManager, CharacterAbilitiesPanel } from "@/components/abilities/CharacterAbilities";
 import { CharacterTransformationImages } from "@/components/transformations/CharacterTransformationImages";
@@ -261,6 +262,8 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
           <CharacterAbilitiesManager characterId={character.id} />
 
           <DamageApplier target={{ id: character.id, name: character.name }} sources={sourceCharacters.filter((source) => source.id !== character.id).map((source) => ({ id: source.id, name: source.name }))} />
+
+          <CharacterSheetEffectsManager characterId={character.id} characterName={character.name} />
 
           <section className="grid gap-4 sm:grid-cols-2">
             <NumberField label="Pontos disponíveis" icon="sparkles" value={character.available_points}
