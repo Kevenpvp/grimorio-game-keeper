@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronDown, ChevronUp, Clock3, Copy, Crosshair, Flame, Footprints, HeartPulse, Minus, Plus, Sparkles, Swords, Trash2, WandSparkles, Zap } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Clock3, Copy, Crosshair, Flame, HeartPulse, Minus, Plus, Sparkles, Swords, Trash2, WandSparkles, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -414,7 +414,7 @@ export function CharacterAbilitiesPanel({
       `**${characterName} — ${attackAbility?.name ?? "Ataque"} contra ${target.name}**`,
       `Lançamento: ${diceText(attackMod)} — (Velocidade de Ataque ${attackSpeed} − Velocidade ${targetSpeed}) ÷ 10, mínimo 0`,
       `Esquiva: ${diceText(dodgeMod)} — (Velocidade ${targetSpeed} − Velocidade de Ataque ${attackSpeed}) ÷ 10, mínimo 0`,
-    ].join("\\n");
+    ].join("\n");
     void navigator.clipboard.writeText(text).then(() => toast.success("Dados de ataque e esquiva copiados")).catch(() => toast.error("Não foi possível copiar os dados"));
   }
 
@@ -436,6 +436,14 @@ export function CharacterAbilitiesPanel({
     }
 
     const hitTargets = currentAttackTargets.filter((target) => attackHits[target.id]);
+    const hasInvalidExtraDamage = hitTargets.some((target) => {
+      const extra = Number(attackExtraDamage[target.id] ?? 0);
+      return !Number.isFinite(extra) || extra < 0 || extra > 1000000;
+    });
+    if (hasInvalidExtraDamage) {
+      toast.error("O dano extra de cada alvo deve ficar entre 0 e 1.000.000.");
+      return;
+    }
     const extraMana = Math.max(0, Math.min(1000000, Math.floor(Number(extraManaCosts[attackAbility.id] ?? 0) || 0)));
     setAttackBusy(true);
     setAttackResults({});
@@ -457,12 +465,8 @@ export function CharacterAbilitiesPanel({
 
       const results: Record<string, string> = {};
       for (const target of hitTargets) {
-        const extraRaw = Number(attackExtraDamage[target.id] ?? 0);
-        if (!Number.isFinite(extraRaw) || extraRaw < 0 || extraRaw > 1000000) {
-          results[target.id] = "Erro: dano extra inválido.";
-          continue;
-        }
-        const finalBaseDamage = Math.min(1000000, attackBaseDamage + Math.floor(extraRaw));
+        const extraRaw = Math.floor(Number(attackExtraDamage[target.id] ?? 0));
+        const finalBaseDamage = Math.min(1000000, attackBaseDamage + extraRaw);
         const needsPhysical = attackConfig.damage_kind === "physical" || attackConfig.damage_kind === "hybrid";
         const needsMagic = attackConfig.damage_kind === "magical" || attackConfig.damage_kind === "hybrid";
         const { data: runtimeResponse, error: damageError } = await supabase.functions.invoke("ability-runtime", {
