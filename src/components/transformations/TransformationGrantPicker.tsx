@@ -4,7 +4,7 @@ import { CheckCircle2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
-type Scope = "race" | "virtue";
+type Scope = "race" | "virtue" | "class";
 
 type TransformationRow = {
   id: string;
@@ -17,8 +17,8 @@ type TransformationRow = {
 export function TransformationGrantPicker({ scope, traitId }: { scope: Scope; traitId: string }) {
   const db = supabase as any;
   const qc = useQueryClient();
-  const table = scope === "race" ? "race_transformations" : "virtue_transformations";
-  const keyColumn = scope === "race" ? "race_id" : "virtue_id";
+  const table = scope === "race" ? "race_transformations" : scope === "virtue" ? "virtue_transformations" : "class_transformations";
+  const keyColumn = scope === "race" ? "race_id" : scope === "virtue" ? "virtue_id" : "class_id";
 
   const { data: transformations = [], isLoading: loadingCatalog, error: catalogError } = useQuery<TransformationRow[]>({
     queryKey: ["transformations"],
@@ -61,7 +61,7 @@ export function TransformationGrantPicker({ scope, traitId }: { scope: Scope; tr
           <Sparkles className="h-4 w-4" /> Transformações concedidas
         </h3>
         <p className="mt-1 text-xs text-muted-foreground">
-          Os personagens que possuem esta {scope === "race" ? "raça" : "virtude"} poderão ativar as transformações selecionadas durante o combate.
+          Os personagens que possuem esta {scope === "race" ? "raça" : scope === "virtue" ? "virtude" : "classe"} poderão ativar as transformações selecionadas durante o combate.
         </p>
       </div>
       {catalogError || assignmentsError ? (
