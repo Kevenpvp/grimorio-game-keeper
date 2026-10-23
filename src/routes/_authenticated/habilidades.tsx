@@ -47,7 +47,7 @@ function HabilidadesPage() {
 
   async function create() {
     const { data, error } = await supabase.from("abilities").insert({
-      name: "Nova habilidade", description: "", is_passive: false, can_activate: true, is_magical: true, self_target_only: false, cooldown_turns: 1, mana_cost: 0, effects: [], passive_effects: [], end_effects: [], custom_script_key: null, custom_attributes: [],
+      name: "Nova habilidade", description: "", is_passive: false, can_activate: true, is_magical: true, self_target_only: false, cooldown_turns: 1, mana_cost: 0, effects: [], passive_effects: [], end_effects: [], attack_effect_groups: [], custom_script_key: null, custom_attributes: [],
     }).select("id").single();
     if (error) { toast.error(error.message); return; }
     setSearch("");
