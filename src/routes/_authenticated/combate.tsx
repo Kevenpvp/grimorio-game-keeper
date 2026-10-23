@@ -479,7 +479,11 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
   const modsOf = (f: Fighter) => {
     const race = races?.find((r) => r.id === f.race_id);
     const mechanics = (race as unknown as { special_mechanics?: { duplicate_virtue_effects?: boolean; virtue_effect_multiplier?: number } } | undefined)?.special_mechanics;
-    const multiplier = mechanics?.duplicate_virtue_effects
+    const virtueBlacklist = Array.isArray(mechanics?.virtue_effect_blacklist)
+      ? mechanics.virtue_effect_blacklist.filter((id): id is string => typeof id === "string")
+      : [];
+    const virtueIsBlacklisted = !!f.virtue_id && virtueBlacklist.includes(f.virtue_id);
+    const multiplier = mechanics?.duplicate_virtue_effects && !virtueIsBlacklisted
       ? Math.max(1, Math.min(10, Number(mechanics.virtue_effect_multiplier) || 2))
       : 1;
     const combined = { ...traitMods(race) };
