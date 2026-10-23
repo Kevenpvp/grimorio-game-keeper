@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronDown, ChevronUp, Clock3, Flame, HeartPulse, Minus, Plus, Sparkles, Trash2, WandSparkles, Zap } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Clock3, Copy, Crosshair, Flame, Footprints, HeartPulse, Minus, Plus, Sparkles, Swords, Trash2, WandSparkles, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { dispatchCustomAbilityScriptEvents } from "@/lib/ability-script-runtime";
 import { useDefs, useMe, useRaces, useClasses } from "@/lib/sheets";
-import { parseAbilityEffects, useAbilities, useCharacterAbilities, useCharacterActiveEffects, useDamageTypes, type Ability, type AbilityEffectDefinition, type CharacterAbility } from "@/lib/abilities";
+import { parseAbilityEffects, parseAbilityAttackDamage, useAbilities, useCharacterAbilities, useCharacterActiveEffects, useDamageTypes, type Ability, type AbilityEffectDefinition, type CharacterAbility, type AbilityAttackDamageConfig } from "@/lib/abilities";
 import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
 import type { Json } from "@/integrations/supabase/types";
 import { parseCustomAbilityAttributes, type CustomAbilityAttribute } from "@/lib/custom-ability-scripts";
@@ -243,7 +244,7 @@ export function effectSummary(effect: AbilityEffectDefinition, defs: NonNullable
 }
 
 export function CharacterAbilitiesPanel({
-  characterId, characterName, mode, canUse, battleId, targets = [], showActiveEffects = true, allowCustomAttributeEdit = false,
+  characterId, characterName, mode, canUse, battleId, targets = [], getAttributeValue, showActiveEffects = true, allowCustomAttributeEdit = false,
 }: {
   characterId: string;
   characterName: string;
@@ -251,6 +252,7 @@ export function CharacterAbilitiesPanel({
   canUse: boolean;
   battleId?: string;
   targets?: TargetOption[];
+  getAttributeValue?: (characterId: string, attributeKey: string) => number;
   /** Hide the active runtime effects list when viewing another character in combat. */
   showActiveEffects?: boolean;
   /** Let the owner personalize the script attributes for abilities on their own sheet. */
@@ -354,6 +356,28 @@ export function CharacterAbilitiesPanel({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [extraManaCosts, setExtraManaCosts] = useState<Record<string, string>>({});
   const [expanded, setExpanded] = useState(true);
+  const [attackDialogAbilityId, setAttackDialogAbilityId] = useState<string | null>(null);
+  const [attackTargetIds, setAttackTargetIds] = useState<string[]>([]);
+  const [attackHits, setAttackHits] = useState<Record<string, boolean>>({});
+  const [attackExtraDamage, setAttackExtraDamage] = useState<Record<string, string>>({});
+  const [attackBusy, setAttackBusy] = useState(false);
+  const [attackResolved, setAttackResolved] = useState(false);
+  const [attackResults, setAttackResults] = useState<Record<string, string>>({});
+  const eligibleAttackTargets = targets.filter((target) => target.id !== characterId);
+  const attackAbility = loadout?.find((ability) => ability.id === attackDialogAbilityId);
+  const attackCatalogEntry = abilityCatalog.find((catalogAbility) => catalogAbility.id === attackAbility?.ability_id);
+  const attackConfig = attackCatalogEntry?.attack_enabled ? parseAbilityAttackDamage(attackCatalogEntry.attack_damage) : null;
+  const currentAttackTargets = eligibleAttackTargets.filter((target) => attackTargetIds.includes(target.id));
+  const statValue = (id: string, key: string) => Math.max(0, Number(getAttributeValue?.(id, key) ?? 0) || 0);
+  const attackBaseDamage = attackConfig
+    ? Math.min(1000000, Math.max(0, Math.round(
+        (attackConfig.attribute_key ? statValue(characterId, attackConfig.attribute_key) * attackConfig.attribute_percent / 100 : 0)
+        + attackConfig.fixed_damage
+      )))
+    : 0;
+  const diceModifier = (mine: number, theirs: number) => Math.max(0, Math.floor((mine - theirs) / 10));
+  const diceText = (modifier: number) => `1d20+${modifier}`;
+
   const hasSelectableTargetAbility = loadout?.some((ability) => ability.can_activate && !ability.self_target_only) ?? false;
   const targetOptions = useMemo(() => [
     { id: characterId, name: `${characterName} (si mesmo)` },
@@ -363,6 +387,141 @@ export function CharacterAbilitiesPanel({
   useEffect(() => {
     setTargetId(characterId);
   }, [characterId]);
+
+  function openAttackDialog(ability: CharacterAbility) {
+    if (!canUse || mode !== "combat" || !battleId || !ability.can_activate || ability.cooldown_remaining > 0 || ability.cooldown_turns <= 0) return;
+    if ((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle && usedOnceAbilityIds.includes(ability.id)) {
+      toast.error("Esta habilidade já foi usada neste combate.");
+      return;
+    }
+    const preferred = targetId !== characterId && eligibleAttackTargets.some((target) => target.id === targetId)
+      ? [targetId]
+      : eligibleAttackTargets.slice(0, 1).map((target) => target.id);
+    setAttackDialogAbilityId(ability.id);
+    setAttackTargetIds(preferred);
+    setAttackHits({});
+    setAttackExtraDamage({});
+    setAttackResults({});
+    setAttackResolved(false);
+  }
+
+  function copyAttackRoll(target: TargetOption) {
+    const attackSpeed = statValue(characterId, "atk_speed");
+    const targetSpeed = statValue(target.id, "speed");
+    const attackMod = diceModifier(attackSpeed, targetSpeed);
+    const dodgeMod = diceModifier(targetSpeed, attackSpeed);
+    const text = [
+      `**${characterName} — ${attackAbility?.name ?? "Ataque"} contra ${target.name}**`,
+      `Lançamento: ${diceText(attackMod)} — (Velocidade de Ataque ${attackSpeed} − Velocidade ${targetSpeed}) ÷ 10, mínimo 0`,
+      `Esquiva: ${diceText(dodgeMod)} — (Velocidade ${targetSpeed} − Velocidade de Ataque ${attackSpeed}) ÷ 10, mínimo 0`,
+    ].join("\\n");
+    void navigator.clipboard.writeText(text).then(() => toast.success("Dados de ataque e esquiva copiados")).catch(() => toast.error("Não foi possível copiar os dados"));
+  }
+
+  async function resolveAbilityAttack() {
+    if (!attackAbility || !attackCatalogEntry || !attackConfig || !battleId || attackBusy || attackResolved) return;
+    if (attackTargetIds.length === 0) {
+      toast.error("Selecione pelo menos um alvo para este ataque.");
+      return;
+    }
+    if ((attackConfig.damage_kind === "physical" || attackConfig.damage_kind === "hybrid")
+      && !damageTypes.some((type) => type.id === attackConfig.physical_damage_type_id && type.category === "physical")) {
+      toast.error("Configure um tipo de dano físico válido nesta habilidade.");
+      return;
+    }
+    if ((attackConfig.damage_kind === "magical" || attackConfig.damage_kind === "hybrid")
+      && !damageTypes.some((type) => type.id === attackConfig.damage_type_id && type.category === "magical")) {
+      toast.error("Configure um tipo de dano mágico válido nesta habilidade.");
+      return;
+    }
+
+    const hitTargets = currentAttackTargets.filter((target) => attackHits[target.id]);
+    const extraMana = Math.max(0, Math.min(1000000, Math.floor(Number(extraManaCosts[attackAbility.id] ?? 0) || 0)));
+    setAttackBusy(true);
+    setAttackResults({});
+    try {
+      const { data: spentMana, error: activationError } = await db.rpc("activate_character_ability_attack", {
+        _character_ability_id: attackAbility.id,
+        _target_character_id: hitTargets[0]?.id ?? characterId,
+        _battle_id: battleId,
+        _extra_mana_cost: extraMana,
+        _hit_target_ids: hitTargets.map((target) => target.id),
+      });
+      if (activationError) throw activationError;
+
+      if ((attackAbility as CharacterAbility & { once_per_battle?: boolean }).once_per_battle) {
+        await qc.invalidateQueries({ queryKey: ["battle-ability-uses", battleId, characterId] });
+      }
+      setExtraManaCosts((current) => ({ ...current, [attackAbility.id]: "0" }));
+      void dispatchCustomAbilityScriptEvents(battleId);
+
+      const results: Record<string, string> = {};
+      for (const target of hitTargets) {
+        const extraRaw = Number(attackExtraDamage[target.id] ?? 0);
+        if (!Number.isFinite(extraRaw) || extraRaw < 0 || extraRaw > 1000000) {
+          results[target.id] = "Erro: dano extra inválido.";
+          continue;
+        }
+        const finalBaseDamage = Math.min(1000000, attackBaseDamage + Math.floor(extraRaw));
+        const needsPhysical = attackConfig.damage_kind === "physical" || attackConfig.damage_kind === "hybrid";
+        const needsMagic = attackConfig.damage_kind === "magical" || attackConfig.damage_kind === "hybrid";
+        const { data: runtimeResponse, error: damageError } = await supabase.functions.invoke("ability-runtime", {
+          body: {
+            action: "apply_damage",
+            battle_id: battleId,
+            _battle_id: battleId,
+            _character_id: target.id,
+            _damage_kind: attackConfig.damage_kind,
+            _damage_type_id: needsMagic ? attackConfig.damage_type_id : null,
+            _physical_damage_type_id: needsPhysical ? attackConfig.physical_damage_type_id : null,
+            _damage_values: [finalBaseDamage],
+            _magic_level: needsMagic ? attackConfig.magic_level : null,
+            _source_character_id: characterId,
+            _critical_damage: false,
+          },
+        });
+        if (damageError) {
+          const context = (damageError as { context?: unknown }).context;
+          let message = damageError.message;
+          if (context instanceof Response) {
+            try {
+              const body = await context.clone().json() as { error?: unknown; message?: unknown };
+              if (typeof body.error === "string") message = body.error;
+              else if (typeof body.message === "string") message = body.message;
+            } catch { /* Use the SDK message. */ }
+          }
+          results[target.id] = `Erro ao aplicar dano: ${message}`;
+          continue;
+        }
+        const damageResult = (runtimeResponse as { damage_result?: { total_damage?: number; hp_before?: number; hp_after?: number; final_damage_by_hit?: number[] } } | null)?.damage_result;
+        if (!damageResult) {
+          results[target.id] = "Dano enviado, mas sem resultado retornado.";
+          continue;
+        }
+        results[target.id] = `Dano base ${finalBaseDamage} → dano final ${Number(damageResult.total_damage ?? 0)}; HP ${Number(damageResult.hp_before ?? 0)} → ${Number(damageResult.hp_after ?? 0)}.`;
+      }
+
+      setAttackResults(results);
+      setAttackResolved(true);
+      toast.success(hitTargets.length
+        ? `${attackAbility.name} resolvida em ${hitTargets.length} alvo(s).${typeof spentMana === "number" && spentMana > 0 ? ` Mana gasta: ${spentMana}.` : ""}`
+        : `${attackAbility.name}: ataque sem acertos.${typeof spentMana === "number" && spentMana > 0 ? ` Mana gasta: ${spentMana}.` : ""}`);
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["character-abilities", characterId] }),
+        qc.invalidateQueries({ queryKey: ["character-abilities-battle"] }),
+        qc.invalidateQueries({ queryKey: ["battle-effects"] }),
+        qc.invalidateQueries({ queryKey: ["character-active-effects"] }),
+        qc.invalidateQueries({ queryKey: ["battles"] }),
+        qc.invalidateQueries({ queryKey: ["character", characterId] }),
+        qc.invalidateQueries({ queryKey: ["battle-character-public-states"] }),
+      ]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      toast.error(message);
+    } finally {
+      setAttackBusy(false);
+    }
+  }
 
   async function activate(ability: CharacterAbility) {
     if (!canUse || !ability.can_activate || ability.cooldown_turns <= 0 || ability.cooldown_remaining > 0 || busyId) return;
@@ -473,9 +632,16 @@ export function CharacterAbilitiesPanel({
                     </div>
                   </div>
                   {canUse && ability.can_activate && (
-                    <Button size="sm" disabled={busyId !== null || ability.cooldown_turns <= 0 || ability.cooldown_remaining > 0 || (Boolean((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle) && mode === "combat" && usedOnceAbilityIds.includes(ability.id))} onClick={() => void activate(ability)}>
-                      <Zap className="mr-1 h-3.5 w-3.5" /> {busyId === ability.id ? "Ativando..." : "Ativar"}
-                    </Button>
+                    <>
+                      <Button size="sm" disabled={busyId !== null || attackBusy || ability.cooldown_turns <= 0 || ability.cooldown_remaining > 0 || (Boolean((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle) && mode === "combat" && usedOnceAbilityIds.includes(ability.id))} onClick={() => void activate(ability)}>
+                        <Zap className="mr-1 h-3.5 w-3.5" /> {busyId === ability.id ? "Ativando..." : "Ativar"}
+                      </Button>
+                      {mode === "combat" && battleId && abilityCatalog.some((catalogAbility) => catalogAbility.id === ability.ability_id && catalogAbility.attack_enabled) && (
+                        <Button size="sm" variant="outline" disabled={busyId !== null || attackBusy || attackDialogAbilityId !== null || ability.cooldown_turns <= 0 || ability.cooldown_remaining > 0 || (Boolean((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle) && usedOnceAbilityIds.includes(ability.id))} onClick={() => openAttackDialog(ability)}>
+                          <Swords className="mr-1 h-3.5 w-3.5" /> Atacar
+                        </Button>
+                      )}
+                    </>
                   )}
                 </div>
                 {mode === "combat" && battleId && (
@@ -577,6 +743,134 @@ export function CharacterAbilitiesPanel({
           </div>
         </div>
       )}
+      
+      <Dialog open={attackDialogAbilityId !== null} onOpenChange={(open) => {
+        if (!open && !attackBusy) setAttackDialogAbilityId(null);
+      }}>
+        <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-gold">Ataque: {attackAbility?.name ?? "Habilidade"}</DialogTitle>
+            <DialogDescription>
+              {characterName} lança o ataque. O mestre marca quem foi atingido; somente esses alvos recebem dano e efeitos direcionados ao alvo.
+            </DialogDescription>
+          </DialogHeader>
+          {!attackAbility || !attackConfig ? (
+            <p className="text-sm text-muted-foreground">Não foi possível carregar a configuração de dano desta habilidade.</p>
+          ) : (
+            <div className="space-y-4">
+              <section className="space-y-2">
+                <h3 className="flex items-center gap-2 text-sm font-semibold text-gold"><Crosshair className="h-4 w-4" /> Selecionar alvos</h3>
+                {eligibleAttackTargets.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Não há outros personagens nesta batalha.</p>
+                ) : (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {eligibleAttackTargets.map((target) => {
+                      const selected = attackTargetIds.includes(target.id);
+                      return (
+                        <label key={target.id} className={`flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm ${selected ? "border-gold bg-gold/5" : "border-border"}`}>
+                          <input type="checkbox" checked={selected} disabled={attackResolved || attackBusy}
+                            onChange={(event) => {
+                              setAttackTargetIds((current) => event.target.checked
+                                ? [...new Set([...current, target.id])]
+                                : current.filter((id) => id !== target.id));
+                              if (!event.target.checked) {
+                                setAttackHits((current) => { const next = { ...current }; delete next[target.id]; return next; });
+                                setAttackExtraDamage((current) => { const next = { ...current }; delete next[target.id]; return next; });
+                              }
+                            }} />
+                          <span className="min-w-0 flex-1">{target.name}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+              {currentAttackTargets.length > 0 && (
+                <section className="space-y-3">
+                  <h3 className="text-sm font-semibold text-gold">Dados para lançar e esquivar</h3>
+                  {currentAttackTargets.map((target) => {
+                    const attackSpeed = statValue(characterId, "atk_speed");
+                    const targetSpeed = statValue(target.id, "speed");
+                    const attackMod = diceModifier(attackSpeed, targetSpeed);
+                    const dodgeMod = diceModifier(targetSpeed, attackSpeed);
+                    const extra = Math.max(0, Math.min(1000000, Math.floor(Number(attackExtraDamage[target.id] ?? 0) || 0)));
+                    const damage = Math.min(1000000, attackBaseDamage + extra);
+                    return (
+                      <article key={target.id} className="space-y-3 rounded-md border border-border p-3">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="font-semibold">{target.name}</div>
+                            <div className="mt-1 text-xs text-muted-foreground">Lançamento: ({attackSpeed} Velocidade de Ataque − {targetSpeed} Velocidade) ÷ 10, mínimo 0</div>
+                            <div className="text-xs text-muted-foreground">Esquiva: ({targetSpeed} Velocidade − {attackSpeed} Velocidade de Ataque) ÷ 10, mínimo 0</div>
+                          </div>
+                          <Button size="sm" variant="outline" onClick={() => copyAttackRoll(target)} disabled={attackBusy}>
+                            <Copy className="mr-1 h-3.5 w-3.5" /> Copiar dados
+                          </Button>
+                        </div>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <div className="rounded-md bg-muted/40 p-3">
+                            <div className="text-xs text-muted-foreground">Dado de quem lança</div>
+                            <div className="font-display text-2xl text-gold">{diceText(attackMod)}</div>
+                          </div>
+                          <div className="rounded-md bg-muted/40 p-3">
+                            <div className="text-xs text-muted-foreground">Dado de esquiva</div>
+                            <div className="font-display text-2xl text-gold">{diceText(dodgeMod)}</div>
+                          </div>
+                        </div>
+                        <label className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
+                          <input type="checkbox" checked={attackHits[target.id] === true} disabled={attackResolved || attackBusy}
+                            onChange={(event) => setAttackHits((current) => ({ ...current, [target.id]: event.target.checked }))} />
+                          <span className="font-semibold">Acertou</span>
+                          <span className="text-xs text-muted-foreground">— aplica dano e efeitos de alvo</span>
+                        </label>
+                        {attackHits[target.id] && (
+                          <div className="grid gap-2 sm:grid-cols-[1fr_1fr]">
+                            <label className="space-y-1 text-xs font-medium">
+                              Dano extra deste alvo
+                              <Input type="number" min={0} max={1000000} disabled={attackResolved || attackBusy}
+                                value={attackExtraDamage[target.id] ?? "0"}
+                                onChange={(event) => setAttackExtraDamage((current) => ({ ...current, [target.id]: event.target.value }))} />
+                            </label>
+                            <div className="rounded-md border border-gold/30 bg-gold/5 p-3">
+                              <div className="text-xs text-muted-foreground">Dano base calculado</div>
+                              <div className="text-lg font-bold text-gold">{damage}</div>
+                              <div className="text-[11px] text-muted-foreground">
+                                {attackConfig.attribute_key
+                                  ? `${attackConfig.attribute_percent}% de ${defs?.find((def) => def.key === attackConfig.attribute_key)?.label ?? attackConfig.attribute_key} (${statValue(characterId, attackConfig.attribute_key)})`
+                                  : "Sem atributo de origem"} + ${attackConfig.fixed_damage} fixos + ${extra} extra; antes de defesa/mitigação
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        {attackResults[target.id] && <p className={`text-xs ${attackResults[target.id].startsWith("Erro") ? "text-destructive" : "text-emerald-500"}`}>{attackResults[target.id]}</p>}
+                      </article>
+                    );
+                  })}
+                </section>
+              )}
+              <div className="rounded-md border border-border bg-muted/20 p-3 text-xs text-muted-foreground">
+                Tipo configurado: {attackConfig.damage_kind === "physical" ? "Físico" : attackConfig.damage_kind === "magical" ? "Mágico" : attackConfig.damage_kind === "hybrid" ? "Híbrido" : "Verdadeiro"}
+                {attackConfig.damage_kind === "physical" || attackConfig.damage_kind === "hybrid"
+                  ? ` · Físico: ${damageTypes.find((type) => type.id === attackConfig.physical_damage_type_id)?.name ?? "tipo não configurado"}`
+                  : ""}
+                {attackConfig.damage_kind === "magical" || attackConfig.damage_kind === "hybrid"
+                  ? ` · Mágico: ${damageTypes.find((type) => type.id === attackConfig.damage_type_id)?.name ?? "tipo não configurado"} · grau ${attackConfig.magic_level}`
+                  : ""}
+              </div>
+              {attackResolved && !Object.values(attackResults).some((result) => result.startsWith("Erro")) && (
+                <p className="text-sm text-emerald-500">Ataque resolvido. Você pode fechar esta janela pelo X quando terminar.</p>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAttackDialogAbilityId(null)} disabled={attackBusy}>Fechar</Button>
+            <Button onClick={() => void resolveAbilityAttack()} disabled={attackBusy || attackResolved || !attackAbility || !attackConfig || attackTargetIds.length === 0 || !battleId}>
+              <Swords className="mr-1 h-4 w-4" />
+              {attackBusy ? "Resolvendo..." : currentAttackTargets.some((target) => attackHits[target.id]) ? "Causou dano" : "Finalizar ataque sem acertos"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }
