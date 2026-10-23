@@ -15,8 +15,8 @@ import { StatBar } from "@/components/sheet/StatBar";
 import { cn } from "@/lib/utils";
 import { DamageApplier } from "@/components/combat/DamageApplier";
 import { DamageOverTimeManager } from "@/components/combat/DamageOverTimeManager";
-import { CharacterAbilitiesPanel } from "@/components/abilities/CharacterAbilities";
-import { passiveEffectTypeActive, passiveRegenerationModifiers, passiveStatusModifiers, useBattleCharacterAbilities, useCharacterAbilities, useDamageTypes } from "@/lib/abilities";
+import { CharacterAbilitiesPanel, effectSummary } from "@/components/abilities/CharacterAbilities";
+import { parseAbilityEffects, passiveEffectTypeActive, passiveRegenerationModifiers, passiveStatusModifiers, useAbilities, useBattleCharacterAbilities, useCharacterAbilities, useDamageTypes } from "@/lib/abilities";
 
 export const Route = createFileRoute("/_authenticated/combate")({
   head: () => ({
@@ -112,7 +112,11 @@ type TransformationTemplate = {
   duration_turns: number;
   cooldown_turns: number;
   mana_cost: number;
+  modifiers: Json;
+  effects: Json;
+  end_effects: Json;
   owner_character_id?: string | null;
+  source_transformation_id?: string | null;
 };
 type TransformationLink = { transformation_id: string; race_id?: string; virtue_id?: string };
 type CharacterTransformationState = {
@@ -321,6 +325,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
   const [advancingTurnKeys, setAdvancingTurnKeys] = useState<Set<string>>(() => new Set());
   // Keep cards compact by default; expand detailed abilities/resources independently per character.
   const [expandedFighterIds, setExpandedFighterIds] = useState<Set<string>>(() => new Set());
+  const [expandedTransformationDetailsIds, setExpandedTransformationDetailsIds] = useState<Set<string>>(() => new Set());
   const fighters = useMemo(
     () => battle.battle_participants.slice().sort((a, b) => {
       const characterA = a.characters as { id?: string; name?: string } | null;
@@ -347,11 +352,22 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
   const { data: transformationCatalog = [] } = useQuery<TransformationTemplate[]>({
     queryKey: ["transformations"],
     queryFn: async () => {
-      const { data, error } = await db.from("transformations").select("id,name,description,duration_turns,cooldown_turns,mana_cost,owner_character_id").order("name");
+      const { data, error } = await db.from("transformations").select("id,name,description,duration_turns,cooldown_turns,mana_cost,owner_character_id,source_transformation_id,modifiers,effects,end_effects").order("name");
       if (error) throw error;
       return data ?? [];
     },
   });
+  const { data: transformationAbilityGrants = [] } = useQuery<Array<{ transformation_id: string; ability_id: string; only_while_transformed: boolean }>>({
+    queryKey: ["battle-transformation-abilities"],
+    queryFn: async () => {
+      const { data, error } = await db.from("transformation_abilities").select("transformation_id,ability_id,only_while_transformed");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const { data: transformationAbilityCatalog = [] } = useAbilities();
+  const { data: transformationDamageTypes = [] } = useDamageTypes();
+
   const { data: raceTransformationLinks = [] } = useQuery<TransformationLink[]>({
     queryKey: ["battle-race-transformations"],
     queryFn: async () => {
@@ -386,7 +402,10 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
       ...virtueTransformationLinks.filter((link) => link.virtue_id === fighter.virtue_id).map((link) => link.transformation_id),
       ...transformationCatalog.filter((transformation) => transformation.owner_character_id === fighter.id).map((transformation) => transformation.id),
     ]);
-    return transformationCatalog.filter((transformation) => ids.has(transformation.id));
+    const overriddenIds = new Set(transformationCatalog
+      .filter((transformation) => transformation.owner_character_id === fighter.id && transformation.source_transformation_id)
+      .map((transformation) => transformation.source_transformation_id as string));
+    return transformationCatalog.filter((transformation) => ids.has(transformation.id) && !overriddenIds.has(transformation.id));
   };
   const [activatingTransformationFor, setActivatingTransformationFor] = useState<string | null>(null);
   async function activateTransformation(characterId: string, transformationId: string) {
@@ -687,27 +706,80 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                   <div className="text-[11px] text-muted-foreground">Termina em {activeTransformationRemaining} turno(s)</div>
                 </div>
               )}
-              {isOwnFighter && availableTransformations.length > 0 && (
+              {(isOwnFighter || isMaster) && availableTransformations.length > 0 && (
                 <div className="space-y-2 rounded-md border border-border p-2">
                   <div className="text-xs font-semibold text-gold">Transformações</div>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="space-y-2">
                     {availableTransformations.map((transformation) => {
                       const state = characterTransformStates.find((item) => item.transformation_id === transformation.id);
                       const isActive = state?.active === true;
                       const isCoolingDown = (state?.cooldown_remaining ?? 0) > 0;
                       const anotherActive = !!activeTransformationState && !isActive;
                       const disabled = !battle.active || activatingTransformationFor === f.id || !!activatingTransformationFor || isActive || isCoolingDown || anotherActive;
+                      const detailKey = `${f.id}:${transformation.id}`;
+                      const detailsOpen = expandedTransformationDetailsIds.has(detailKey);
+                      const rawModifiers = transformation.modifiers;
+                      const modifierEntries = rawModifiers && typeof rawModifiers === "object" && !Array.isArray(rawModifiers)
+                        ? Object.entries(rawModifiers as Record<string, unknown>).map(([key, value]) => [key, Number(value)] as const).filter(([, value]) => Number.isFinite(value) && value !== 0)
+                        : [];
+                      const activationEffects = parseAbilityEffects(transformation.effects);
+                      const endingEffects = parseAbilityEffects(transformation.end_effects);
+                      const grantedAbilities = transformationAbilityGrants.filter((grant) => grant.transformation_id === transformation.id);
                       return (
-                        <Button
-                          key={transformation.id}
-                          size="sm"
-                          variant={isActive ? "default" : "outline"}
-                          disabled={disabled}
-                          onClick={() => void activateTransformation(f.id, transformation.id)}
-                        >
-                          <Sparkles className="mr-1 h-3.5 w-3.5" />
-                          {isActive ? transformation.name : isCoolingDown ? `${transformation.name} · ${state?.cooldown_remaining}T` : activatingTransformationFor === f.id ? "Ativando…" : transformation.name}
-                        </Button>
+                        <div key={transformation.id} className="space-y-2 rounded border border-border/70 p-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            {isOwnFighter && <Button
+                              size="sm"
+                              variant={isActive ? "default" : "outline"}
+                              disabled={disabled}
+                              onClick={() => void activateTransformation(f.id, transformation.id)}
+                            >
+                              <Sparkles className="mr-1 h-3.5 w-3.5" />
+                              {isActive ? transformation.name : isCoolingDown ? `${transformation.name} · ${state?.cooldown_remaining}T` : activatingTransformationFor === f.id ? "Ativando…" : transformation.name}
+                            </Button>}
+                            <Button size="sm" variant="ghost" onClick={() => setExpandedTransformationDetailsIds((current) => {
+                              const next = new Set(current);
+                              if (next.has(detailKey)) next.delete(detailKey); else next.add(detailKey);
+                              return next;
+                            })}>
+                              {detailsOpen ? <ChevronUp className="mr-1 h-3.5 w-3.5" /> : <ChevronDown className="mr-1 h-3.5 w-3.5" />}
+                              {detailsOpen ? "Ocultar detalhes" : "Ver mais detalhes"}
+                            </Button>
+                          </div>
+                          {detailsOpen && <div className="space-y-3 rounded bg-muted/30 p-3 text-xs">
+                            <div className="space-y-1">
+                              <div className="font-semibold text-gold">{transformation.name}</div>
+                              <div className="text-muted-foreground">Duração: {transformation.duration_turns} turno(s) · Recarga: {transformation.cooldown_turns} turno(s) · Custo: {transformation.mana_cost > 0 ? `${transformation.mana_cost} Mana` : "sem custo de Mana"}</div>
+                              {transformation.description && <p className="whitespace-pre-wrap text-muted-foreground">{transformation.description}</p>}
+                            </div>
+                            <div className="space-y-1.5">
+                              <div className="font-semibold">Atributos e status concedidos</div>
+                              {modifierEntries.length ? modifierEntries.map(([key, value]) => {
+                                const label = key === "body" ? "Corpo" : key === "sanity" ? "Sanidade" : defs?.find((definition) => definition.key === key)?.label ?? key;
+                                return <div key={key} className={value > 0 ? "text-emerald-500" : "text-destructive"}>{value > 0 ? "+" : ""}{value}{key === "body" || key === "sanity" ? "%" : ""} {label}</div>;
+                              }) : <p className="text-muted-foreground">Nenhum modificador de atributo.</p>}
+                            </div>
+                            <div className="space-y-1.5">
+                              <div className="font-semibold">Efeitos ao ativar</div>
+                              {activationEffects.length ? activationEffects.map((effect, index) => <p key={index} className="text-muted-foreground">
+                                {effectSummary(effect, defs ?? [], transformationDamageTypes, races ?? [])} · Destino: {effect.target_scope === "caster" ? "Caster" : effect.target_scope === "both" ? "Ambos" : "Alvo"}{effect.effect_type === "healing" && effect.healing_timing !== "per_turn" ? "" : ` · ${effect.until_combat_end ? "até o fim do combate" : `${effect.duration} turno(s)`}`}
+                              </p>) : <p className="text-muted-foreground">Nenhum efeito de ativação.</p>}
+                            </div>
+                            <div className="space-y-1.5">
+                              <div className="font-semibold">Efeitos ao terminar</div>
+                              {endingEffects.length ? endingEffects.map((effect, index) => <p key={index} className="text-muted-foreground">
+                                {effectSummary(effect, defs ?? [], transformationDamageTypes, races ?? [])} · Destino: {effect.target_scope === "caster" ? "Caster" : effect.target_scope === "both" ? "Ambos" : "Alvo"}{effect.effect_type === "healing" && effect.healing_timing !== "per_turn" ? "" : ` · ${effect.until_combat_end ? "até o fim do combate" : `${effect.duration} turno(s)`}`}
+                              </p>) : <p className="text-muted-foreground">Nenhum efeito de encerramento.</p>}
+                            </div>
+                            <div className="space-y-1.5">
+                              <div className="font-semibold">Habilidades concedidas</div>
+                              {grantedAbilities.length ? grantedAbilities.map((grant) => {
+                                const ability = transformationAbilityCatalog.find((item) => item.id === grant.ability_id);
+                                return <p key={grant.ability_id} className="text-muted-foreground"><span className="font-medium text-foreground">{ability?.name ?? "Habilidade indisponível"}</span>{grant.only_while_transformed ? " · só enquanto transformado" : " · permanece concedida enquanto possuir a transformação"}</p>;
+                              }) : <p className="text-muted-foreground">Nenhuma habilidade concedida.</p>}
+                            </div>
+                          </div>}
+                        </div>
                       );
                     })}
                   </div>
