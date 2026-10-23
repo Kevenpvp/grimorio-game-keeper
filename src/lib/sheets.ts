@@ -50,7 +50,7 @@ export function useCharacter(id: string | undefined) {
       ]);
       if (error) throw error;
       if (e2) throw e2;
-      return { character: c, attrs: attrs ?? [] };
+      return { character: c as Character | null, attrs: attrs ?? [] };
     },
   });
 }
