@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
-import { computeValue, physicalAttributePoints, traitMods, useCharacter, useCharacterLive, useDefs, useMe, useRaces, useVirtues } from "@/lib/sheets";
+import { computeValue, physicalAttributePoints, traitMods, useCharacter, useCharacterLive, useDefs, useMe, useRaces, useVirtues, useClasses } from "@/lib/sheets";
 import { CharacterSheetView, Portrait } from "@/components/sheet/CharacterSheetView";
 import { StatBar } from "@/components/sheet/StatBar";
 import { PointsDistribution } from "@/components/sheet/PointsDistribution";
@@ -87,6 +87,7 @@ function MasterDashboard() {
   const [q, setQ] = useState("");
   const { data: defs } = useDefs();
   const { data: races = [] } = useRaces();
+  const { data: classes = [] } = useClasses();
   const { data: virtues = [] } = useVirtues();
   const { data: list, isLoading } = useQuery({
     queryKey: ["characters"],
@@ -139,6 +140,10 @@ function MasterDashboard() {
             const hp = c.character_attributes.find((a) => a.attribute_key === "hp");
             const mana = c.character_attributes.find((a) => a.attribute_key === "mana");
             const modifiers = { ...traitMods(races.find((race) => race.id === c.race_id)) };
+            for (const [key, value] of Object.entries(traitMods(classes.find((classTrait) => classTrait.id === c.class_id)))) {
+              modifiers[key] = (modifiers[key] ?? 0) + value;
+              if (modifiers[key] === 0) delete modifiers[key];
+            }
             for (const [key, value] of Object.entries(traitMods(virtues.find((virtue) => virtue.id === c.virtue_id)))) {
               modifiers[key] = (modifiers[key] ?? 0) + value;
               if (modifiers[key] === 0) delete modifiers[key];
