@@ -88,7 +88,8 @@ function AuthPage() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: window.location.origin,
+          // Return to the auth route so the app can finish the PKCE exchange before navigating.
+          redirectTo: `${window.location.origin}/auth`,
         },
       });
       if (error) throw error;
