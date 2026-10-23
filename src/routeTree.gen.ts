@@ -18,6 +18,7 @@ import { Route as AuthenticatedTransformacoesRouteImport } from './routes/_authe
 import { Route as AuthenticatedHabilidadesRouteImport } from './routes/_authenticated/habilidades'
 import { Route as AuthenticatedPainelRouteImport } from './routes/_authenticated/painel'
 import { Route as AuthenticatedRacasRouteImport } from './routes/_authenticated/racas'
+import { Route as AuthenticatedClassesRouteImport } from './routes/_authenticated/classes'
 import { Route as AuthenticatedTiposDanoRouteImport } from './routes/_authenticated/tipos-dano'
 import { Route as AuthenticatedVirtudesRouteImport } from './routes/_authenticated/virtudes'
 import { Route as AuthenticatedFichaIdRouteImport } from './routes/_authenticated/ficha.$id'
@@ -62,6 +63,9 @@ const AuthenticatedPainelRoute = AuthenticatedPainelRouteImport.update({
   path: '/painel',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedClassesRoute = AuthenticatedClassesRouteImport.update({
+  id: '/classes', path: '/classes', getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedRacasRoute = AuthenticatedRacasRouteImport.update({
   id: '/racas',
   path: '/racas',
@@ -92,6 +96,7 @@ export interface FileRoutesByFullPath {
   '/habilidades': typeof AuthenticatedHabilidadesRoute
   '/painel': typeof AuthenticatedPainelRoute
   '/racas': typeof AuthenticatedRacasRoute
+  '/classes': typeof AuthenticatedClassesRoute
   '/tipos-dano': typeof AuthenticatedTiposDanoRoute
   '/virtudes': typeof AuthenticatedVirtudesRoute
   '/ficha/$id': typeof AuthenticatedFichaIdRoute
@@ -231,7 +236,14 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPainelRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/racas': {
+    '/_authenticated/classes': {
+    id: '/_authenticated/classes'
+    path: '/classes'
+    fullPath: '/classes'
+    preLoaderRoute: typeof AuthenticatedClassesRouteImport
+    parentRoute: typeof AuthenticatedRouteRoute
+  }
+  '/_authenticated/racas': {
       id: '/_authenticated/racas'
       path: '/racas'
       fullPath: '/racas'
@@ -269,6 +281,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedHabilidadesRoute: typeof AuthenticatedHabilidadesRoute
   AuthenticatedPainelRoute: typeof AuthenticatedPainelRoute
   AuthenticatedRacasRoute: typeof AuthenticatedRacasRoute
+  AuthenticatedClassesRoute: typeof AuthenticatedClassesRoute
   AuthenticatedTiposDanoRoute: typeof AuthenticatedTiposDanoRoute
   AuthenticatedVirtudesRoute: typeof AuthenticatedVirtudesRoute
   AuthenticatedFichaIdRoute: typeof AuthenticatedFichaIdRoute
@@ -281,6 +294,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedHabilidadesRoute: AuthenticatedHabilidadesRoute,
   AuthenticatedPainelRoute: AuthenticatedPainelRoute,
   AuthenticatedRacasRoute: AuthenticatedRacasRoute,
+  AuthenticatedClassesRoute: AuthenticatedClassesRoute,
   AuthenticatedTiposDanoRoute: AuthenticatedTiposDanoRoute,
   AuthenticatedVirtudesRoute: AuthenticatedVirtudesRoute,
   AuthenticatedFichaIdRoute: AuthenticatedFichaIdRoute,
