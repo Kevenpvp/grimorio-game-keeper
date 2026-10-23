@@ -352,8 +352,9 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
 
   async function removeSheetEffect(effect: (typeof sheetEffects)[number]) {
     if (effect.source_race_id || effect.source_class_id || effect.source_virtue_id) return;
-    const { error } = await supabase.from("battle_effects").delete().eq("id", effect.id);
+    const { data, error } = await supabase.rpc("remove_manual_character_effect", { _effect_id: effect.id });
     if (error) { toast.error(error.message); return; }
+    if (data !== true) { toast.error("Este efeito já não está na ficha."); await refetchSheetEffects(); return; }
     toast.success("Efeito removido da ficha de " + target.name + ".");
     await Promise.all([
       refetchSheetEffects(),
