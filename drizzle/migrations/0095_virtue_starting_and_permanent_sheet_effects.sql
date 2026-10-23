@@ -491,8 +491,8 @@ BEGIN
     IF _stored_type IN ('mental_control_chance','mental_control_resistance') THEN
       _attribute_key := NULL;
       IF _polarity <> 'buff' THEN RAISE EXCEPTION 'Modificadores de Controle Mental só podem ser buffs.'; END IF;
-      IF _stored_type='mental_control_chance' AND _value_mode='percent' AND _amount > 99 THEN RAISE EXCEPTION 'Potência de Controle Mental deve ser no máximo 99% por efeito.'; END IF;
-      IF _stored_type='mental_control_resistance' AND _value_mode='percent' AND _amount > 1000 THEN RAISE EXCEPTION 'Resistência Mental deve ser no máximo 1000% por efeito.'; END IF;
+      IF _stored_type='mental_control_chance' AND _value_mode='percent' AND _amount > 99 THEN RAISE EXCEPTION 'Potência de Controle Mental deve ser no máximo 99 por cento por efeito.'; END IF;
+      IF _stored_type='mental_control_resistance' AND _value_mode='percent' AND _amount > 1000 THEN RAISE EXCEPTION 'Resistência Mental deve ser no máximo 1000 por cento por efeito.'; END IF;
     END IF;
     IF _stored_type='damage_reduction' THEN
       _attribute_key := NULL; _polarity := 'buff';
