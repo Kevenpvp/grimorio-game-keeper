@@ -136,6 +136,7 @@ function TransformationsPage() {
             transformation={transformation}
             defs={defs}
             isNew={pendingSaveIds.includes(transformation.id)}
+            abilityCatalog={abilityCatalog}
             onSaved={() => setPendingSaveIds((current) => current.filter((id) => id !== transformation.id))}
             onDeleted={() => setPendingSaveIds((current) => current.filter((id) => id !== transformation.id))}
           />
@@ -146,16 +147,16 @@ function TransformationsPage() {
 }
 
 function TransformationEditor({
-  transformation, defs, isNew, onSaved, onDeleted,
+  transformation, defs, isNew, onSaved, onDeleted, abilityCatalog,
 }: {
   transformation: Transformation;
   defs: AttributeDef[];
   isNew: boolean;
+  abilityCatalog: Ability[];
   onSaved: () => void;
   onDeleted: () => void;
 }) {
   const qc = useQueryClient();
-  const db = supabase as any;
   const [name, setName] = useState(transformation.name);
   const [description, setDescription] = useState(transformation.description ?? "");
   const [duration, setDuration] = useState(transformation.duration_turns);
