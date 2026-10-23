@@ -120,7 +120,7 @@ function RaceEditor({ race, defs, isNew, onSaved }: { race: Race; defs: Attribut
       const normalized = k === "body" || k === "sanity" ? Math.max(-100, Math.min(0, rounded)) : rounded;
       if (normalized) clean[k] = normalized;
     }
-    const { error } = await supabase.from("races").update({
+    const { error } = await db.from("races").update({
       name: name.trim(), description: description.trim() || null,
       bonus_points: Math.max(0, Math.round(bonus) || 0),
       physical_bonus_points: Math.max(0, Math.round(physicalBonus) || 0),
