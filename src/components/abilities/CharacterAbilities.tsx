@@ -866,7 +866,10 @@ export function CharacterAbilitiesPanel({
                                       })} />
                                     <span>
                                       <span className="block font-medium">{group.name} — {group.chance}% de chance</span>
-                                      <span className="block text-xs text-muted-foreground">{group.effects.length} efeito(s) configurado(s); marque se esta categoria acertou este alvo.</span>
+                                      <span className="mt-1 block text-xs text-muted-foreground">
+                                        {group.effects.map((effect) => effectSummary(effect, defs ?? [], damageTypes, races ?? [])).join(" · ")}
+                                      </span>
+                                      <span className="mt-1 block text-[11px] text-muted-foreground">Marque esta categoria se os efeitos acertaram este alvo.</span>
                                     </span>
                                   </label>
                                 ))}
