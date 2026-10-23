@@ -4,7 +4,7 @@ import { Check, Shield } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { useClasses, useDefs, type Character, type ClassTrait } from "@/lib/sheets";
+import { numberAllocation, useClasses, useDefs, type Character, type ClassTrait } from "@/lib/sheets";
 import { parseAbilityEffects, useAbilities } from "@/lib/abilities";
 import { ModsList } from "@/components/sheet/RacePicker";
 
@@ -23,9 +23,15 @@ export function ClassPicker({ character, isMaster }: { character: Character; isM
     },
   });
   const [pendingClassId, setPendingClassId] = useState<string | null>(character.class_id ?? null);
+  const [pendingClassModifiers, setPendingClassModifiers] = useState<Record<string, string>>(() =>
+    Object.fromEntries(Object.entries(numberAllocation(character.class_custom_modifiers)).map(([key, value]) => [key, String(value)]))
+  );
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => setPendingClassId(character.class_id ?? null), [character.id, character.class_id]);
+  useEffect(() => {
+    setPendingClassId(character.class_id ?? null);
+    setPendingClassModifiers(Object.fromEntries(Object.entries(numberAllocation(character.class_custom_modifiers)).map(([key, value]) => [key, String(value)])));
+  }, [character.id, character.class_id, character.class_custom_modifiers]);
 
   if (!classes || !defs) return null;
   if (!isMaster && character.class_id) return null;
@@ -35,11 +41,27 @@ export function ClassPicker({ character, isMaster }: { character: Character; isM
       toast.error("Selecione uma classe antes de confirmar");
       return;
     }
-    if (pendingClassId === (character.class_id ?? null)) return;
+    const cleanCustomModifiers: Record<string, number> = {};
+    if (isMaster && pendingClassId !== null) {
+      for (const definition of defs ?? []) {
+        const raw = pendingClassModifiers[definition.key];
+        const value = raw === undefined || raw.trim() === "" ? 0 : Number(raw);
+        if (!Number.isFinite(value) || value < 0 || value > 1000000 || Math.floor(value) !== value) {
+          toast.error(`O bônus de ${definition.label} deve ser um inteiro de 0 a 1.000.000.`);
+          return;
+        }
+        if (value > 0) cleanCustomModifiers[definition.key] = value;
+      }
+    }
+    const currentCustom = numberAllocation(character.class_custom_modifiers);
+    const customChanged = JSON.stringify(Object.fromEntries(Object.entries(cleanCustomModifiers).sort(([a], [b]) => a.localeCompare(b))))
+      !== JSON.stringify(Object.fromEntries(Object.entries(currentCustom).sort(([a], [b]) => a.localeCompare(b))));
+    if (pendingClassId === (character.class_id ?? null) && (!isMaster || !customChanged)) return;
     setBusy(true);
     const { error } = await db.rpc("choose_character_class", {
       _character_id: character.id,
       _class_id: pendingClassId,
+      _custom_modifiers: cleanCustomModifiers,
     });
     if (error) {
       toast.error(error.message);
@@ -70,7 +92,7 @@ export function ClassPicker({ character, isMaster }: { character: Character; isM
         </div>
         <div className="flex items-center gap-2">
           {isMaster && pendingClassId && <Button size="sm" variant="ghost" disabled={busy} onClick={() => setPendingClassId(null)}>Nenhuma</Button>}
-          <Button size="sm" disabled={busy || pendingClassId === (character.class_id ?? null) || (!isMaster && !pendingClassId) || (noClasses && !pendingClassId)} onClick={() => void confirmClass()}>
+          <Button size="sm" disabled={busy || (!isMaster && pendingClassId === (character.class_id ?? null)) || (!isMaster && !pendingClassId) || (noClasses && !pendingClassId)} onClick={() => void confirmClass()}>
             <Check className="mr-1 h-3.5 w-3.5" /> {busy ? "Confirmando..." : "Confirmar classe"}
           </Button>
         </div>
@@ -88,7 +110,12 @@ export function ClassPicker({ character, isMaster }: { character: Character; isM
                     <div className="font-semibold">{classTrait.name}</div>
                     {classTrait.description && <p className="mt-1 text-xs text-muted-foreground">{classTrait.description}</p>}
                   </div>
-                  <Button size="sm" variant={selected ? "default" : "outline"} className="shrink-0" disabled={busy || lockedForPlayer} onClick={() => setPendingClassId(classTrait.id)}>
+                  <Button size="sm" variant={selected ? "default" : "outline"} className="shrink-0" disabled={busy || lockedForPlayer} onClick={() => {
+                     setPendingClassId(classTrait.id);
+                     setPendingClassModifiers(classTrait.id === character.class_id
+                       ? Object.fromEntries(Object.entries(numberAllocation(character.class_custom_modifiers)).map(([key, value]) => [key, String(value)]))
+                       : {});
+                   }}>
                     {selected ? <><Check className="mr-1 h-3.5 w-3.5" /> Selecionada</> : "Selecionar"}
                   </Button>
                 </div>
@@ -100,6 +127,30 @@ export function ClassPicker({ character, isMaster }: { character: Character; isM
                     startingEffects={parseAbilityEffects(classTrait.starting_effects)}
                   />
                 </div>
+                {isMaster && selected && (
+                  <div className="mt-3 space-y-2 rounded-md border border-gold/25 bg-gold/5 p-3">
+                    <div>
+                      <div className="text-xs font-semibold text-gold">Bônus extras desta ficha</div>
+                      <p className="mt-1 text-[11px] text-muted-foreground">Só afeta este personagem enquanto ele tiver esta classe. Os modificadores base da classe continuam iguais para todos.</p>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {defs.filter((definition) => definition.key !== "hp" && definition.key !== "mana").map((definition) => (
+                        <label key={definition.key} className="space-y-1 text-xs font-medium">
+                          + {definition.label}
+                          <input
+                            aria-label={`Bônus extra de ${definition.label} nesta ficha`}
+                            type="number" min={0} max={1000000} step={1}
+                            className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                            value={pendingClassModifiers[definition.key] ?? ""}
+                            disabled={busy}
+                            onChange={(event) => setPendingClassModifiers((current) => ({ ...current, [definition.key]: event.target.value }))}
+                            placeholder="0"
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </article>
             );
           })}
