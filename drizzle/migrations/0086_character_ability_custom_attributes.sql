@@ -7,6 +7,26 @@ ALTER TABLE public.character_abilities
   ADD CONSTRAINT character_abilities_custom_attributes_array_check
   CHECK (custom_attributes IS NULL OR jsonb_typeof(custom_attributes) = 'array');
 
+-- Only benefits scale by default. In Demônio Interno the HP cost remains the same
+-- while the reflected-damage percentage scales with a virtue's racial mechanic.
+UPDATE public.abilities a
+SET custom_attributes = (
+  SELECT coalesce(jsonb_agg(
+    CASE
+      WHEN lower(attr.value->>'key') = 'percentual_hp_perdido_por_refletir'
+        THEN attr.value || jsonb_build_object('scale_with_race', false)
+      WHEN lower(regexp_replace(coalesce(attr.value->>'key', ''), '[^a-zA-Z0-9]', '', 'g')) = 'forcabonus'
+        OR attr.value->>'key' = 'porcentagem_maxima_dano_refletido'
+        THEN attr.value || jsonb_build_object('scale_with_race', true)
+      WHEN attr.value->>'type' = 'number'
+        THEN attr.value || jsonb_build_object('scale_with_race', coalesce((attr.value->>'scale_with_race')::boolean, true))
+      ELSE attr.value
+    END ORDER BY attr.ordinality
+  ), '[]'::jsonb)
+  FROM jsonb_array_elements(coalesce(a.custom_attributes, '[]'::jsonb)) WITH ORDINALITY AS attr(value, ordinality)
+)
+WHERE a.custom_script_key IN ('coracao_corrompido', 'demonio_interno');
+
 -- Owners may change values only, never the keys/types or the shared catalogue definition.
 CREATE OR REPLACE FUNCTION public.update_character_ability_custom_attributes(
   _character_ability_id uuid,
@@ -73,7 +93,7 @@ BEGIN
       IF jsonb_typeof(_input->'value') <> 'number' THEN RAISE EXCEPTION 'O atributo % precisa ser numérico', _key; END IF;
       _number := (_input->>'value')::numeric;
       IF _number < -1000000 OR _number > 1000000 THEN RAISE EXCEPTION 'O atributo % precisa estar entre -1.000.000 e 1.000.000', _key; END IF;
-      _value := jsonb_build_object('key', _key, 'name', coalesce(_definition->>'name', _key), 'type', _type, 'value', to_jsonb(_number));
+      _value := jsonb_build_object('key', _key, 'name', coalesce(_definition->>'name', _key), 'type', _type, 'value', to_jsonb(_number), 'scale_with_race', coalesce((_definition->>'scale_with_race')::boolean, true));
     ELSIF _type = 'boolean' THEN
       IF jsonb_typeof(_input->'value') <> 'boolean' THEN RAISE EXCEPTION 'O atributo % precisa ser verdadeiro ou falso', _key; END IF;
       _value := jsonb_build_object('key', _key, 'name', coalesce(_definition->>'name', _key), 'type', _type, 'value', (_input->>'value')::boolean);
@@ -117,6 +137,7 @@ DECLARE
   _configured_bonus numeric;
   _effective_bonus numeric;
   _racial_multiplier numeric;
+  _bonus_scales_with_race boolean := true;
 BEGIN
   IF _character_id IS NULL THEN RETURN; END IF;
 
@@ -167,8 +188,15 @@ BEGIN
       INTO _configured_bonus
       FROM jsonb_array_elements(_attributes) AS attr(value);
 
+      SELECT COALESCE(bool_or(coalesce((attr.value->>'scale_with_race')::boolean, true)), true)
+      INTO _bonus_scales_with_race
+      FROM jsonb_array_elements(_attributes) AS attr(value)
+      WHERE lower(regexp_replace(coalesce(attr.value->>'key', ''), '[^a-zA-Z0-9]', '', 'g')) = 'forcabonus'
+        AND attr.value->>'type' = 'number';
+
       _racial_multiplier := 1;
       IF _heart.granted_by_virtue_id IS NOT NULL
+         AND _bonus_scales_with_race
          AND coalesce((_heart.special_mechanics->>'duplicate_virtue_effects')::boolean, false) THEN
         _racial_multiplier := greatest(1, least(10, coalesce(nullif(_heart.special_mechanics->>'virtue_effect_multiplier', '')::numeric, 2)));
       END IF;
