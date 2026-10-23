@@ -25,6 +25,7 @@ export type Database = {
           custom_attributes: Json
           custom_script_key: string | null
           description: string | null
+          dot_effects: Json
           effects: Json
           end_effects: Json
           id: string
@@ -46,6 +47,7 @@ export type Database = {
           custom_attributes?: Json
           custom_script_key?: string | null
           description?: string | null
+          dot_effects?: Json
           effects?: Json
           end_effects?: Json
           id?: string
@@ -67,6 +69,7 @@ export type Database = {
           custom_attributes?: Json
           custom_script_key?: string | null
           description?: string | null
+          dot_effects?: Json
           effects?: Json
           end_effects?: Json
           id?: string
