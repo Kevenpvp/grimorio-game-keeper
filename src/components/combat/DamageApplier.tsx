@@ -38,21 +38,9 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
   const [effects, setEffects] = useState<AbilityEffectDefinition[]>([]);
   const [dots, setDots] = useState<ManualDotDraft[]>([]);
   const [selectedDotTemplateId, setSelectedDotTemplateId] = useState("");
-  const [sheetPermanent, setSheetPermanent] = useState(false);
   const [applyingEffectsOnly, setApplyingEffectsOnly] = useState(false);
   const { data: defs = [] } = useDefs();
   const { data: dotTemplates = [], isLoading: loadingDotTemplates } = useDotTemplates();
-  const { data: sheetEffects = [], refetch: refetchSheetEffects } = useQuery({
-    queryKey: ["manual-sheet-effects", target.id],
-    enabled: !battleId,
-    queryFn: async () => {
-      const { data, error } = await supabase.from("battle_effects")
-        .select("id,name,effect_type,duration,is_sheet_permanent,source_race_id,source_class_id,source_virtue_id,effect_data")
-        .eq("character_id", target.id).is("battle_id", null).order("created_at", { ascending: false });
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
   useEffect(() => {
     if (defaultSourceCharacterId) setSourceCharacterId(defaultSourceCharacterId);
   }, [defaultSourceCharacterId]);
@@ -116,21 +104,20 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
     try { dotPayload = payloadDots(); }
     catch (error) { toast.error(error instanceof Error ? error.message : String(error)); return false; }
     const sourceId = (sourceOverride ?? sourceCharacterId) || null;
-    const permanentForApplication = !battleId && sheetPermanent;
     const { data, error } = await supabase.rpc("apply_manual_character_effects", {
       _character_id: target.id,
       ...(battleId ? { _battle_id: battleId } : {}),
       ...(sourceId ? { _source_character_id: sourceId } : {}),
       _effects: effects as unknown as Json,
       _dots: dotPayload as unknown as Json,
-      _permanent: permanentForApplication,
+      _permanent: false,
     });
     if (error) throw error;
     const count = Number(data ?? 0);
     if (count < 1) {
       toast.info("Nenhum efeito foi aplicado. Confira as imunidades a DoTs e os alvos.");
     } else {
-      toast.success(String(count) + " efeito(s)/DoT(s) aplicado(s) em " + target.name + (permanentForApplication ? " como permanente(s) na ficha." : "."));
+      toast.success(String(count) + " efeito(s)/DoT(s) temporário(s) aplicado(s) em " + target.name + ".");
     }
     await Promise.all([
       qc.invalidateQueries({ queryKey: ["battle-effects"] }),
@@ -339,20 +326,6 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
     }
   }
 
-  async function removeSheetEffect(effect: (typeof sheetEffects)[number]) {
-    if (effect.source_race_id || effect.source_class_id || effect.source_virtue_id) return;
-    const { data, error } = await supabase.rpc("remove_manual_character_effect", { _effect_id: effect.id });
-    if (error) { toast.error(error.message); return; }
-    if (data !== true) { toast.error("Este efeito já não está na ficha."); await refetchSheetEffects(); return; }
-    toast.success("Efeito removido da ficha de " + target.name + ".");
-    await Promise.all([
-      refetchSheetEffects(),
-      qc.invalidateQueries({ queryKey: ["character-active-effects", target.id] }),
-      qc.invalidateQueries({ queryKey: ["battles"] }),
-      qc.invalidateQueries({ queryKey: ["character", target.id] }),
-    ]);
-  }
-
   function addDot() {
     if (!selectedDotTemplateId) { toast.error("Cadastre e selecione um modelo de DoT primeiro."); return; }
     setDots((current) => [...current, { templateId: selectedDotTemplateId, damageMode: "fixed", amount: "10", duration: "3" }]);
@@ -472,7 +445,7 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
             onChange={setEffects}
             defs={defs}
             title="Efeitos para aplicar junto com o dano"
-            description={battleId ? "Os efeitos e DoTs são temporários durante o combate e seguem a duração configurada." : "Os efeitos e DoTs são aplicados diretamente na ficha. Marque como permanentes somente os que devem continuar fora de combate."}
+            description={battleId ? "Os efeitos e DoTs são temporários durante o combate e seguem a duração configurada." : "Os efeitos e DoTs aplicados por esta área são sempre temporários. Para efeitos permanentes, use a seção separada Efeitos permanentes da ficha."}
             allowHealing={false}
           />
           <div className="space-y-3 rounded-md border border-border p-3">
@@ -524,17 +497,6 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
               );
             })}
           </div>
-          {!battleId && (
-            <label className="flex cursor-pointer items-start gap-2 rounded-md border border-emerald-500/40 bg-emerald-500/5 p-3 text-sm">
-              <input type="checkbox" className="mt-1" checked={sheetPermanent} onChange={(event) => setSheetPermanent(event.target.checked)} />
-              <span>
-                <span className="block font-semibold text-emerald-400">Permanente na ficha</span>
-                <span className="mt-0.5 block text-xs text-muted-foreground">
-                  Este efeito ficará fora de combate, não perderá duração nem será removido por limpezas automáticas. Só o mestre poderá removê-lo manualmente.
-                </span>
-              </span>
-            </label>
-          )}
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="outline" disabled={applyingEffectsOnly || applyingDamage || (!effects.length && !dots.length)}
               onClick={() => void applyEffectsOnly()}>
@@ -543,31 +505,6 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
           </div>
         </div>
       </details>
-      {!battleId && (
-        <details className="rounded-md border border-border">
-          <summary className="cursor-pointer select-none px-3 py-3 text-sm font-semibold hover:text-gold">
-            Efeitos persistentes da ficha ({sheetEffects.length})
-          </summary>
-          <div className="space-y-2 border-t border-border p-3">
-            {sheetEffects.length === 0 ? <p className="text-xs text-muted-foreground">Nenhum efeito fora de combate nesta ficha.</p> : sheetEffects.map((effect) => {
-              const traitOwned = Boolean(effect.source_race_id || effect.source_class_id || effect.source_virtue_id);
-              return (
-                <div key={effect.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border/70 p-2">
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium">{effect.name}</div>
-                    <div className="text-xs text-muted-foreground">{effect.is_sheet_permanent ? "Permanente na ficha" : String(effect.duration) + " turno(s)"}{traitOwned ? " · Vinculado à raça/classe/virtude" : ""}</div>
-                  </div>
-                  {!traitOwned && (
-                    <Button type="button" size="sm" variant="destructive" onClick={() => void removeSheetEffect(effect)}>
-                      <Trash2 className="mr-1 h-3.5 w-3.5" /> Remover
-                    </Button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </details>
-      )}
       <Button disabled={applyingDamage || applyingEffectsOnly
         || (needsMagic && (!selectedMagicDamageTypeId || magicalDamageTypes.length === 0))
         || (needsPhysical && physicalDamageTypes.length > 0 && !selectedPhysicalDamageTypeId)
