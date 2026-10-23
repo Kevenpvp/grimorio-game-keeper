@@ -314,3 +314,19 @@ REVOKE ALL ON FUNCTION public.sync_coracao_corrompido_strength_effect_internal(u
 REVOKE ALL ON FUNCTION public.refresh_racial_virtue_effect_scaling() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.refresh_character_racial_virtue_abilities() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.refresh_character_ability_custom_attributes() FROM PUBLIC, anon, authenticated;
+
+-- Refresh existing runtime bonuses immediately when this migration is deployed.
+DO $function$
+DECLARE _character_id uuid;
+BEGIN
+  FOR _character_id IN
+    SELECT DISTINCT ca.character_id
+    FROM public.character_abilities ca
+    JOIN public.abilities a ON a.id = ca.ability_id
+    WHERE a.custom_script_key IN ('coracao_corrompido', 'demonio_interno')
+       OR lower(btrim(a.name)) IN (lower('Coração Corrompido'), lower('Demônio Interno'))
+  LOOP
+    PERFORM public.sync_coracao_corrompido_strength_effect(_character_id);
+  END LOOP;
+END;
+$function$;
