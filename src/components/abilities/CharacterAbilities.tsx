@@ -562,7 +562,7 @@ export function CharacterAbilitiesPanel({
   }
 
   async function activate(ability: CharacterAbility) {
-    if (!canUse || !ability.can_activate || ability.cooldown_turns <= 0 || ability.cooldown_remaining > 0 || busyId) return;
+    if (!canUse || mode !== "combat" || !ability.can_activate || ability.cooldown_turns <= 0 || ability.cooldown_remaining > 0 || busyId) return;
     if ((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle && mode === "combat" && usedOnceAbilityIds.includes(ability.id)) {
       toast.error("Esta habilidade já foi usada neste combate.");
       return;
@@ -680,7 +680,7 @@ export function CharacterAbilitiesPanel({
                       {ability.can_activate && !ability.mana_cost && <span className="rounded bg-muted px-2 py-1">Sem custo base de Mana</span>}
                     </div>
                   </div>
-                  {canUse && ability.can_activate && (
+                  {mode === "combat" && canUse && ability.can_activate && (
                     <>
                       <Button size="sm" disabled={busyId !== null || attackBusy || ability.cooldown_turns <= 0 || ability.cooldown_remaining > 0 || (Boolean((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle) && mode === "combat" && usedOnceAbilityIds.includes(ability.id))} onClick={() => void activate(ability)}>
                         <Zap className="mr-1 h-3.5 w-3.5" /> {busyId === ability.id ? "Ativando..." : "Ativar"}
