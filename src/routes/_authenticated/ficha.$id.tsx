@@ -24,6 +24,7 @@ import { CharacterSheetView, Portrait } from "@/components/sheet/CharacterSheetV
 import { PointsDistribution } from "@/components/sheet/PointsDistribution";
 import { PhysicalPointsDistribution } from "@/components/sheet/PhysicalPointsDistribution";
 import { RacePicker } from "@/components/sheet/RacePicker";
+import { ClassPicker } from "@/components/sheet/ClassPicker";
 import { AttrIcon, barTone } from "@/components/sheet/icons";
 import { StatBar } from "@/components/sheet/StatBar";
 import { DamageApplier } from "@/components/combat/DamageApplier";
@@ -64,13 +65,14 @@ function FichaPage() {
     return (
       <div className="space-y-6">
         <RacePicker character={data.character} isMaster={false} />
+        <ClassPicker character={data.character} isMaster={false} />
         <CharacterTransformationImages character={data.character} />
         <CharacterAbilitiesManager characterId={data.character.id} personalOnly />
         <CharacterAbilitiesPanel characterId={data.character.id} characterName={data.character.name} mode="sheet" canUse={false} allowCustomAttributeEdit />
         <CharacterSheetView character={data.character} attrs={data.attrs} defs={defs} />
         {/* Keep this panel before normal points: physical grants must be visible to the player without being buried below the regular allocation panel. */}
         <PhysicalPointsDistribution character={data.character} attrs={data.attrs} defs={defs} />
-        {(data.character.available_points > 0 || data.character.race_points_granted > 0 || data.character.virtue_points_granted > 0) && (
+        {(data.character.available_points > 0 || data.character.race_points_granted > 0 || data.character.virtue_points_granted > 0 || (data.character.class_points_granted ?? 0) > 0) && (
           <PointsDistribution character={data.character} attrs={data.attrs} defs={defs} />
         )}
       </div>
@@ -154,7 +156,7 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
   }
 
   const byKey = new Map(attrs.map((a) => [a.attribute_key, a]));
-  const { mods, raceModifiers, virtueModifiers } = useCharacterTraitMods(character.race_id, character.virtue_id);
+  const { mods, raceModifiers, classModifiers, virtueModifiers } = useCharacterTraitMods(character.race_id, character.virtue_id, character.class_id);
   const { data: characterAbilities = [] } = useCharacterAbilities(character.id);
   const { data: activeEffects = [] } = useCharacterActiveEffects(character.id);
   const passiveStatus = passiveStatusModifiers(characterAbilities);
@@ -245,6 +247,7 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
           </section>
 
           <RacePicker character={character} isMaster />
+          <ClassPicker character={character} isMaster />
           <CharacterTransformationImages character={character} isMaster />
           <CharacterAbilitiesManager characterId={character.id} />
 
@@ -260,7 +263,7 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
           <section>
             <h2 className="mb-3 text-lg text-gold">Pontos de atributo</h2>
             <PointsDistribution character={character} attrs={attrs} defs={defs} canRemove />
-          {(character.race_physical_points_granted + character.virtue_physical_points_granted) > 0 && (
+          {(character.race_physical_points_granted + character.virtue_physical_points_granted + (character.class_physical_points_granted ?? 0)) > 0 && (
             <PhysicalPointsDistribution character={character} attrs={attrs} defs={defs} />
           )}
           </section>
@@ -269,7 +272,7 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
             <h2 className="mb-3 text-lg text-gold">Atributos</h2>
             <div className="grid gap-3 md:grid-cols-2">
               {defs.map((d) => (
-                <AttrEditor key={d.key} def={d} characterId={character.id} body={character.body} sanity={character.sanity} attr={byKey.get(d.key)} racePts={raceModifiers[d.key] ?? 0} virtuePts={virtueModifiers[d.key] ?? 0} physicalPts={physicalAttributePoints(character, d.key)} noMana={noMana && d.key === "mana"} statusModifier={{ fixed: (passiveStatus[d.key]?.fixed ?? 0) + statusEffectModifiers(activeEffects, d.key).fixed, percent: (passiveStatus[d.key]?.percent ?? 0) + statusEffectModifiers(activeEffects, d.key).percent }}
+                <AttrEditor key={d.key} def={d} characterId={character.id} body={character.body} sanity={character.sanity} attr={byKey.get(d.key)} racePts={raceModifiers[d.key] ?? 0} virtuePts={virtueModifiers[d.key] ?? 0} classPts={classModifiers[d.key] ?? 0} physicalPts={physicalAttributePoints(character, d.key)} noMana={noMana && d.key === "mana"} statusModifier={{ fixed: (passiveStatus[d.key]?.fixed ?? 0) + statusEffectModifiers(activeEffects, d.key).fixed, percent: (passiveStatus[d.key]?.percent ?? 0) + statusEffectModifiers(activeEffects, d.key).percent }}
                   onSaved={() => { mark(); refresh(); }} />
               ))}
             </div>
@@ -349,13 +352,13 @@ function PercentEditor({ label, icon, tone, value, onSave }: {
 }
 
 function AttrEditor({ def, characterId, body, sanity, attr, racePts, virtuePts, physicalPts, noMana, statusModifier, onSaved }: {
-  def: AttributeDef; characterId: string; body: number; sanity: number; attr: CharacterAttr | undefined; racePts: number; virtuePts: number; physicalPts: number; noMana: boolean; statusModifier: { fixed: number; percent: number }; onSaved: () => void;
+  def: AttributeDef; characterId: string; body: number; sanity: number; attr: CharacterAttr | undefined; racePts: number; virtuePts: number; classPts: number; physicalPts: number; noMana: boolean; statusModifier: { fixed: number; percent: number }; onSaved: () => void;
 }) {
   const cur0 = noMana ? 0 : attr?.current_value ?? 0;
   const max0 = noMana ? 0 : attr?.max_value ?? 0;
   const pts0 = attr?.points ?? 0;
   const bonus0 = attr?.bonus ?? 0;
-  const traitPts = racePts + virtuePts + physicalPts;
+  const traitPts = racePts + virtuePts + classPts + physicalPts;
   const base = def.accepts_points ? computeValue(def, pts0 + traitPts) : max0;
   const rawTotal = def.accepts_points ? base + bonus0 : max0 + traitPts + bonus0;
   const adjustedTotal = Math.floor((rawTotal + statusModifier.fixed) * (1 + statusModifier.percent / 100));
@@ -414,7 +417,7 @@ function AttrEditor({ def, characterId, body, sanity, attr, racePts, virtuePts, 
           ) : def.accepts_points ? (
             <>{cur0} <span className="text-sm text-muted-foreground">/ {total}</span></>
           ) : (
-            <>{cur0} <span className="text-sm text-muted-foreground">/ {total}{(racePts !== 0 || virtuePts !== 0) && ` (${racePts !== 0 ? `${racePts > 0 ? "+" : ""}${racePts} raça` : ""}${racePts !== 0 && virtuePts !== 0 ? ", " : ""}${virtuePts !== 0 ? `${virtuePts > 0 ? "+" : ""}${virtuePts} virtude` : ""})`}</span></>
+            <>{cur0} <span className="text-sm text-muted-foreground">/ {total}{(racePts !== 0 || virtuePts !== 0 || classPts !== 0) && ` (${racePts !== 0 ? `${racePts > 0 ? "+" : ""}${racePts} raça` : ""}${racePts !== 0 && virtuePts !== 0 ? ", " : ""}${virtuePts !== 0 ? `${virtuePts > 0 ? "+" : ""}${virtuePts} virtude` : ""}${(racePts !== 0 || virtuePts !== 0) && classPts !== 0 ? ", " : ""}${classPts !== 0 ? `${classPts > 0 ? "+" : ""}${classPts} classe` : ""})`}</span></>
           )}
         </span>
       </div>
@@ -424,7 +427,7 @@ function AttrEditor({ def, characterId, body, sanity, attr, racePts, virtuePts, 
           <div className="flex flex-wrap items-end gap-3">
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">Pontos investidos</Label>
-              <div className="tabular panel px-4 py-1.5 text-center text-sm">{pts0}{racePts !== 0 && <span className={racePts > 0 ? "text-gold" : "text-destructive"}> {racePts > 0 ? "+" : ""}{racePts} raça</span>}{virtuePts !== 0 && <span className={virtuePts > 0 ? "text-gold" : "text-destructive"}> {virtuePts > 0 ? "+" : ""}{virtuePts} virtude</span>}{physicalPts !== 0 && <span className="text-gold"> +{physicalPts} físicos</span>}</div>
+              <div className="tabular panel px-4 py-1.5 text-center text-sm">{pts0}{racePts !== 0 && <span className={racePts > 0 ? "text-gold" : "text-destructive"}> {racePts > 0 ? "+" : ""}{racePts} raça</span>}{virtuePts !== 0 && <span className={virtuePts > 0 ? "text-gold" : "text-destructive"}> {virtuePts > 0 ? "+" : ""}{virtuePts} virtude</span>}{classPts !== 0 && <span className={classPts > 0 ? "text-gold" : "text-destructive"}> {classPts > 0 ? "+" : ""}{classPts} classe</span>}{physicalPts !== 0 && <span className="text-gold"> +{physicalPts} físicos</span>}</div>
             </div>
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">Valor por pontos</Label>
