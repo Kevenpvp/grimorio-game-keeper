@@ -41,6 +41,7 @@ export function AppHeader() {
             {me?.isMaster && (
               <>
                 <Link to="/racas" className="whitespace-nowrap text-muted-foreground hover:text-gold">Raças</Link>
+                <Link to="/classes" className="whitespace-nowrap text-muted-foreground hover:text-gold">Classes</Link>
                 <Link to="/virtudes" className="whitespace-nowrap text-muted-foreground hover:text-gold">Virtudes</Link>
                 <Link to="/habilidades" className="whitespace-nowrap text-muted-foreground hover:text-gold">Habilidades</Link>
                 <Link to="/tipos-dano" className="flex whitespace-nowrap items-center gap-1 text-muted-foreground hover:text-gold">
@@ -88,6 +89,7 @@ export function AppHeader() {
             {me?.isMaster && (
               <>
                 <Link to="/racas" className={navClass} onClick={() => setMobileOpen(false)}>Raças</Link>
+                <Link to="/classes" className={navClass} onClick={() => setMobileOpen(false)}>Classes</Link>
                 <Link to="/virtudes" className={navClass} onClick={() => setMobileOpen(false)}>Virtudes</Link>
                 <Link to="/habilidades" className={navClass} onClick={() => setMobileOpen(false)}>Habilidades</Link>
                 <Link to="/tipos-dano" className={navClass} onClick={() => setMobileOpen(false)}>
