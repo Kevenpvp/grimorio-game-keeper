@@ -153,6 +153,8 @@ function RaceEditor({ race, defs, isNew, onSaved }: { race: Race; defs: Attribut
       qc.invalidateQueries({ queryKey: ["character"] }),
       qc.invalidateQueries({ queryKey: ["characters"] }),
       qc.invalidateQueries({ queryKey: ["my-character"] }),
+      qc.invalidateQueries({ queryKey: ["character-abilities"] }),
+      qc.invalidateQueries({ queryKey: ["character-abilities-battle"] }),
     ]);
     onSaved();
   }
