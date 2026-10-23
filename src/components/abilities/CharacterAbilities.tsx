@@ -216,7 +216,7 @@ export function CharacterAbilitiesPanel({
       return;
     }
     setBusyId(ability.id);
-    const { data: spentMana, error } = await supabase.rpc("activate_character_ability", {
+    const { data: spentMana, error } = await db.rpc("activate_character_ability", {
       _character_ability_id: ability.id,
       _target_character_id: ability.self_target_only ? characterId : (targetId || characterId),
       _battle_id: mode === "combat" ? battleId ?? null : null,
