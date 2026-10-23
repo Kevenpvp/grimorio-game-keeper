@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
-import { parseAbilityEffects, useAbilities, type Ability, type AbilityEffectDefinition } from "@/lib/abilities";
+import { parseAbilityEffects, parseAbilityAttackDamage, useAbilities, useDamageTypes, type Ability, type AbilityEffectDefinition, type AbilityAttackDamageConfig, type AbilityAttackDamageKind } from "@/lib/abilities";
 import {
   CUSTOM_ABILITY_SCRIPTS,
   DEMONIO_INTERNO_DEFAULT_ATTRIBUTES,
@@ -97,6 +97,11 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
   const [customAttributes, setCustomAttributes] = useState<CustomAbilityAttribute[]>(() => parseCustomAbilityAttributes(ability.custom_attributes));
   const [canActivate, setCanActivate] = useState(ability.can_activate);
   const [isMagical, setIsMagical] = useState(ability.is_magical);
+  const [attackEnabled, setAttackEnabled] = useState(ability.attack_enabled);
+  const [attackDamage, setAttackDamage] = useState<AbilityAttackDamageConfig>(() => parseAbilityAttackDamage(ability.attack_damage));
+  const { data: damageTypes = [] } = useDamageTypes();
+  const physicalDamageTypes = damageTypes.filter((type) => type.category === "physical");
+  const magicalDamageTypes = damageTypes.filter((type) => type.category === "magical");
   const [oncePerBattle, setOncePerBattle] = useState(Boolean((ability as Ability & { once_per_battle?: boolean }).once_per_battle));
   const [selfTargetOnly, setSelfTargetOnly] = useState(ability.self_target_only);
   const [cooldown, setCooldown] = useState(String(ability.cooldown_turns));
@@ -113,6 +118,8 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
     setCustomAttributes(parseCustomAbilityAttributes(ability.custom_attributes));
     setCanActivate(ability.can_activate);
     setIsMagical(ability.is_magical);
+    setAttackEnabled(ability.attack_enabled);
+    setAttackDamage(parseAbilityAttackDamage(ability.attack_damage));
     setOncePerBattle(Boolean((ability as Ability & { once_per_battle?: boolean }).once_per_battle));
     setSelfTargetOnly(ability.self_target_only);
     setCooldown(String(ability.cooldown_turns));
@@ -178,6 +185,14 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
       custom_attributes: customAttributes as unknown as Json,
       can_activate: canActivate,
       is_magical: isMagical,
+      attack_enabled: canActivate && !selfTargetOnly && attackEnabled,
+      attack_damage: {
+        ...attackDamage,
+        attribute_percent: Math.max(0, Math.min(1000, Number(attackDamage.attribute_percent) || 0)),
+        fixed_damage: Math.max(0, Math.min(1000000, Number(attackDamage.fixed_damage) || 0)),
+        physical_damage_type_id: attackDamage.physical_damage_type_id || physicalDamageTypes[0]?.id || null,
+        damage_type_id: attackDamage.damage_type_id || magicalDamageTypes[0]?.id || null,
+      } as unknown as Json,
       once_per_battle: canActivate && oncePerBattle,
       self_target_only: canActivate && selfTargetOnly,
       is_passive: !canActivate,
@@ -242,6 +257,107 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
           </label>
         )}
       </div>
+      <section className="space-y-3 rounded-md border border-violet-500/30 bg-violet-500/5 p-3">
+        <div>
+          <h3 className="text-sm font-semibold text-gold">Ataque da habilidade</h3>
+          <p className="mt-1 text-xs text-muted-foreground">Permite usar o botão Atacar no combate, selecionar vários alvos, mostrar os dados para lançar/esquivar e aplicar dano pela regra normal de defesas e mitigação.</p>
+        </div>
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={attackEnabled}
+            disabled={!canActivate || selfTargetOnly}
+            onChange={(event) => setAttackEnabled(event.target.checked)}
+          />
+          <span>
+            <span className="font-medium">Habilidade pode Atacar</span>
+            <span className="mt-1 block text-xs text-muted-foreground">O botão Ativar continua existindo separadamente. Ataques com esta habilidade consomem o custo de Mana/cooldown uma vez, mesmo que todos os alvos esquivem.</span>
+          </span>
+        </label>
+        {(!canActivate || selfTargetOnly) && <p className="text-xs text-amber-500">Para habilitar Atacar, a habilidade precisa ser ativável e não pode estar limitada ao próprio personagem.</p>}
+        {attackEnabled && canActivate && !selfTargetOnly && (
+          <div className="space-y-3 border-t border-border/70 pt-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="space-y-1 text-xs font-medium">
+                Tipo de dano
+                <select
+                  className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                  value={attackDamage.damage_kind}
+                  onChange={(event) => setAttackDamage((current) => ({ ...current, damage_kind: event.target.value as AbilityAttackDamageKind }))}
+                >
+                  <option value="physical">Físico</option>
+                  <option value="magical">Mágico</option>
+                  <option value="hybrid">Híbrido (físico + mágico)</option>
+                  <option value="true">Verdadeiro (ignora defesas)</option>
+                </select>
+              </label>
+              <label className="space-y-1 text-xs font-medium">
+                Atributo usado para calcular o dano
+                <select
+                  className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                  value={attackDamage.attribute_key ?? ""}
+                  onChange={(event) => setAttackDamage((current) => ({ ...current, attribute_key: event.target.value || null }))}
+                >
+                  <option value="">Nenhum — dano fixo</option>
+                  {defs.map((def) => <option key={def.key} value={def.key}>{def.label}</option>)}
+                </select>
+              </label>
+              <label className="space-y-1 text-xs font-medium">
+                Percentual do atributo
+                <div className="flex items-center gap-2">
+                  <Input type="number" min={0} max={1000} step={5} value={attackDamage.attribute_percent}
+                    disabled={!attackDamage.attribute_key}
+                    onChange={(event) => setAttackDamage((current) => ({ ...current, attribute_percent: Math.max(0, Math.min(1000, Number(event.target.value) || 0)) }))} />
+                  <span className="text-muted-foreground">%</span>
+                </div>
+              </label>
+              <label className="space-y-1 text-xs font-medium">
+                Dano fixo adicional
+                <Input type="number" min={0} max={1000000} value={attackDamage.fixed_damage}
+                  onChange={(event) => setAttackDamage((current) => ({ ...current, fixed_damage: Math.max(0, Math.min(1000000, Number(event.target.value) || 0)) }))} />
+              </label>
+              {(attackDamage.damage_kind === "physical" || attackDamage.damage_kind === "hybrid") && (
+                <label className="space-y-1 text-xs font-medium">
+                  Tipo de dano físico
+                  <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                    value={attackDamage.physical_damage_type_id ?? ""}
+                    onChange={(event) => setAttackDamage((current) => ({ ...current, physical_damage_type_id: event.target.value || null }))}>
+                    <option value="">Selecionar tipo físico</option>
+                    {physicalDamageTypes.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}
+                  </select>
+                </label>
+              )}
+              {(attackDamage.damage_kind === "magical" || attackDamage.damage_kind === "hybrid") && (
+                <>
+                  <label className="space-y-1 text-xs font-medium">
+                    Tipo de dano mágico
+                    <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                      value={attackDamage.damage_type_id ?? ""}
+                      onChange={(event) => setAttackDamage((current) => ({ ...current, damage_type_id: event.target.value || null }))}>
+                      <option value="">Selecionar tipo mágico</option>
+                      {magicalDamageTypes.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}
+                    </select>
+                  </label>
+                  <label className="space-y-1 text-xs font-medium">
+                    Grau da magia
+                    <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                      value={attackDamage.magic_level}
+                      onChange={(event) => setAttackDamage((current) => ({ ...current, magic_level: event.target.value as "baixa" | "media" | "alta" }))}>
+                      <option value="baixa">Baixa</option>
+                      <option value="media">Média</option>
+                      <option value="alta">Alta</option>
+                    </select>
+                  </label>
+                </>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Exemplo: Força 100, atributo em 100% e dano fixo adicional 20 = 120 de dano base antes da defesa. No combate, o mestre poderá somar dano extra para cada alvo.
+            </p>
+          </div>
+        )}
+      </section>
       <div className="space-y-1.5">
         <Label>Descrição</Label>
         <Textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="O que a habilidade faz..." />
