@@ -181,9 +181,9 @@ export function useClasses() {
   return useQuery<ClassTrait[]>({
     queryKey: ["classes"],
     queryFn: async () => {
-      const { data, error } = await (supabase as any).from("classes").select("*").order("name");
+      const { data, error } = await supabase.from("classes").select("*").order("name");
       if (error) throw error;
-      return (data ?? []) as ClassTrait[];
+      return data ?? [];
     },
   });
 }
@@ -218,7 +218,7 @@ export function raceMods(race: Race | null | undefined): RaceMods {
   return traitMods(race);
 }
 
-/** Both selected traits contribute to the character's attribute modifiers. */
+/** Race, virtue, and class each contribute their own attribute modifiers. */
 export function useCharacterTraitMods(
   raceId: string | null | undefined,
   virtueId: string | null | undefined,
