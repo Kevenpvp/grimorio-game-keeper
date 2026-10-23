@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 
-export type Character = Tables<"characters"> & { class_id?: string | null; class_points_granted?: number; class_physical_points_granted?: number; class_attribute_allocations?: import("@/integrations/supabase/types").Json; class_physical_allocations?: import("@/integrations/supabase/types").Json; };
+export type Character = Tables<"characters">;
 export type AttributeDef = Tables<"attribute_definitions">;
 export type CharacterAttr = Tables<"character_attributes">;
 
@@ -138,7 +138,7 @@ export function conditionAdjustedValue(
 }
 
 export type Race = Tables<"races">;
-export type ClassTrait = Race & { special_mechanics?: import("@/integrations/supabase/types").Json };
+export type ClassTrait = Tables<"classes">;
 export type Virtue = Tables<"virtues">;
 export type RaceMods = Record<string, number>;
 
@@ -164,7 +164,7 @@ export function physicalAttributePoints(
 export function allocationTotal(value: unknown) {
   return Object.values(numberAllocation(value)).reduce((sum, points) => sum + points, 0);
 }
-export type Trait = Race | Virtue;
+export type Trait = Race | Virtue | ClassTrait;
 
 export function useRaces() {
   return useQuery({
