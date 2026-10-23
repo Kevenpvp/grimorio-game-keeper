@@ -153,8 +153,8 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
           <div className="space-y-2">
             {available.map((transformation) => {
               const state = states.find((entry) => entry.transformation_id === transformation.id);
-              const fromRace = raceLinks.some((link) => link.transformation_id === transformation.id);
-              const fromVirtue = virtueLinks.some((link) => link.transformation_id === transformation.id);
+              const fromRace = raceLinks.some((link) => link.transformation_id === transformation.id || link.transformation_id === transformation.source_transformation_id);
+              const fromVirtue = virtueLinks.some((link) => link.transformation_id === transformation.id || link.transformation_id === transformation.source_transformation_id);
               return (
                 <div key={transformation.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border px-3 py-2">
                   <span className="font-medium">{transformation.name}</span>
@@ -308,13 +308,23 @@ function TransformationImageCard({
     } else {
       // Race/virtue transformations are shared templates. Customize a copy for this character
       // instead of changing the template for every other player with the same race/virtue.
-      const { data: copy, error } = await db.from("transformations").insert({
-        ...payload,
-        owner_character_id: characterId,
-        source_transformation_id: transformation.id,
-      }).select("id").single();
-      if (error || !copy?.id) { toast.error(error?.message ?? "Não foi possível criar a transformação personalizada"); return; }
-      savedTransformationId = copy.id;
+      const { data: existingCopy, error: existingCopyError } = await db.from("transformations")
+        .select("id").eq("owner_character_id", characterId).eq("source_transformation_id", transformation.id).maybeSingle();
+      if (existingCopyError) { toast.error(existingCopyError.message); return; }
+      if (existingCopy?.id) {
+        savedTransformationId = existingCopy.id;
+        const { error } = await db.from("transformations").update(payload)
+          .eq("id", savedTransformationId).eq("owner_character_id", characterId);
+        if (error) { toast.error(error.message); return; }
+      } else {
+        const { data: copy, error } = await db.from("transformations").insert({
+          ...payload,
+          owner_character_id: characterId,
+          source_transformation_id: transformation.id,
+        }).select("id").single();
+        if (error || !copy?.id) { toast.error(error?.message ?? "Não foi possível criar a transformação personalizada"); return; }
+        savedTransformationId = copy.id;
+      }
       const { error: linkError } = await db.from("character_transformations").upsert({
         character_id: characterId,
         transformation_id: savedTransformationId,
