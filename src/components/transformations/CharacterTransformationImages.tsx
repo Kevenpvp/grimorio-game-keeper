@@ -14,7 +14,7 @@ import type { Json } from "@/integrations/supabase/types";
 import { supabase } from "@/integrations/supabase/client";
 import { usePhotoUrl, type Character } from "@/lib/sheets";
 
-type Transformation = { id: string; name: string; description: string | null; duration_turns: number; cooldown_turns: number; mana_cost: number; modifiers: Json; effects: Json; end_effects: Json; owner_character_id?: string | null };
+type Transformation = { id: string; name: string; description: string | null; duration_turns: number; cooldown_turns: number; mana_cost: number; modifiers: Json; effects: Json; end_effects: Json; owner_character_id?: string | null; source_transformation_id?: string | null };
 type CharacterTransformationState = { transformation_id: string; image_path: string | null; active: boolean; cooldown_remaining: number };
 
 export function CharacterTransformationImages({ character, isMaster = false }: { character: Character; isMaster?: boolean }) {
@@ -81,7 +81,13 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
 
   // Include trait grants, personal transformations, and any transformation state already attached to this character.
   const availableIds = new Set([...raceLinks, ...virtueLinks, ...states].map((link) => link.transformation_id));
-  const available = catalog.filter((transformation) => availableIds.has(transformation.id) || transformation.owner_character_id === character.id);
+  const overriddenTransformationIds = new Set(catalog
+    .filter((transformation) => transformation.owner_character_id === character.id && transformation.source_transformation_id)
+    .map((transformation) => transformation.source_transformation_id as string));
+  const available = catalog.filter((transformation) =>
+    (availableIds.has(transformation.id) || transformation.owner_character_id === character.id)
+    && !overriddenTransformationIds.has(transformation.id)
+  );
   async function createPersonalTransformation() {
     const name = newTransformationName.trim();
     if (!name) { toast.error("Informe o nome da transformação"); return; }
@@ -182,8 +188,8 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
               state={states.find((entry) => entry.transformation_id === transformation.id)}
               isMaster={isMaster}
               isPersonal={transformation.owner_character_id === character.id}
-              grantedByRace={raceLinks.some((link) => link.transformation_id === transformation.id)}
-              grantedByVirtue={virtueLinks.some((link) => link.transformation_id === transformation.id)}
+              grantedByRace={raceLinks.some((link) => link.transformation_id === transformation.id || link.transformation_id === transformation.source_transformation_id)}
+              grantedByVirtue={virtueLinks.some((link) => link.transformation_id === transformation.id || link.transformation_id === transformation.source_transformation_id)}
               hasCharacterState={states.some((entry) => entry.transformation_id === transformation.id)}
               defs={defs}
               damageTypes={damageTypes}
@@ -280,10 +286,10 @@ function TransformationImageCard({
     await onSaved();
   }
 
-  async function savePersonalTransformation() {
+  async function saveTransformation() {
     if (!name.trim()) { toast.error("Informe o nome da transformação"); return; }
     const cleanModifiers = Object.fromEntries(Object.entries(modifiers).map(([key, value]) => [key, Math.round(Number(value) || 0)]).filter(([, value]) => value !== 0));
-    const { error } = await db.from("transformations").update({
+    const payload = {
       name: name.trim(), description: description.trim() || null,
       duration_turns: Math.max(1, Math.min(1000, Math.floor(Number(duration) || 1))),
       cooldown_turns: Math.max(1, Math.min(1000, Math.floor(Number(cooldown) || 1))),
@@ -292,19 +298,50 @@ function TransformationImageCard({
       effects: effects.map((effect) => ({ ...effect, duration: Math.max(1, effect.duration) })) as unknown as Json,
       end_effects: endEffects.map((effect) => ({ ...effect, duration: Math.max(1, effect.duration) })) as unknown as Json,
       updated_at: new Date().toISOString(),
-    }).eq("id", transformation.id).eq("owner_character_id", characterId);
-    if (error) { toast.error(error.message); return; }
-    const { error: clearGrantsError } = await db.from("transformation_abilities").delete().eq("transformation_id", transformation.id);
+    };
+
+    let savedTransformationId = transformation.id;
+    if (isPersonal) {
+      const { error } = await db.from("transformations").update(payload)
+        .eq("id", transformation.id).eq("owner_character_id", characterId);
+      if (error) { toast.error(error.message); return; }
+    } else {
+      // Race/virtue transformations are shared templates. Customize a copy for this character
+      // instead of changing the template for every other player with the same race/virtue.
+      const { data: copy, error } = await db.from("transformations").insert({
+        ...payload,
+        owner_character_id: characterId,
+        source_transformation_id: transformation.id,
+      }).select("id").single();
+      if (error || !copy?.id) { toast.error(error?.message ?? "Não foi possível criar a transformação personalizada"); return; }
+      savedTransformationId = copy.id;
+      const { error: linkError } = await db.from("character_transformations").upsert({
+        character_id: characterId,
+        transformation_id: savedTransformationId,
+        active: false,
+        cooldown_remaining: 0,
+      }, { onConflict: "character_id,transformation_id", ignoreDuplicates: true });
+      if (linkError) {
+        await db.from("transformations").delete().eq("id", savedTransformationId);
+        toast.error("Transformação copiada, mas não foi possível vinculá-la à ficha: " + linkError.message);
+        return;
+      }
+    }
+
+    const { error: clearGrantsError } = await db.from("transformation_abilities").delete().eq("transformation_id", savedTransformationId);
     if (clearGrantsError) { toast.error("Transformação salva, mas não foi possível atualizar habilidades concedidas: " + clearGrantsError.message); return; }
     if (abilityGrants.length > 0) {
       const { error: grantsError } = await db.from("transformation_abilities").insert(
-        abilityGrants.map((grant) => ({ transformation_id: transformation.id, ...grant }))
+        abilityGrants.map((grant) => ({ transformation_id: savedTransformationId, ...grant }))
       );
       if (grantsError) { toast.error("Transformação salva, mas não foi possível salvar habilidades concedidas: " + grantsError.message); return; }
     }
-    await qc.invalidateQueries({ queryKey: ["transformation-abilities", transformation.id] });
-    toast.success("Transformação exclusiva salva");
-    await qc.invalidateQueries({ queryKey: ["transformations"] });
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ["transformation-abilities", transformation.id] }),
+      qc.invalidateQueries({ queryKey: ["transformation-abilities", savedTransformationId] }),
+      qc.invalidateQueries({ queryKey: ["transformations"] }),
+    ]);
+    toast.success(isPersonal ? "Transformação salva" : "Transformação personalizada para esta ficha salva");
     await onSaved();
     setEditPersonal(false);
   }
@@ -403,7 +440,7 @@ function TransformationImageCard({
           if (file) void upload(file);
           event.target.value = "";
         }} />
-        {isMaster && isPersonal && (
+        {isMaster && (
           <Button type="button" size="sm" variant="outline" onClick={() => setEditPersonal((value) => !value)}>
             {editPersonal ? "Fechar edição" : "Editar transformação"}
           </Button>
@@ -421,7 +458,7 @@ function TransformationImageCard({
           </div>
         )}
       </div>
-      {isMaster && isPersonal && editPersonal && (
+      {isMaster && editPersonal && (
         <div className="mt-3 w-full basis-full space-y-3 rounded-md border border-gold/30 p-3">
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1"><Label>Nome</Label><Input value={name} onChange={(event) => setName(event.target.value)} /></div>
@@ -465,7 +502,7 @@ function TransformationImageCard({
             })}
             {abilityCatalog.length === 0 && <p className="text-xs text-muted-foreground">Nenhuma habilidade do catálogo disponível.</p>}
           </div>
-          <Button type="button" onClick={() => void savePersonalTransformation()}>Salvar transformação exclusiva</Button>
+          <Button type="button" onClick={() => void saveTransformation()}>{isPersonal ? "Salvar transformação" : "Personalizar transformação nesta ficha"}</Button>
         </div>
       )}
     </div>
