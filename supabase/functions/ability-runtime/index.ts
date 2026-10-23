@@ -32,7 +32,7 @@ type QueuedAbilityEvent = {
   queue_order: number | string;
 };
 
-type CharacterRow = { id: string; name: string; player_name?: string | null; body?: number; sanity?: number; race_id?: string | null };
+type CharacterRow = { id: string; name: string; player_name?: string | null; body?: number; sanity?: number; race_id?: string | null; class_id?: string | null };
 type ObjectValue = Record<string, unknown>;
 
 function respond(body: unknown, status = 200) {
@@ -116,7 +116,7 @@ async function loadCharacter(service: ReturnType<typeof createClient>, id: strin
   if (!id) return null;
   const { data, error } = await service
     .from("characters")
-    .select("id,name,player_name,body,sanity,race_id")
+    .select("id,name,player_name,body,sanity,race_id,class_id")
     .eq("id", id)
     .maybeSingle();
   if (error) throw error;
@@ -155,32 +155,34 @@ async function buildContext(service: ReturnType<typeof createClient>, event: Que
     ? assignment.custom_attributes
     : Array.isArray(ability?.custom_attributes) ? ability.custom_attributes : [];
   let racialMultiplier = 1;
-  if (assignment?.granted_by_virtue_id && caster.race_id) {
-    const { data: raceRow, error: raceError } = await service
-      .from("races")
-      .select("special_mechanics")
-      .eq("id", caster.race_id)
-      .maybeSingle();
-    if (raceError) throw raceError;
-    const mechanics = asObject(raceRow?.special_mechanics);
-    const virtueBlacklist = Array.isArray(mechanics.virtue_effect_blacklist)
-      ? mechanics.virtue_effect_blacklist.filter((id): id is string => typeof id === "string")
-      : [];
-    const virtueIsBlacklisted = !!assignment.granted_by_virtue_id
-      && virtueBlacklist.includes(assignment.granted_by_virtue_id);
-    if (mechanics.duplicate_virtue_effects === true && !virtueIsBlacklisted) {
+  if (assignment?.granted_by_virtue_id) {
+    const [raceResult, classResult] = await Promise.all([
+      caster.race_id
+        ? service.from("races").select("special_mechanics").eq("id", caster.race_id).maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+      caster.class_id
+        ? service.from("classes").select("special_mechanics").eq("id", caster.class_id).maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+    ]);
+    if (raceResult.error) throw raceResult.error;
+    if (classResult.error) throw classResult.error;
+    const scaleForTrait = (rawMechanics: unknown) => {
+      const mechanics = asObject(rawMechanics);
+      const blacklist = Array.isArray(mechanics.virtue_effect_blacklist)
+        ? mechanics.virtue_effect_blacklist.filter((id): id is string => typeof id === "string")
+        : [];
+      if (mechanics.duplicate_virtue_effects !== true || blacklist.includes(assignment.granted_by_virtue_id!)) return 1;
       const configuredMultiplier = Number(mechanics.virtue_effect_multiplier ?? 2);
-      racialMultiplier = Number.isFinite(configuredMultiplier)
-        ? Math.max(1, Math.min(10, configuredMultiplier))
-        : 2;
-    }
+      return Number.isFinite(configuredMultiplier) ? Math.max(1, Math.min(10, configuredMultiplier)) : 2;
+    };
+    racialMultiplier = Math.min(100, scaleForTrait(raceResult.data?.special_mechanics) * scaleForTrait(classResult.data?.special_mechanics));
   }
   const customAttributes: Record<string, number | string | boolean> = {};
   for (const rawAttribute of selectedAttributes) {
     const attribute = asObject(rawAttribute);
     if (typeof attribute.key !== "string" || !attribute.key.trim()) continue;
     if (attribute.type === "number" && Number.isFinite(Number(attribute.value))) {
-      // Only numeric attributes explicitly eligible for racial scaling are multiplied.
+      // Only numeric attributes explicitly eligible for race/class scaling are multiplied.
       customAttributes[attribute.key] = Number(attribute.value) * (attribute.scale_with_race === false ? 1 : racialMultiplier);
     } else if (attribute.type === "boolean") customAttributes[attribute.key] = attribute.value === true;
     else if (attribute.type === "string" && typeof attribute.value === "string") customAttributes[attribute.key] = attribute.value;
