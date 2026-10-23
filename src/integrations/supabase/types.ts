@@ -765,6 +765,7 @@ export type Database = {
           available_points: number
           body: number
           class_attribute_allocations: Json
+          class_custom_modifiers: Json
           class_id: string | null
           class_physical_allocations: Json
           class_physical_points_granted: number
@@ -794,6 +795,7 @@ export type Database = {
           available_points?: number
           body?: number
           class_attribute_allocations?: Json
+          class_custom_modifiers?: Json
           class_id?: string | null
           class_physical_allocations?: Json
           class_physical_points_granted?: number
@@ -823,6 +825,7 @@ export type Database = {
           available_points?: number
           body?: number
           class_attribute_allocations?: Json
+          class_custom_modifiers?: Json
           class_id?: string | null
           class_physical_allocations?: Json
           class_physical_points_granted?: number
