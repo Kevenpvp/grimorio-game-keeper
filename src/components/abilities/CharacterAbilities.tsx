@@ -279,12 +279,6 @@ export function CharacterAbilitiesPanel({
     const value = trait?.special_mechanics;
     return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
   };
-  const multiplierForTrait = (mechanics: Record<string, unknown>) => {
-    const blacklist = Array.isArray(mechanics.virtue_effect_blacklist) ? mechanics.virtue_effect_blacklist : [];
-    return mechanics.duplicate_virtue_effects === true && !blacklist.includes(abilityTraitId)
-      ? Math.max(1, Math.min(10, Number(mechanics.virtue_effect_multiplier) || 2))
-      : 1;
-  };
   const multiplierForAbility = (ability: CharacterAbility | undefined) => {
     const abilityTraitId = ability?.granted_by_virtue_id;
     if (!abilityTraitId) return 1;
