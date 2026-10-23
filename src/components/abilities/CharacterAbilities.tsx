@@ -411,23 +411,24 @@ export function CharacterAbilitiesPanel({
     const attackMod = diceModifier(attackSpeed, targetSpeed);
     const dodgeMod = diceModifier(targetSpeed, attackSpeed);
     const text = [
-      \`**\${characterName} — \${attackAbility?.name ?? "Ataque"} contra \${target.name}**\`,
-      \`Lançamento: \${diceText(attackMod)} — (Velocidade de Ataque \${attackSpeed} − Velocidade \${targetSpeed}) ÷ 10, mínimo 0\`,
-      \`Esquiva: \${diceText(dodgeMod)} — (Velocidade \${targetSpeed} − Velocidade de Ataque \${attackSpeed}) ÷ 10, mínimo 0\`,
-    ].join("\n");
+      "**" + characterName + " — " + (attackAbility?.name ?? "Ataque") + " contra " + target.name + "**",
+      "Lançamento: " + diceText(attackMod) + " — (Velocidade de Ataque " + attackSpeed + " − Velocidade " + targetSpeed + ") ÷ 10, mínimo 0",
+      "Esquiva: " + diceText(dodgeMod) + " — (Velocidade " + targetSpeed + " − Velocidade de Ataque " + attackSpeed + ") ÷ 10, mínimo 0",
+    ].join(String.fromCharCode(10));
     void navigator.clipboard.writeText(text).then(() => toast.success("Dados de ataque e esquiva copiados")).catch(() => toast.error("Não foi possível copiar os dados"));
   }
 
   function copyAllAttackRolls() {
+    const lineBreak = String.fromCharCode(10);
     const text = currentAttackTargets.map((target) => {
       const attackSpeed = statValue(characterId, "atk_speed");
       const targetSpeed = statValue(target.id, "speed");
       return [
-        \`**\${characterName} — \${attackAbility?.name ?? "Ataque"} contra \${target.name}**\`,
-        \`Lançamento: \${diceText(diceModifier(attackSpeed, targetSpeed))} — (Velocidade de Ataque \${attackSpeed} − Velocidade \${targetSpeed}) ÷ 10, mínimo 0\`,
-        \`Esquiva: \${diceText(diceModifier(targetSpeed, attackSpeed))} — (Velocidade \${targetSpeed} − Velocidade de Ataque \${attackSpeed}) ÷ 10, mínimo 0\`,
-      ].join("\n");
-    }).join("\n\n");
+        "**" + characterName + " — " + (attackAbility?.name ?? "Ataque") + " contra " + target.name + "**",
+        "Lançamento: " + diceText(diceModifier(attackSpeed, targetSpeed)) + " — (Velocidade de Ataque " + attackSpeed + " − Velocidade " + targetSpeed + ") ÷ 10, mínimo 0",
+        "Esquiva: " + diceText(diceModifier(targetSpeed, attackSpeed)) + " — (Velocidade " + targetSpeed + " − Velocidade de Ataque " + attackSpeed + ") ÷ 10, mínimo 0",
+      ].join(lineBreak);
+    }).join(lineBreak + lineBreak);
     void navigator.clipboard.writeText(text).then(() => toast.success("Dados de todos os alvos copiados")).catch(() => toast.error("Não foi possível copiar os dados"));
   }
 
