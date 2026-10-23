@@ -398,7 +398,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
               {attackEffectGroups.length === 0 && (
                 <p className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">Nenhuma categoria de efeitos configurada.</p>
               )}
-              {attackEffectGroups.map((group, index) => (
+              {attackEffectGroups.map((group) => (
                 <section key={group.id} className="space-y-3 rounded-md border border-border p-3">
                   <div className="grid gap-3 sm:grid-cols-[1fr_140px_auto] sm:items-end">
                     <label className="space-y-1 text-xs font-medium">
