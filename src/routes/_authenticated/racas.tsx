@@ -83,6 +83,9 @@ function RaceEditor({ race, defs, isNew, onSaved }: { race: Race; defs: Attribut
   const [description, setDescription] = useState(race.description ?? "");
   const [bonus, setBonus] = useState(race.bonus_points);
   const [physicalBonus, setPhysicalBonus] = useState(race.physical_bonus_points);
+  const existingMechanics = ((race as unknown as { special_mechanics?: Record<string, unknown> }).special_mechanics ?? {});
+  const [duplicateVirtueEffects, setDuplicateVirtueEffects] = useState(existingMechanics.duplicate_virtue_effects === true);
+  const [virtueEffectMultiplier, setVirtueEffectMultiplier] = useState(Number(existingMechanics.virtue_effect_multiplier ?? 2));
   const [mods, setMods] = useState(raceMods(race));
   const [startingEffects, setStartingEffects] = useState<AbilityEffectDefinition[]>(() => parseAbilityEffects(race.starting_effects));
   const { data: allAbilities = [], isLoading: catalogLoading } = useAbilities();
@@ -192,6 +195,21 @@ function RaceEditor({ race, defs, isNew, onSaved }: { race: Race; defs: Attribut
             </div>
           ))}
         </div>
+      </div>
+      <div className="space-y-3 rounded-md border border-violet-500/30 bg-violet-500/5 p-3">
+        <div>
+          <h3 className="text-sm font-semibold text-gold">Mecânicas especiais da raça</h3>
+          <p className="mt-1 text-xs text-muted-foreground">Regras reutilizáveis, configuradas sem escrever código. Desative para não alterar as virtudes dos personagens desta raça.</p>
+        </div>
+        <label className="flex items-start gap-2 text-sm">
+          <input type="checkbox" className="mt-1" checked={duplicateVirtueEffects} onChange={(event) => setDuplicateVirtueEffects(event.target.checked)} />
+          <span><span className="font-medium">Duplicar efeitos da virtude</span><span className="mt-1 block text-xs text-muted-foreground">Multiplica valores numéricos dos efeitos das habilidades concedidas pela virtude (incluindo passivas), sem duplicar duração, recarga, custo de Mana ou efeitos binários como Invencível.</span></span>
+        </label>
+        {duplicateVirtueEffects && <div className="max-w-xs space-y-1">
+          <Label>Multiplicador dos efeitos</Label>
+          <Input type="number" min={1} max={10} step={0.5} value={virtueEffectMultiplier} onChange={(event) => setVirtueEffectMultiplier(Math.max(1, Math.min(10, Number(event.target.value) || 1)))} />
+          <p className="text-xs text-muted-foreground">Ex.: 2 = dobro; 3 = triplo. Limite de 10x.</p>
+        </div>}
       </div>
       <div className="space-y-3 rounded-md border border-border p-3">
         <div>
