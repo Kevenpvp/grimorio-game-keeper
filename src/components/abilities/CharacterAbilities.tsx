@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { dispatchCustomAbilityScriptEvents } from "@/lib/ability-script-runtime";
 import { useDefs, useMe, useRaces, useClasses } from "@/lib/sheets";
-import { parseAbilityEffects, parseAbilityAttackDamage, parseAbilityAttackEffectGroups, useAbilities, useCharacterAbilities, useCharacterActiveEffects, useDamageTypes, type Ability, type AbilityEffectDefinition, type CharacterAbility } from "@/lib/abilities";
+import { parseAbilityEffects, parseAbilityAttackDamage, parseAbilityAttackEffectGroups, parseAbilityDotEffects, useAbilities, useCharacterAbilities, useCharacterActiveEffects, useDamageTypes, type Ability, type AbilityEffectDefinition, type CharacterAbility, type AbilityDotEffect } from "@/lib/abilities";
 import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
 import type { Json } from "@/integrations/supabase/types";
 import { parseCustomAbilityAttributes, type CustomAbilityAttribute } from "@/lib/custom-ability-scripts";
@@ -369,6 +369,7 @@ export function CharacterAbilitiesPanel({
   const attackCatalogEntry = abilityCatalog.find((catalogAbility) => catalogAbility.id === attackAbility?.ability_id);
   const attackConfig = attackCatalogEntry?.attack_enabled ? parseAbilityAttackDamage(attackCatalogEntry.attack_damage) : null;
   const attackEffectGroups = attackCatalogEntry?.attack_enabled ? parseAbilityAttackEffectGroups(attackCatalogEntry.attack_effect_groups) : [];
+  const guaranteedAttackDots = attackCatalogEntry?.attack_enabled ? parseAbilityDotEffects(attackCatalogEntry.dot_effects) : [];
   const currentAttackTargets = eligibleAttackTargets.filter((target) => attackTargetIds.includes(target.id));
   const statValue = (id: string, key: string) => Math.max(0, Number(getAttributeValue?.(id, key) ?? 0) || 0);
   const attackBaseDamage = attackConfig
@@ -379,6 +380,23 @@ export function CharacterAbilitiesPanel({
     : 0;
   const diceModifier = (mine: number, theirs: number) => Math.max(0, Math.floor((mine - theirs) / 10));
   const diceText = (modifier: number) => `1d20+${modifier}`;
+
+  function snapshotDotAttributeValues(dots: AbilityDotEffect[]): Record<string, number> | null {
+    const values: Record<string, number> = {};
+    for (const dot of dots) {
+      if (dot.damage_mode !== "attribute") continue;
+      if (!dot.attribute_key) {
+        toast.error(`Selecione um atributo para o DoT "${dot.name}".`);
+        return null;
+      }
+      if (!getAttributeValue) {
+        toast.error("Para calcular DoTs baseados em atributo, use a habilidade dentro do combate.");
+        return null;
+      }
+      values[dot.id] = statValue(characterId, dot.attribute_key);
+    }
+    return values;
+  }
 
   const hasSelectableTargetAbility = loadout?.some((ability) => ability.can_activate && !ability.self_target_only) ?? false;
   const targetOptions = useMemo(() => [
@@ -440,6 +458,20 @@ export function CharacterAbilitiesPanel({
       toast.error("O dano extra de cada alvo deve ficar entre 0 e 1.000.000.");
       return;
     }
+    const guaranteedDots = parseAbilityDotEffects(attackCatalogEntry.dot_effects);
+    const allAttackDots = [
+      ...guaranteedDots,
+      ...attackEffectGroups.flatMap((group) => group.dots),
+    ];
+    const dotAttributeValues = snapshotDotAttributeValues(allAttackDots);
+    if (!dotAttributeValues) return;
+    const dotTargetSelections = currentAttackTargets.map((target) => ({
+      target_id: target.id,
+      hit: attackHits[target.id] === true,
+      group_ids: attackHits[target.id] === true
+        ? (attackEffectHits[target.id] ?? []).filter((groupId) => attackEffectGroups.some((group) => group.id === groupId))
+        : [],
+    }));
     const extraMana = Math.max(0, Math.min(1000000, Math.floor(Number(extraManaCosts[attackAbility.id] ?? 0) || 0)));
     setAttackBusy(true);
     setAttackResults({});
@@ -454,6 +486,8 @@ export function CharacterAbilitiesPanel({
           target_id: target.id,
           group_ids: (attackEffectHits[target.id] ?? []).filter((groupId) => attackEffectGroups.some((group) => group.id === groupId)),
         })),
+        _dot_target_selections: dotTargetSelections,
+        _dot_attribute_values: dotAttributeValues,
       });
       if (activationError) throw activationError;
 
@@ -533,14 +567,25 @@ export function CharacterAbilitiesPanel({
       toast.error("Esta habilidade já foi usada neste combate.");
       return;
     }
+    const catalogEntry = abilityCatalog.find((candidate) => candidate.id === ability.ability_id);
+    const guaranteedDots = parseAbilityDotEffects(catalogEntry?.dot_effects);
+    const actualTargetId = ability.self_target_only ? characterId : (targetId || characterId);
+    if (guaranteedDots.length > 0 && (mode !== "combat" || !battleId)) {
+      toast.error("DoTs de habilidades só podem ser aplicados durante um combate ativo.");
+      return;
+    }
+    const dotAttributeValues = snapshotDotAttributeValues(guaranteedDots);
+    if (!dotAttributeValues) return;
     setBusyId(ability.id);
     const { data: spentMana, error } = await db.rpc("activate_character_ability", {
       _character_ability_id: ability.id,
-      _target_character_id: ability.self_target_only ? characterId : (targetId || characterId),
+      _target_character_id: actualTargetId,
       _battle_id: mode === "combat" ? battleId ?? null : null,
       _extra_mana_cost: mode === "combat" && ability.mana_cost > 0
         ? Math.max(0, Math.min(1000000, Math.floor(Number(extraManaCosts[ability.id] ?? 0) || 0)))
         : 0,
+      _dot_target_selections: guaranteedDots.length > 0 ? [{ target_id: actualTargetId, hit: true, group_ids: [] }] : null,
+      _dot_attribute_values: dotAttributeValues,
     });
     setBusyId(null);
     if (error) { toast.error(error.message); return; }
@@ -755,7 +800,7 @@ export function CharacterAbilitiesPanel({
           <DialogHeader>
             <DialogTitle className="text-gold">Ataque: {attackAbility?.name ?? "Habilidade"}</DialogTitle>
             <DialogDescription>
-              {characterName} lança o ataque. O mestre marca quem foi atingido; somente esses alvos recebem dano e efeitos direcionados ao alvo.
+              {characterName} lança o ataque. Marque cada alvo que acertou e as categorias que acertaram. DoTs fora das categorias são garantidos em todos os alvos selecionados; DoTs dentro das categorias só aplicam quando a categoria foi marcada como acertada.
             </DialogDescription>
           </DialogHeader>
           {!attackAbility || !attackConfig ? (
@@ -867,7 +912,20 @@ export function CharacterAbilitiesPanel({
                                     <span>
                                       <span className="block font-medium">{group.name} — {group.chance}% de chance</span>
                                       <span className="mt-1 block text-xs text-muted-foreground">
-                                        {group.effects.map((effect) => effectSummary(effect, defs ?? [], damageTypes, races ?? [])).join(" · ")}
+                                        {[
+                                          ...group.effects.map((effect) => effectSummary(effect, defs ?? [], damageTypes, races ?? [])),
+                                          ...group.dots.map((dot) => {
+                                            const type = dot.damage_kind === "physical"
+                                              ? (damageTypes.find((item) => item.id === dot.physical_damage_type_id)?.name ?? "tipo físico")
+                                              : (damageTypes.find((item) => item.id === dot.damage_type_id)?.name ?? "tipo mágico") + " · " + (dot.magic_level ?? "baixa");
+                                            const amountText = dot.damage_mode === "percent"
+                                              ? (dot.damage_amount + "% do HP máximo por turno")
+                                              : dot.damage_mode === "attribute"
+                                                ? ((dot.attribute_percent + "% de " + (defs?.find((def) => def.key === dot.attribute_key)?.label ?? dot.attribute_key ?? "atributo")) + " + " + dot.fixed_damage + " fixos por turno")
+                                                : (dot.damage_amount + " de dano por turno");
+                                            return `DoT ${dot.name} — ${dot.damage_kind === "physical" ? "físico" : "mágico"} · ${type} · ${amountText} · ${dot.duration} turno(s)`;
+                                          }),
+                                        ].join(" · ") || "Sem efeitos configurados"}
                                       </span>
                                       <span className="mt-1 block text-[11px] text-muted-foreground">Marque esta categoria se os efeitos acertaram este alvo.</span>
                                     </span>
