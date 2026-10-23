@@ -957,7 +957,7 @@ export function AbilityEffectsEditor({
               )}
               {needsValue && (
                 <>
-                  {!isDamageReduction && !isDamageReceived && (
+                  {!isDamageReduction && !isDamageReceived && !isMentalControlModifier && (
                     <select aria-label="Buff ou debuff" className="h-9 min-w-0 rounded-md border border-input bg-background px-2 text-sm" value={effect.polarity}
                     onChange={(e) => patch(index, { polarity: e.target.value as "buff" | "debuff" })}>
                     <option value="buff">Buff</option><option value="debuff">Debuff</option>
