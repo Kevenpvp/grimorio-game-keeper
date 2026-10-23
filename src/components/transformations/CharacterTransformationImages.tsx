@@ -42,7 +42,7 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
 
   const { data: defs = [] } = useDefs();
   const { data: catalog = [], isLoading: loadingCatalog } = useQuery<Transformation[]>({
-    queryKey: ["transformations"],
+    queryKey: ["transformations", "character-transformation-images", character.id],
     queryFn: async () => {
       const { data, error } = await db.from("transformations").select("*").order("name");
       if (error) throw error;
@@ -135,6 +135,29 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
         <p className="text-sm text-destructive">
           Não foi possível carregar todas as transformações: {String(statesError?.message ?? raceLinksError?.message ?? virtueLinksError?.message ?? "erro desconhecido")}
         </p>
+      )}
+      {!isMaster && !busy && available.length > 0 && (
+        <div className="space-y-2 rounded-md border border-gold/30 p-3">
+          <h3 className="text-sm font-semibold text-gold">Lista das suas transformações</h3>
+          <div className="space-y-2">
+            {available.map((transformation) => {
+              const state = states.find((entry) => entry.transformation_id === transformation.id);
+              const fromRace = raceLinks.some((link) => link.transformation_id === transformation.id);
+              const fromVirtue = virtueLinks.some((link) => link.transformation_id === transformation.id);
+              return (
+                <div key={transformation.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border px-3 py-2">
+                  <span className="font-medium">{transformation.name}</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {fromRace && <span className="rounded bg-gold/10 px-2 py-0.5 text-[11px] text-gold">Raça</span>}
+                    {fromVirtue && <span className="rounded bg-gold/10 px-2 py-0.5 text-[11px] text-gold">Virtude</span>}
+                    {transformation.owner_character_id === character.id && <span className="rounded bg-violet-500/10 px-2 py-0.5 text-[11px] text-violet-300">Exclusiva</span>}
+                    {state?.active && <span className="rounded bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-500">Ativa</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       )}
       {busy ? (
         <p className="text-sm text-muted-foreground">Carregando transformações…</p>
