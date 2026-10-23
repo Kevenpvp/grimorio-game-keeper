@@ -336,7 +336,7 @@ function TransformationImageCard({
         <div>
           <h3 className="font-semibold">{transformation.name}</h3>
           <p className="text-xs text-muted-foreground">
-            Cooldown de {transformation.cooldown_turns} turno(s) · {transformation.mana_cost > 0 ? `${transformation.mana_cost} Mana` : "sem custo de Mana"}
+            Duração de {transformation.duration_turns} turno(s) · Cooldown de {transformation.cooldown_turns} turno(s) · {transformation.mana_cost > 0 ? `${transformation.mana_cost} Mana` : "sem custo de Mana"}
           </p>
           <div className="mt-1 flex flex-wrap gap-1.5">
             {grantedByRace && <span className="rounded bg-gold/10 px-2 py-0.5 text-[11px] text-gold">Transformação inicial da raça</span>}
@@ -372,7 +372,7 @@ function TransformationImageCard({
             <h4 className="text-xs font-semibold uppercase tracking-wide text-gold">Efeitos ao ativar</h4>
             {effects.length ? effects.map((effect, index) => (
               <p key={index} className="text-xs text-muted-foreground">
-                {effectSummary(effect, defs, damageTypes, races)}
+                {effectSummary(effect, defs, damageTypes, races)} · Destino: {effect.target_scope === "caster" ? "Caster" : effect.target_scope === "both" ? "Ambos" : "Alvo"}
                 {effect.effect_type === "healing" && effect.healing_timing !== "per_turn" ? "" : ` · ${effect.until_combat_end ? "até o fim do combate" : `${effect.duration} turno(s)`}`}
               </p>
             )) : <p className="text-xs text-muted-foreground">Nenhum efeito de ativação.</p>}
@@ -381,7 +381,7 @@ function TransformationImageCard({
             <h4 className="text-xs font-semibold uppercase tracking-wide text-gold">Efeitos ao terminar</h4>
             {endEffects.length ? endEffects.map((effect, index) => (
               <p key={index} className="text-xs text-muted-foreground">
-                {effectSummary(effect, defs, damageTypes, races)}
+                {effectSummary(effect, defs, damageTypes, races)} · Destino: {effect.target_scope === "caster" ? "Caster" : effect.target_scope === "both" ? "Ambos" : "Alvo"}
                 {effect.effect_type === "healing" && effect.healing_timing !== "per_turn" ? "" : ` · ${effect.until_combat_end ? "até o fim do combate" : `${effect.duration} turno(s)`}`}
               </p>
             )) : <p className="text-xs text-muted-foreground">Nenhum efeito de encerramento.</p>}
