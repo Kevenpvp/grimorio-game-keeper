@@ -208,7 +208,13 @@ export function useCharacterTraitMods(raceId: string | null | undefined, virtueI
   const race = races?.find((r) => r.id === raceId) ?? null;
   const virtue = virtues?.find((v) => v.id === virtueId) ?? null;
   const raceModifiers = traitMods(race);
-  const virtueModifiers = traitMods(virtue);
+  const mechanics = (race as unknown as { special_mechanics?: { duplicate_virtue_effects?: boolean; virtue_effect_multiplier?: number } } | null)?.special_mechanics;
+  const virtueMultiplier = mechanics?.duplicate_virtue_effects
+    ? Math.max(1, Math.min(10, Number(mechanics.virtue_effect_multiplier) || 2))
+    : 1;
+  const virtueModifiers: RaceMods = Object.fromEntries(
+    Object.entries(traitMods(virtue)).map(([key, value]) => [key, value * virtueMultiplier]),
+  );
   const mods: RaceMods = { ...raceModifiers };
   for (const [key, value] of Object.entries(virtueModifiers)) {
     mods[key] = (mods[key] ?? 0) + value;
