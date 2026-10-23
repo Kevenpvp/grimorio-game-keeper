@@ -11,6 +11,7 @@ import { useDefs, useMe, useRaces } from "@/lib/sheets";
 import { parseAbilityEffects, useAbilities, useCharacterAbilities, useCharacterActiveEffects, useDamageTypes, type Ability, type AbilityEffectDefinition, type CharacterAbility } from "@/lib/abilities";
 import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
 import type { Json } from "@/integrations/supabase/types";
+import { parseCustomAbilityAttributes, type CustomAbilityAttribute } from "@/lib/custom-ability-scripts";
 
 type TargetOption = { id: string; name: string };
 
@@ -28,6 +29,126 @@ function numericStateValue(state: unknown, key: string): number {
   if (!state || typeof state !== "object" || Array.isArray(state)) return 0;
   const value = Number((state as Record<string, unknown>)[key] ?? 0);
   return Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+}
+
+
+function effectiveCustomAbilityAttributes(value: unknown, multiplier: number): CustomAbilityAttribute[] {
+  return parseCustomAbilityAttributes(value).map((attribute) =>
+    attribute.type === "number"
+      ? { ...attribute, value: Number(attribute.value) * multiplier }
+      : attribute
+  );
+}
+
+function mergeCustomAbilityAttributeValues(definitions: unknown, overrides: unknown): CustomAbilityAttribute[] {
+  const base = parseCustomAbilityAttributes(definitions);
+  const saved = parseCustomAbilityAttributes(overrides);
+  return base.map((attribute) => {
+    const existing = saved.find((item) => item.key === attribute.key);
+    return existing ? { ...attribute, value: existing.value } : { ...attribute };
+  });
+}
+
+function CharacterAbilityCustomAttributesEditor({
+  ability, definitions, multiplier,
+}: {
+  ability: CharacterAbility;
+  definitions: unknown;
+  multiplier: number;
+}) {
+  const qc = useQueryClient();
+  const row = ability as CharacterAbility & { custom_attributes?: unknown };
+  const source = Array.isArray(row.custom_attributes) ? row.custom_attributes : definitions;
+  const sourceKey = JSON.stringify([definitions, source]);
+  const [attributes, setAttributes] = useState<CustomAbilityAttribute[]>(() =>
+    mergeCustomAbilityAttributeValues(definitions, source)
+  );
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setAttributes(mergeCustomAbilityAttributeValues(definitions, source));
+  }, [ability.id, sourceKey]);
+
+  function changeValue(index: number, value: number | string | boolean) {
+    setAttributes((current) => current.map((attribute, i) => i === index ? { ...attribute, value } : attribute));
+  }
+
+  async function save() {
+    setSaving(true);
+    const db = supabase as any;
+    const { error } = await db.rpc("update_character_ability_custom_attributes", {
+      _character_ability_id: ability.id,
+      _custom_attributes: attributes,
+    });
+    setSaving(false);
+    if (error) {
+      toast.error(error.message || "Não foi possível salvar os atributos personalizados");
+      return;
+    }
+    toast.success("Atributos personalizados da habilidade salvos nesta ficha");
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ["character-abilities", ability.character_id] }),
+      qc.invalidateQueries({ queryKey: ["character-abilities-battle"] }),
+    ]);
+  }
+
+  if (!attributes.length) return null;
+  return (
+    <div className="mt-3 space-y-3 rounded-md border border-gold/30 bg-gold/5 p-3">
+      <div>
+        <div className="text-xs font-semibold text-gold">Atributos personalizados desta ficha</div>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Esses valores são exclusivos do personagem e não alteram a habilidade no catálogo.
+          {ability.granted_by_virtue_id && multiplier > 1
+            ? ` A raça aplica ${multiplier}× aos valores numéricos durante os cálculos.`
+            : ""}
+        </p>
+      </div>
+      <div className="space-y-3">
+        {attributes.map((attribute, index) => (
+          <div key={attribute.key} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(140px,220px)] sm:items-center">
+            <div className="min-w-0">
+              <div className="text-sm font-medium">{attribute.name}</div>
+              <div className="text-[11px] text-muted-foreground">Chave: <code>{attribute.key}</code></div>
+            </div>
+            {attribute.type === "number" ? (
+              <div className="space-y-1">
+                <Input
+                  type="number"
+                  step="any"
+                  min={-1000000}
+                  max={1000000}
+                  value={String(attribute.value)}
+                  onChange={(event) => changeValue(index, Number(event.target.value) || 0)}
+                  disabled={saving}
+                  aria-label={attribute.name}
+                />
+                {ability.granted_by_virtue_id && multiplier > 1 && (
+                  <div className="text-[11px] text-muted-foreground">
+                    Valor efetivo: {Number(attribute.value) * multiplier} ({attribute.value} × {multiplier})
+                  </div>
+                )}
+              </div>
+            ) : attribute.type === "boolean" ? (
+              <label className="flex h-9 items-center gap-2 rounded-md border border-input px-3 text-sm">
+                <input type="checkbox" checked={attribute.value === true}
+                  onChange={(event) => changeValue(index, event.target.checked)} disabled={saving} />
+                {attribute.value ? "Ativado" : "Desativado"}
+              </label>
+            ) : (
+              <Input value={String(attribute.value)} onChange={(event) => changeValue(index, event.target.value)}
+                disabled={saving} aria-label={attribute.name} maxLength={2000} />
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="flex justify-end">
+        <Button size="sm" onClick={() => void save()} disabled={saving}>
+          <Check className="mr-1 h-3.5 w-3.5" /> {saving ? "Salvando..." : "Salvar atributos"}
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 export function effectSummary(effect: AbilityEffectDefinition, defs: NonNullable<ReturnType<typeof useDefs>["data"]>, damageTypes: NonNullable<ReturnType<typeof useDamageTypes>["data"]>, races: NonNullable<ReturnType<typeof useRaces>["data"]>) {
@@ -123,7 +244,7 @@ export function effectSummary(effect: AbilityEffectDefinition, defs: NonNullable
 }
 
 export function CharacterAbilitiesPanel({
-  characterId, characterName, mode, canUse, battleId, targets = [], showActiveEffects = true,
+  characterId, characterName, mode, canUse, battleId, targets = [], showActiveEffects = true, allowCustomAttributeEdit = false,
 }: {
   characterId: string;
   characterName: string;
@@ -133,6 +254,8 @@ export function CharacterAbilitiesPanel({
   targets?: TargetOption[];
   /** Hide the active runtime effects list when viewing another character in combat. */
   showActiveEffects?: boolean;
+  /** Let the owner personalize the script attributes for abilities on their own sheet. */
+  allowCustomAttributeEdit?: boolean;
 }) {
   const qc = useQueryClient();
   const { data: loadout, isLoading } = useCharacterAbilities(characterId);
@@ -142,6 +265,19 @@ export function CharacterAbilitiesPanel({
   const { data: races = [] } = useRaces();
   const { data: abilityCatalog = [] } = useAbilities();
   const db = supabase as any;
+  const { data: characterRaceId = null } = useQuery<string | null>({
+    queryKey: ["character-race-for-custom-ability-attributes", characterId],
+    queryFn: async () => {
+      const { data, error } = await db.from("characters").select("race_id").eq("id", characterId).maybeSingle();
+      if (error) throw error;
+      return (data?.race_id as string | null | undefined) ?? null;
+    },
+  });
+  const selectedRace = races.find((race) => race.id === characterRaceId);
+  const raceMechanics = (selectedRace as unknown as { special_mechanics?: { duplicate_virtue_effects?: boolean; virtue_effect_multiplier?: number } } | undefined)?.special_mechanics;
+  const racialMultiplier = raceMechanics?.duplicate_virtue_effects
+    ? Math.max(1, Math.min(10, Number(raceMechanics.virtue_effect_multiplier) || 2))
+    : 1;
   const { data: usedOnceAbilityIds = [] } = useQuery<string[]>({
     queryKey: ["battle-ability-uses", battleId, characterId],
     enabled: mode === "combat" && !!battleId,
@@ -159,14 +295,19 @@ export function CharacterAbilitiesPanel({
       || assigned.name === "Demônio Interno";
   });
   const demonioCatalogEntry = abilityCatalog.find((candidate) => candidate.id === demonioAssignment?.ability_id);
+  const demonioAssignedCustomAttributes = (demonioAssignment as (CharacterAbility & { custom_attributes?: unknown }) | undefined)?.custom_attributes;
+  const demonioCustomAttributes = effectiveCustomAbilityAttributes(
+    Array.isArray(demonioAssignedCustomAttributes) ? demonioAssignedCustomAttributes : demonioCatalogEntry?.custom_attributes,
+    demonioAssignment?.granted_by_virtue_id ? racialMultiplier : 1,
+  );
   const demonioHeat = numericStateValue(demonioAssignment?.custom_state, "dano_superaquecimento");
   const demonioReflectPercent = customNumberAttribute(
-    demonioCatalogEntry?.custom_attributes,
+    demonioCustomAttributes,
     "porcentagem_maxima_dano_refletido",
     50,
   );
   const demonioHpCostPercent = customNumberAttribute(
-    demonioCatalogEntry?.custom_attributes,
+    demonioCustomAttributes,
     "percentual_hp_perdido_por_refletir",
     10,
   );
@@ -326,6 +467,15 @@ export function CharacterAbilitiesPanel({
                 {mode === "combat" && battleId && (
                   <BattleAbilityOverrideEditor ability={ability} battleId={battleId} defs={defs ?? []} />
                 )}
+                {allowCustomAttributeEdit && ability.ability_id && (() => {
+                  const catalogEntry = abilityCatalog.find((candidate) => candidate.id === ability.ability_id);
+                  if (!catalogEntry || !parseCustomAbilityAttributes(catalogEntry.custom_attributes).length) return null;
+                  return <CharacterAbilityCustomAttributesEditor
+                    ability={ability}
+                    definitions={catalogEntry.custom_attributes}
+                    multiplier={ability.granted_by_virtue_id ? racialMultiplier : 1}
+                  />;
+                })()}
                 {mode === "combat" && ability.can_activate && ability.mana_cost > 0 && (
                   <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-violet-500/30 p-2">
                     <Label className="text-xs">Mana extra nesta utilização</Label>
