@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { useDefs, useMe, type AttributeDef } from "@/lib/sheets";
-import { parseAbilityEffects, type AbilityEffectDefinition } from "@/lib/abilities";
+import { parseAbilityEffects, useAbilities, type AbilityEffectDefinition, type Ability } from "@/lib/abilities";
 import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
 import type { Json } from "@/integrations/supabase/types";
 
@@ -50,6 +50,7 @@ function parseModifiers(value: unknown): Record<string, number> {
 function TransformationsPage() {
   const { data: me, isLoading: loadingMe } = useMe();
   const { data: defs = [] } = useDefs();
+  const { data: abilityCatalog = [] } = useAbilities();
   const qc = useQueryClient();
   const db = supabase as any;
   const [search, setSearch] = useState("");
@@ -163,6 +164,17 @@ function TransformationEditor({
   const [modifiers, setModifiers] = useState<Record<string, number>>(() => parseModifiers(transformation.modifiers));
   const [effects, setEffects] = useState<AbilityEffectDefinition[]>(() => parseAbilityEffects(transformation.effects));
   const [endEffects, setEndEffects] = useState<AbilityEffectDefinition[]>(() => parseAbilityEffects(transformation.end_effects));
+  const [abilityGrants, setAbilityGrants] = useState<Array<{ ability_id: string; only_while_transformed: boolean }>>([]);
+  const db = supabase as any;
+  const { data: savedAbilityGrants = [] } = useQuery<Array<{ ability_id: string; only_while_transformed: boolean }>>({
+    queryKey: ["transformation-abilities", transformation.id],
+    queryFn: async () => {
+      const { data, error } = await db.from("transformation_abilities").select("ability_id,only_while_transformed").eq("transformation_id", transformation.id);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  useEffect(() => { setAbilityGrants(savedAbilityGrants); }, [savedAbilityGrants]);
 
   useEffect(() => {
     setName(transformation.name);
@@ -297,6 +309,32 @@ function TransformationEditor({
         />
       </div>
 
+      <div className="space-y-3 rounded-md border border-gold/30 p-3">
+        <div>
+          <h3 className="text-sm font-semibold text-gold">Habilidades concedidas por esta transformação</h3>
+          <p className="mt-1 text-xs text-muted-foreground">Escolha habilidades do catálogo. Você pode concedê-las enquanto o personagem possui a transformação ou apenas enquanto ela estiver ativa no combate.</p>
+        </div>
+        <div className="space-y-2">
+          {abilityCatalog.map((ability) => {
+            const grant = abilityGrants.find((item) => item.ability_id === ability.id);
+            return (
+              <div key={ability.id} className="flex flex-col gap-2 rounded-md border border-border p-2 sm:flex-row sm:items-center sm:justify-between">
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={!!grant} onChange={(event) => setAbilityGrants((current) => event.target.checked
+                    ? [...current.filter((item) => item.ability_id !== ability.id), { ability_id: ability.id, only_while_transformed: false }]
+                    : current.filter((item) => item.ability_id !== ability.id))} />
+                  <span>{ability.name}</span>
+                </label>
+                {grant && <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <input type="checkbox" checked={grant.only_while_transformed} onChange={(event) => setAbilityGrants((current) => current.map((item) => item.ability_id === ability.id ? { ...item, only_while_transformed: event.target.checked } : item))} />
+                  Só enquanto transformado
+                </label>}
+              </div>
+            );
+          })}
+          {abilityCatalog.length === 0 && <p className="text-xs text-muted-foreground">Cadastre habilidades no catálogo para poder concedê-las.</p>}
+        </div>
+      </div>
       <div className="flex flex-wrap gap-2">
         <Button onClick={() => void save()}>{isNew ? "Salvar transformação" : "Salvar alterações"}</Button>
         <Button variant="destructive" onClick={() => void remove()}><Trash2 className="mr-1 h-4 w-4" /> Excluir</Button>
