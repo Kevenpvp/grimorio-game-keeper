@@ -43,6 +43,8 @@ function createSupabaseClient() {
       storage: brokeredPreviewStorage(),
       persistSession: true,
       autoRefreshToken: true,
+      // OAuth uses an authorization code instead of returning access tokens in the URL fragment.
+      flowType: 'pkce',
     },
   });
 }
