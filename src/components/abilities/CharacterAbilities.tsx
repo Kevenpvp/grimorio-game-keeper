@@ -197,6 +197,7 @@ export function CharacterAbilitiesPanel({
     : null;
   const [targetId, setTargetId] = useState(characterId);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [extraManaCosts, setExtraManaCosts] = useState<Record<string, string>>({});
   const [expanded, setExpanded] = useState(true);
   const hasSelectableTargetAbility = loadout?.some((ability) => ability.can_activate && !ability.self_target_only) ?? false;
   const targetOptions = useMemo(() => [
@@ -219,19 +220,17 @@ export function CharacterAbilitiesPanel({
       _character_ability_id: ability.id,
       _target_character_id: ability.self_target_only ? characterId : (targetId || characterId),
       _battle_id: mode === "combat" ? battleId ?? null : null,
+      _extra_mana_cost: mode === "combat" && ability.mana_cost > 0
+        ? Math.max(0, Math.min(1000000, Math.floor(Number(extraManaCosts[ability.id] ?? 0) || 0)))
+        : 0,
     });
     setBusyId(null);
     if (error) { toast.error(error.message); return; }
     if ((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle && mode === "combat" && battleId) {
-      const { error: useError } = await db.from("character_ability_battle_uses").insert({
-        battle_id: battleId, character_ability_id: ability.id, character_id: characterId,
-      });
-      if (useError) {
-        toast.error("A habilidade foi ativada, mas não foi possível registrar o uso único: " + useError.message);
-      } else {
-        await qc.invalidateQueries({ queryKey: ["battle-ability-uses", battleId, characterId] });
-      }
+      await qc.invalidateQueries({ queryKey: ["battle-ability-uses", battleId, characterId] });
     }
+    // O custo extra é enviado apenas nesta ativação; o valor salvo na ficha nunca muda.
+    setExtraManaCosts((current) => ({ ...current, [ability.id]: "0" }));
     toast.success(`${ability.name} ativada!${typeof spentMana === "number" && spentMana > 0 ? ` Mana gasta: ${spentMana}.` : ""}`);
     void dispatchCustomAbilityScriptEvents(mode === "combat" ? battleId : null);
     await Promise.all([
@@ -319,11 +318,26 @@ export function CharacterAbilitiesPanel({
                     </div>
                   </div>
                   {canUse && ability.can_activate && (
-                    <Button size="sm" disabled={busyId !== null || ability.cooldown_turns <= 0 || ability.cooldown_remaining > 0} onClick={() => void activate(ability)}>
+                    <Button size="sm" disabled={busyId !== null || ability.cooldown_turns <= 0 || ability.cooldown_remaining > 0 || (Boolean((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle) && mode === "combat" && usedOnceAbilityIds.includes(ability.id))} onClick={() => void activate(ability)}>
                       <Zap className="mr-1 h-3.5 w-3.5" /> {busyId === ability.id ? "Ativando..." : "Ativar"}
                     </Button>
                   )}
                 </div>
+                {mode === "combat" && ability.can_activate && ability.mana_cost > 0 && (
+                  <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-violet-500/30 p-2">
+                    <Label className="text-xs">Mana extra nesta utilização</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={1000000}
+                      className="h-8 w-28"
+                      value={extraManaCosts[ability.id] ?? "0"}
+                      onChange={(event) => setExtraManaCosts((current) => ({ ...current, [ability.id]: event.target.value }))}
+                      disabled={busyId !== null}
+                    />
+                    <span className="text-xs text-muted-foreground">Total base + extra: {ability.mana_cost + Math.max(0, Math.min(1000000, Math.floor(Number(extraManaCosts[ability.id] ?? 0) || 0)))} Mana. Volta ao normal após usar.</span>
+                  </div>
+                )}
                 {demonioAssignment?.id === ability.id && (
                   <div className="mt-3 space-y-2 rounded-md border border-orange-500/35 bg-orange-500/5 p-3 text-xs">
                     <div className="flex items-center gap-2 font-semibold text-orange-300">
