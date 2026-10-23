@@ -709,7 +709,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                   <div className="text-[11px] text-muted-foreground">Termina em {activeTransformationRemaining} turno(s)</div>
                 </div>
               )}
-              {(isOwnFighter || isMaster) && availableTransformations.length > 0 && (
+              {(isOwnFighter || (isMaster && isExpanded)) && availableTransformations.length > 0 && (
                 <div className="space-y-2 rounded-md border border-border p-2">
                   <div className="text-xs font-semibold text-gold">Transformações</div>
                   <div className="space-y-2">
@@ -838,7 +838,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                   return next;
                 })}>
                   {isExpanded ? <ChevronUp className="mr-1 h-3.5 w-3.5" /> : <ChevronDown className="mr-1 h-3.5 w-3.5" />}
-                  {isExpanded ? "Recolher" : "Detalhes"}
+                  {isExpanded ? "Recolher" : "Ver mais detalhes"}
                 </Button>
               </div>
             </div>
