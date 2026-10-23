@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
-import { raceMods, useDefs, useMe, useRaces, type AttributeDef, type Race } from "@/lib/sheets";
+import { raceMods, useDefs, useMe, useRaces, useVirtues, type AttributeDef, type Race } from "@/lib/sheets";
 import { parseAbilityEffects, useAbilities, type AbilityEffectDefinition, type AbilityEffectType } from "@/lib/abilities";
 import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
 import { TransformationGrantPicker } from "@/components/transformations/TransformationGrantPicker";
@@ -79,6 +79,8 @@ function RacasPage() {
 
 function RaceEditor({ race, defs, isNew, onSaved }: { race: Race; defs: AttributeDef[]; isNew: boolean; onSaved: () => void }) {
   const qc = useQueryClient();
+  const db = supabase as any;
+  const { data: virtues = [], isLoading: virtuesLoading } = useVirtues();
   const [name, setName] = useState(race.name);
   const [description, setDescription] = useState(race.description ?? "");
   const [bonus, setBonus] = useState(race.bonus_points);
@@ -86,6 +88,11 @@ function RaceEditor({ race, defs, isNew, onSaved }: { race: Race; defs: Attribut
   const existingMechanics = ((race as unknown as { special_mechanics?: Record<string, unknown> }).special_mechanics ?? {});
   const [duplicateVirtueEffects, setDuplicateVirtueEffects] = useState(existingMechanics.duplicate_virtue_effects === true);
   const [virtueEffectMultiplier, setVirtueEffectMultiplier] = useState(Number(existingMechanics.virtue_effect_multiplier ?? 2));
+  const [virtueEffectBlacklist, setVirtueEffectBlacklist] = useState<string[]>(
+    Array.isArray(existingMechanics.virtue_effect_blacklist)
+      ? existingMechanics.virtue_effect_blacklist.filter((id): id is string => typeof id === "string")
+      : [],
+  );
   const [mods, setMods] = useState(raceMods(race));
   const [startingEffects, setStartingEffects] = useState<AbilityEffectDefinition[]>(() => parseAbilityEffects(race.starting_effects));
   const { data: allAbilities = [], isLoading: catalogLoading } = useAbilities();
@@ -125,6 +132,11 @@ function RaceEditor({ race, defs, isNew, onSaved }: { race: Race; defs: Attribut
       bonus_points: Math.max(0, Math.round(bonus) || 0),
       physical_bonus_points: Math.max(0, Math.round(physicalBonus) || 0),
       modifiers: clean,
+      special_mechanics: {
+        duplicate_virtue_effects: duplicateVirtueEffects,
+        virtue_effect_multiplier: Math.max(1, Math.min(10, Number(virtueEffectMultiplier) || 2)),
+        virtue_effect_blacklist: virtueEffectBlacklist,
+      } as unknown as Json,
       starting_effects: startingEffects.map((effect) => ({
         ...effect,
         duration: 1,
@@ -205,11 +217,49 @@ function RaceEditor({ race, defs, isNew, onSaved }: { race: Race; defs: Attribut
           <input type="checkbox" className="mt-1" checked={duplicateVirtueEffects} onChange={(event) => setDuplicateVirtueEffects(event.target.checked)} />
           <span><span className="font-medium">Duplicar efeitos da virtude</span><span className="mt-1 block text-xs text-muted-foreground">Multiplica valores numéricos dos efeitos das habilidades concedidas pela virtude (incluindo passivas), sem duplicar duração, recarga, custo de Mana ou efeitos binários como Invencível.</span></span>
         </label>
-        {duplicateVirtueEffects && <div className="max-w-xs space-y-1">
-          <Label>Multiplicador dos efeitos</Label>
-          <Input type="number" min={1} max={10} step={0.5} value={virtueEffectMultiplier} onChange={(event) => setVirtueEffectMultiplier(Math.max(1, Math.min(10, Number(event.target.value) || 1)))} />
-          <p className="text-xs text-muted-foreground">Ex.: 2 = dobro; 3 = triplo. Limite de 10x.</p>
-        </div>}
+        {duplicateVirtueEffects && <>
+          <div className="max-w-xs space-y-1">
+            <Label>Multiplicador dos efeitos</Label>
+            <Input type="number" min={1} max={10} step={0.5} value={virtueEffectMultiplier} onChange={(event) => setVirtueEffectMultiplier(Math.max(1, Math.min(10, Number(event.target.value) || 1)))} />
+            <p className="text-xs text-muted-foreground">Ex.: 2 = dobro; 3 = triplo. Limite de 10x.</p>
+          </div>
+          <div className="space-y-2 border-t border-border/70 pt-3">
+            <div>
+              <Label>Virtudes excluídas do multiplicador</Label>
+              <p className="mt-1 text-xs text-muted-foreground">As virtudes marcadas continuam funcionando normalmente, mas seus efeitos e atributos personalizados não são multiplicados por esta raça. Você pode marcar mais de uma.</p>
+            </div>
+            {virtuesLoading ? (
+              <p className="text-xs text-muted-foreground">Carregando virtudes…</p>
+            ) : virtues.length === 0 ? (
+              <p className="text-xs text-muted-foreground">Nenhuma virtude cadastrada.</p>
+            ) : (
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {virtues.map((virtue) => {
+                  const excluded = virtueEffectBlacklist.includes(virtue.id);
+                  return (
+                    <label key={virtue.id} className={`flex cursor-pointer items-start gap-2 rounded-md border px-3 py-2 text-sm ${excluded ? "border-amber-500/50 bg-amber-500/5" : "border-border"}`}>
+                      <input
+                        type="checkbox"
+                        className="mt-1"
+                        checked={excluded}
+                        onChange={(event) => setVirtueEffectBlacklist((current) =>
+                          event.target.checked
+                            ? [...new Set([...current, virtue.id])]
+                            : current.filter((id) => id !== virtue.id)
+                        )}
+                      />
+                      <span>
+                        <span className="block font-medium">{virtue.name}</span>
+                        <span className="block text-xs text-muted-foreground">{excluded ? "Sem multiplicador racial" : "Recebe o multiplicador racial"}</span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground">A exclusão afeta somente esta mecânica racial; não remove a virtude nem suas habilidades da ficha.</p>
+          </div>
+        </>}
       </div>
       <div className="space-y-3 rounded-md border border-border p-3">
         <div>
