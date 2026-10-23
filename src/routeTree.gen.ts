@@ -113,6 +113,7 @@ export interface FileRoutesByTo {
   '/tipos-dano': typeof AuthenticatedTiposDanoRoute
   '/virtudes': typeof AuthenticatedVirtudesRoute
   '/ficha/$id': typeof AuthenticatedFichaIdRoute
+  '/classes': typeof AuthenticatedClassesRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -128,6 +129,7 @@ export interface FileRoutesById {
   '/_authenticated/tipos-dano': typeof AuthenticatedTiposDanoRoute
   '/_authenticated/virtudes': typeof AuthenticatedVirtudesRoute
   '/_authenticated/ficha/$id': typeof AuthenticatedFichaIdRoute
+  '/_authenticated/classes': typeof AuthenticatedClassesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -143,6 +145,7 @@ export interface FileRouteTypes {
     | '/tipos-dano'
     | '/virtudes'
     | '/ficha/$id'
+    | '/classes'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -156,6 +159,7 @@ export interface FileRouteTypes {
     | '/tipos-dano'
     | '/virtudes'
     | '/ficha/$id'
+    | '/classes'
   id:
     | '__root__'
     | '/'
@@ -170,6 +174,7 @@ export interface FileRouteTypes {
     | '/_authenticated/tipos-dano'
     | '/_authenticated/virtudes'
     | '/_authenticated/ficha/$id'
+    | '/_authenticated/classes'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
