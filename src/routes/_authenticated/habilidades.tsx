@@ -334,6 +334,22 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
                   return { ...item, value: attribute.type === "number" ? (e.target.value === "" ? 0 : Number(e.target.value)) : e.target.value };
                 }))} />
               )}
+              {attribute.type === "number" && (
+                <label className="mt-2 flex cursor-pointer items-start gap-2 text-xs text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={attribute.scale_with_race !== false}
+                    onChange={(event) => setCustomAttributes((current) => current.map((item, itemIndex) =>
+                      itemIndex === index ? { ...item, scale_with_race: event.target.checked } : item
+                    ))}
+                  />
+                  <span>
+                    Multiplicar com a mecânica racial
+                    <span className="mt-0.5 block text-[11px]">Desmarque para valores que representam custos ou penalidades, e não benefícios.</span>
+                  </span>
+                </label>
+              )}
             </div>
             <Button type="button" variant="ghost" size="icon" aria-label={`Remover atributo ${attribute.name || index + 1}`} onClick={() => setCustomAttributes((current) => current.filter((_, itemIndex) => itemIndex !== index))}>
               <Trash2 className="h-4 w-4" />
