@@ -429,12 +429,15 @@ export function CharacterAbilitiesManager({ characterId, personalOnly = false }:
   const db = supabase as any;
   const assignedIds = new Set(assigned.map((ability) => ability.ability_id).filter(Boolean));
   const managedAssigned = personalOnly
-    ? assigned.filter((ability) => !ability.ability_id && !ability.granted_by_virtue_id && !ability.granted_by_race_id && !ability.granted_by_transformation_id)
+    ? assigned.filter((ability) => {
+        const row = ability as CharacterAbility & { granted_by_transformation_id?: string | null };
+        return !ability.ability_id && !ability.granted_by_virtue_id && !ability.granted_by_race_id && !row.granted_by_transformation_id;
+      })
     : assigned;
   const available = personalOnly ? [] : allAbilities.filter((ability) => !assignedIds.has(ability.id));
 
   async function give(ability: Ability) {
-    const { error } = await supabase.from("character_abilities").insert({
+    const { error } = await db.from("character_abilities").insert({
       character_id: characterId,
       ability_id: ability.id,
       name: ability.name,
