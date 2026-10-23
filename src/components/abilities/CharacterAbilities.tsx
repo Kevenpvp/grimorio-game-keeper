@@ -324,7 +324,7 @@ export function CharacterAbilitiesPanel({
                   )}
                 </div>
                 {mode === "combat" && battleId && (
-                  <BattleAbilityOverrideEditor ability={ability} battleId={battleId} />
+                  <BattleAbilityOverrideEditor ability={ability} battleId={battleId} defs={defs ?? []} />
                 )}
                 {mode === "combat" && ability.can_activate && ability.mana_cost > 0 && (
                   <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-violet-500/30 p-2">
@@ -743,7 +743,7 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
 }
 
 
-function BattleAbilityOverrideEditor({ ability, battleId }: { ability: CharacterAbility; battleId: string }) {
+function BattleAbilityOverrideEditor({ ability, battleId, defs }: { ability: CharacterAbility; battleId: string; defs: NonNullable<ReturnType<typeof useDefs>["data"]> }) {
   const { data: me } = useMe();
   const qc = useQueryClient();
   const db = supabase as any;
@@ -815,8 +815,8 @@ function BattleAbilityOverrideEditor({ ability, battleId }: { ability: Character
             <Label>Custo de Mana nesta batalha</Label>
             <Input type="number" min={0} max={1000000} value={manaCost} onChange={(event) => setManaCost(event.target.value)} />
           </div>
-          <AbilityEffectsEditor effects={effects} onChange={setEffects} permanent={false} title="Efeitos alterados nesta batalha" description="Os atributos afetados por esses efeitos também são temporários." defs={[]} />
-          <AbilityEffectsEditor effects={endEffects} onChange={setEndEffects} permanent={false} title="Efeitos ao terminar" description="Efeitos de encerramento temporários para esta batalha." defs={[]} allowPeriodicHealing={false} />
+          <AbilityEffectsEditor effects={effects} onChange={setEffects} permanent={false} title="Efeitos alterados nesta batalha" description="Os atributos afetados por esses efeitos também são temporários." defs={defs} />
+          <AbilityEffectsEditor effects={endEffects} onChange={setEndEffects} permanent={false} title="Efeitos ao terminar" description="Efeitos de encerramento temporários para esta batalha." defs={defs} allowPeriodicHealing={false} />
           <label className="flex items-start gap-2 text-sm">
             <input type="checkbox" className="mt-1" checked={keepAfterUse} onChange={(event) => setKeepAfterUse(event.target.checked)} />
             <span><strong>Manter Alterações</strong><span className="block text-xs text-muted-foreground">Marcado: usar os valores alterados nas próximas ativações. Desmarcado: usar uma vez e restaurar os valores originais.</span></span>
