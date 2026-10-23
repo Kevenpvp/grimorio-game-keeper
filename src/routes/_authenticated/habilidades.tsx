@@ -97,6 +97,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
   const [customAttributes, setCustomAttributes] = useState<CustomAbilityAttribute[]>(() => parseCustomAbilityAttributes(ability.custom_attributes));
   const [canActivate, setCanActivate] = useState(ability.can_activate);
   const [isMagical, setIsMagical] = useState(ability.is_magical);
+  const [oncePerBattle, setOncePerBattle] = useState(Boolean((ability as Ability & { once_per_battle?: boolean }).once_per_battle));
   const [selfTargetOnly, setSelfTargetOnly] = useState(ability.self_target_only);
   const [cooldown, setCooldown] = useState(String(ability.cooldown_turns));
   const [manaCost, setManaCost] = useState(String(ability.mana_cost));
@@ -112,6 +113,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
     setCustomAttributes(parseCustomAbilityAttributes(ability.custom_attributes));
     setCanActivate(ability.can_activate);
     setIsMagical(ability.is_magical);
+    setOncePerBattle(Boolean((ability as Ability & { once_per_battle?: boolean }).once_per_battle));
     setSelfTargetOnly(ability.self_target_only);
     setCooldown(String(ability.cooldown_turns));
     setManaCost(String(ability.mana_cost));
@@ -168,13 +170,15 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
       return;
     }
     setBusy(true);
-    const { error } = await supabase.from("abilities").update({
+    const db = supabase as any;
+    const { error } = await db.from("abilities").update({
       name: name.trim(),
       description: description.trim() || null,
       custom_script_key: customScriptKey || null,
       custom_attributes: customAttributes as unknown as Json,
       can_activate: canActivate,
       is_magical: isMagical,
+      once_per_battle: canActivate && oncePerBattle,
       self_target_only: canActivate && selfTargetOnly,
       is_passive: !canActivate,
       cooldown_turns: cool,
@@ -185,8 +189,19 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
     }).eq("id", ability.id);
     setBusy(false);
     if (error) { toast.error(error.message); return; }
+    const { error: syncError } = await db.from("character_abilities")
+      .update({ once_per_battle: canActivate && oncePerBattle })
+      .eq("ability_id", ability.id);
+    if (syncError) {
+      toast.error(`Habilidade salva, mas não foi possível sincronizar o limite de uso nas fichas: ${syncError.message}`);
+      await qc.invalidateQueries({ queryKey: ["abilities"] });
+      await qc.invalidateQueries({ queryKey: ["character-abilities"] });
+      onSaved();
+      return;
+    }
     toast.success("Habilidade salva");
     await qc.invalidateQueries({ queryKey: ["abilities"] });
+    await qc.invalidateQueries({ queryKey: ["character-abilities"] });
     onSaved();
   }
 
@@ -331,6 +346,15 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
         {canActivate && <div className="space-y-1.5">
           <Label>Custo de Mana (0 = não gasta)</Label>
           <Input type="number" min="0" value={manaCost} onChange={(e) => setManaCost(e.target.value)} />
+        </div>}
+        {canActivate && <div className="sm:col-span-2 rounded-md border border-border p-3">
+          <label className="flex items-start gap-2 text-sm">
+            <input type="checkbox" className="mt-1" checked={oncePerBattle} onChange={(e) => setOncePerBattle(e.target.checked)} />
+            <span>
+              <span className="font-medium">Só pode ser usada 1 vez por combate</span>
+              <span className="mt-1 block text-xs text-muted-foreground">O uso fica registrado por personagem e por combate. Ao salvar, essa regra também é atualizada nas fichas que já possuem esta habilidade.</span>
+            </span>
+          </label>
         </div>}
         {!canActivate && <p className="text-xs text-muted-foreground">Esta habilidade não pode ser ativada. Seus efeitos passivos permanecem aplicados enquanto estiver na ficha.</p>}
       </div>
