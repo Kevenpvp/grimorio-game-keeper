@@ -19,54 +19,153 @@ export type Database = {
           can_activate: boolean
           cooldown_turns: number
           created_at: string
-          custom_script_key: string | null
           custom_attributes: Json
+          custom_script_key: string | null
           description: string | null
           effects: Json
           end_effects: Json
-          self_target_only: boolean
           id: string
-          is_passive: boolean
           is_magical: boolean
+          is_passive: boolean
           mana_cost: number
           name: string
+          once_per_battle: boolean
           passive_effects: Json
+          self_target_only: boolean
         }
         Insert: {
           can_activate?: boolean
           cooldown_turns?: number
           created_at?: string
-          custom_script_key?: string | null
           custom_attributes?: Json
+          custom_script_key?: string | null
           description?: string | null
           effects?: Json
           end_effects?: Json
-          self_target_only?: boolean
           id?: string
-          is_passive?: boolean
           is_magical?: boolean
+          is_passive?: boolean
           mana_cost?: number
           name: string
+          once_per_battle?: boolean
           passive_effects?: Json
+          self_target_only?: boolean
         }
         Update: {
           can_activate?: boolean
           cooldown_turns?: number
           created_at?: string
-          custom_script_key?: string | null
           custom_attributes?: Json
+          custom_script_key?: string | null
           description?: string | null
           effects?: Json
           end_effects?: Json
-          self_target_only?: boolean
           id?: string
-          is_passive?: boolean
           is_magical?: boolean
+          is_passive?: boolean
           mana_cost?: number
           name?: string
+          once_per_battle?: boolean
           passive_effects?: Json
+          self_target_only?: boolean
         }
         Relationships: []
+      }
+      ability_script_events: {
+        Row: {
+          ability_id: string | null
+          attempts: number
+          battle_id: string | null
+          character_ability_id: string | null
+          character_id: string
+          created_at: string
+          effect_id: string | null
+          error_message: string | null
+          event_type: string
+          id: string
+          locked_at: string | null
+          payload: Json
+          processed_at: string | null
+          queue_order: number
+          script_key: string
+          status: string
+          target_character_id: string | null
+        }
+        Insert: {
+          ability_id?: string | null
+          attempts?: number
+          battle_id?: string | null
+          character_ability_id?: string | null
+          character_id: string
+          created_at?: string
+          effect_id?: string | null
+          error_message?: string | null
+          event_type: string
+          id?: string
+          locked_at?: string | null
+          payload?: Json
+          processed_at?: string | null
+          queue_order?: never
+          script_key: string
+          status?: string
+          target_character_id?: string | null
+        }
+        Update: {
+          ability_id?: string | null
+          attempts?: number
+          battle_id?: string | null
+          character_ability_id?: string | null
+          character_id?: string
+          created_at?: string
+          effect_id?: string | null
+          error_message?: string | null
+          event_type?: string
+          id?: string
+          locked_at?: string | null
+          payload?: Json
+          processed_at?: string | null
+          queue_order?: never
+          script_key?: string
+          status?: string
+          target_character_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ability_script_events_ability_id_fkey"
+            columns: ["ability_id"]
+            isOneToOne: false
+            referencedRelation: "abilities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ability_script_events_battle_id_fkey"
+            columns: ["battle_id"]
+            isOneToOne: false
+            referencedRelation: "battles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ability_script_events_character_ability_id_fkey"
+            columns: ["character_ability_id"]
+            isOneToOne: false
+            referencedRelation: "character_abilities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ability_script_events_character_id_fkey"
+            columns: ["character_id"]
+            isOneToOne: false
+            referencedRelation: "characters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ability_script_events_target_character_id_fkey"
+            columns: ["target_character_id"]
+            isOneToOne: false
+            referencedRelation: "characters"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       attribute_definitions: {
         Row: {
@@ -104,6 +203,45 @@ export type Database = {
         }
         Relationships: []
       }
+      battle_ability_overrides: {
+        Row: {
+          battle_id: string
+          character_ability_id: string
+          keep_after_use: boolean
+          override_values: Json
+          updated_at: string
+        }
+        Insert: {
+          battle_id: string
+          character_ability_id: string
+          keep_after_use?: boolean
+          override_values?: Json
+          updated_at?: string
+        }
+        Update: {
+          battle_id?: string
+          character_ability_id?: string
+          keep_after_use?: boolean
+          override_values?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "battle_ability_overrides_battle_id_fkey"
+            columns: ["battle_id"]
+            isOneToOne: false
+            referencedRelation: "battles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "battle_ability_overrides_character_ability_id_fkey"
+            columns: ["character_ability_id"]
+            isOneToOne: false
+            referencedRelation: "character_abilities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       battle_effects: {
         Row: {
           amount: number
@@ -112,23 +250,25 @@ export type Database = {
           character_id: string
           created_at: string
           damage_reduction_magic_level: string | null
+          damage_reduction_magic_levels: string[] | null
           damage_reduction_scope: string
           damage_reduction_type_id: string | null
-          damage_reduction_magic_levels: string[] | null
           damage_reduction_type_ids: string[] | null
           damage_scope: string
           duration: number
           duration_scope: string
           effect_data: Json
           effect_group_id: string | null
-          is_end_effect: boolean
           effect_type: string
           id: string
+          is_end_effect: boolean
           name: string
           polarity: string
           source_character_ability_id: string | null
-          source_race_id: string | null
+          source_class_effect_index: number | null
+          source_class_id: string | null
           source_race_effect_index: number | null
+          source_race_id: string | null
           target_character_id: string | null
           until_combat_end: boolean
           value_mode: string
@@ -140,23 +280,25 @@ export type Database = {
           character_id: string
           created_at?: string
           damage_reduction_magic_level?: string | null
+          damage_reduction_magic_levels?: string[] | null
           damage_reduction_scope?: string
           damage_reduction_type_id?: string | null
-          damage_reduction_magic_levels?: string[] | null
           damage_reduction_type_ids?: string[] | null
           damage_scope?: string
           duration: number
           duration_scope?: string
           effect_data?: Json
           effect_group_id?: string | null
-          is_end_effect?: boolean
           effect_type: string
           id?: string
+          is_end_effect?: boolean
           name: string
           polarity?: string
           source_character_ability_id?: string | null
-          source_race_id?: string | null
+          source_class_effect_index?: number | null
+          source_class_id?: string | null
           source_race_effect_index?: number | null
+          source_race_id?: string | null
           target_character_id?: string | null
           until_combat_end?: boolean
           value_mode?: string
@@ -168,23 +310,25 @@ export type Database = {
           character_id?: string
           created_at?: string
           damage_reduction_magic_level?: string | null
+          damage_reduction_magic_levels?: string[] | null
           damage_reduction_scope?: string
           damage_reduction_type_id?: string | null
-          damage_reduction_magic_levels?: string[] | null
           damage_reduction_type_ids?: string[] | null
           damage_scope?: string
           duration?: number
           duration_scope?: string
           effect_data?: Json
           effect_group_id?: string | null
-          is_end_effect?: boolean
           effect_type?: string
           id?: string
+          is_end_effect?: boolean
           name?: string
           polarity?: string
           source_character_ability_id?: string | null
-          source_race_id?: string | null
+          source_class_effect_index?: number | null
+          source_class_id?: string | null
           source_race_effect_index?: number | null
+          source_race_id?: string | null
           target_character_id?: string | null
           until_combat_end?: boolean
           value_mode?: string
@@ -205,10 +349,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "battle_effects_damage_reduction_type_id_fkey"
+            columns: ["damage_reduction_type_id"]
+            isOneToOne: false
+            referencedRelation: "damage_types"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "battle_effects_source_character_ability_id_fkey"
             columns: ["source_character_ability_id"]
             isOneToOne: false
             referencedRelation: "character_abilities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "battle_effects_source_class_id_fkey"
+            columns: ["source_class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
             referencedColumns: ["id"]
           },
           {
@@ -223,13 +381,6 @@ export type Database = {
             columns: ["target_character_id"]
             isOneToOne: false
             referencedRelation: "characters"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "battle_effects_damage_reduction_type_id_fkey"
-            columns: ["damage_reduction_type_id"]
-            isOneToOne: false
-            referencedRelation: "damage_types"
             referencedColumns: ["id"]
           },
         ]
@@ -317,67 +468,82 @@ export type Database = {
       }
       character_abilities: {
         Row: {
-          ability_id: string
+          ability_id: string | null
           can_activate: boolean
           character_id: string
           cooldown_remaining: number
           cooldown_turns: number
           created_at: string
+          custom_attributes: Json | null
           custom_state: Json
           description: string | null
           effects: Json
           end_effects: Json
-          self_target_only: boolean
+          granted_by_class_id: string | null
           granted_by_race_id: string | null
+          granted_by_transformation_id: string | null
           granted_by_virtue_id: string | null
+          granted_only_while_transformed: boolean
           id: string
-          is_passive: boolean
           is_magical: boolean
+          is_passive: boolean
           mana_cost: number
           name: string
+          once_per_battle: boolean
           passive_effects: Json
+          self_target_only: boolean
         }
         Insert: {
-          ability_id: string
+          ability_id?: string | null
           can_activate?: boolean
           character_id: string
           cooldown_remaining?: number
           cooldown_turns?: number
           created_at?: string
+          custom_attributes?: Json | null
           custom_state?: Json
           description?: string | null
           effects?: Json
           end_effects?: Json
-          self_target_only?: boolean
+          granted_by_class_id?: string | null
           granted_by_race_id?: string | null
+          granted_by_transformation_id?: string | null
           granted_by_virtue_id?: string | null
+          granted_only_while_transformed?: boolean
           id?: string
-          is_passive?: boolean
           is_magical?: boolean
+          is_passive?: boolean
           mana_cost?: number
           name: string
+          once_per_battle?: boolean
           passive_effects?: Json
+          self_target_only?: boolean
         }
         Update: {
-          ability_id?: string
+          ability_id?: string | null
           can_activate?: boolean
           character_id?: string
           cooldown_remaining?: number
           cooldown_turns?: number
           created_at?: string
+          custom_attributes?: Json | null
           custom_state?: Json
           description?: string | null
           effects?: Json
           end_effects?: Json
-          self_target_only?: boolean
+          granted_by_class_id?: string | null
           granted_by_race_id?: string | null
+          granted_by_transformation_id?: string | null
           granted_by_virtue_id?: string | null
+          granted_only_while_transformed?: boolean
           id?: string
-          is_passive?: boolean
           is_magical?: boolean
+          is_passive?: boolean
           mana_cost?: number
           name?: string
+          once_per_battle?: boolean
           passive_effects?: Json
+          self_target_only?: boolean
         }
         Relationships: [
           {
@@ -395,6 +561,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "character_abilities_granted_by_class_id_fkey"
+            columns: ["granted_by_class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "character_abilities_granted_by_race_id_fkey"
             columns: ["granted_by_race_id"]
             isOneToOne: false
@@ -402,10 +575,60 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "character_abilities_granted_by_transformation_id_fkey"
+            columns: ["granted_by_transformation_id"]
+            isOneToOne: false
+            referencedRelation: "transformations"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "character_abilities_granted_by_virtue_id_fkey"
             columns: ["granted_by_virtue_id"]
             isOneToOne: false
             referencedRelation: "virtues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      character_ability_battle_uses: {
+        Row: {
+          battle_id: string
+          character_ability_id: string
+          character_id: string
+          used_at: string
+        }
+        Insert: {
+          battle_id: string
+          character_ability_id: string
+          character_id: string
+          used_at?: string
+        }
+        Update: {
+          battle_id?: string
+          character_ability_id?: string
+          character_id?: string
+          used_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "character_ability_battle_uses_battle_id_fkey"
+            columns: ["battle_id"]
+            isOneToOne: false
+            referencedRelation: "battles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "character_ability_battle_uses_character_ability_id_fkey"
+            columns: ["character_ability_id"]
+            isOneToOne: false
+            referencedRelation: "character_abilities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "character_ability_battle_uses_character_id_fkey"
+            columns: ["character_id"]
+            isOneToOne: false
+            referencedRelation: "characters"
             referencedColumns: ["id"]
           },
         ]
@@ -455,10 +678,85 @@ export type Database = {
           },
         ]
       }
+      character_transformations: {
+        Row: {
+          activated_at: string | null
+          active: boolean
+          active_battle_id: string | null
+          active_duration_remaining: number
+          active_effect_group_id: string | null
+          applied_attribute_modifiers: Json
+          applied_body_delta: number
+          applied_sanity_delta: number
+          character_id: string
+          cooldown_remaining: number
+          image_path: string | null
+          transformation_id: string
+          updated_at: string
+        }
+        Insert: {
+          activated_at?: string | null
+          active?: boolean
+          active_battle_id?: string | null
+          active_duration_remaining?: number
+          active_effect_group_id?: string | null
+          applied_attribute_modifiers?: Json
+          applied_body_delta?: number
+          applied_sanity_delta?: number
+          character_id: string
+          cooldown_remaining?: number
+          image_path?: string | null
+          transformation_id: string
+          updated_at?: string
+        }
+        Update: {
+          activated_at?: string | null
+          active?: boolean
+          active_battle_id?: string | null
+          active_duration_remaining?: number
+          active_effect_group_id?: string | null
+          applied_attribute_modifiers?: Json
+          applied_body_delta?: number
+          applied_sanity_delta?: number
+          character_id?: string
+          cooldown_remaining?: number
+          image_path?: string | null
+          transformation_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "character_transformations_active_battle_id_fkey"
+            columns: ["active_battle_id"]
+            isOneToOne: false
+            referencedRelation: "battles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "character_transformations_character_id_fkey"
+            columns: ["character_id"]
+            isOneToOne: false
+            referencedRelation: "characters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "character_transformations_transformation_id_fkey"
+            columns: ["transformation_id"]
+            isOneToOne: false
+            referencedRelation: "transformations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       characters: {
         Row: {
           available_points: number
           body: number
+          class_attribute_allocations: Json
+          class_id: string | null
+          class_physical_allocations: Json
+          class_physical_points_granted: number
+          class_points_granted: number
           created_at: string
           description: string | null
           id: string
@@ -467,22 +765,27 @@ export type Database = {
           owner_id: string | null
           photo_path: string | null
           player_name: string
-          race_id: string | null
-          race_points_granted: number
           race_attribute_allocations: Json
-          race_physical_points_granted: number
+          race_id: string | null
           race_physical_allocations: Json
+          race_physical_points_granted: number
+          race_points_granted: number
           sanity: number
           updated_at: string
-          virtue_id: string | null
-          virtue_points_granted: number
           virtue_attribute_allocations: Json
-          virtue_physical_points_granted: number
+          virtue_id: string | null
           virtue_physical_allocations: Json
+          virtue_physical_points_granted: number
+          virtue_points_granted: number
         }
         Insert: {
           available_points?: number
           body?: number
+          class_attribute_allocations?: Json
+          class_id?: string | null
+          class_physical_allocations?: Json
+          class_physical_points_granted?: number
+          class_points_granted?: number
           created_at?: string
           description?: string | null
           id?: string
@@ -491,22 +794,27 @@ export type Database = {
           owner_id?: string | null
           photo_path?: string | null
           player_name?: string
-          race_id?: string | null
-          race_points_granted?: number
           race_attribute_allocations?: Json
-          race_physical_points_granted?: number
+          race_id?: string | null
           race_physical_allocations?: Json
+          race_physical_points_granted?: number
+          race_points_granted?: number
           sanity?: number
           updated_at?: string
-          virtue_id?: string | null
-          virtue_points_granted?: number
           virtue_attribute_allocations?: Json
-          virtue_physical_points_granted?: number
+          virtue_id?: string | null
           virtue_physical_allocations?: Json
+          virtue_physical_points_granted?: number
+          virtue_points_granted?: number
         }
         Update: {
           available_points?: number
           body?: number
+          class_attribute_allocations?: Json
+          class_id?: string | null
+          class_physical_allocations?: Json
+          class_physical_points_granted?: number
+          class_points_granted?: number
           created_at?: string
           description?: string | null
           id?: string
@@ -515,20 +823,27 @@ export type Database = {
           owner_id?: string | null
           photo_path?: string | null
           player_name?: string
-          race_id?: string | null
-          race_points_granted?: number
           race_attribute_allocations?: Json
-          race_physical_points_granted?: number
+          race_id?: string | null
           race_physical_allocations?: Json
+          race_physical_points_granted?: number
+          race_points_granted?: number
           sanity?: number
           updated_at?: string
-          virtue_id?: string | null
-          virtue_points_granted?: number
           virtue_attribute_allocations?: Json
-          virtue_physical_points_granted?: number
+          virtue_id?: string | null
           virtue_physical_allocations?: Json
+          virtue_physical_points_granted?: number
+          virtue_points_granted?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "characters_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "characters_owner_id_fkey"
             columns: ["owner_id"]
@@ -551,6 +866,108 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      class_abilities: {
+        Row: {
+          ability_id: string
+          class_id: string
+          created_at: string
+        }
+        Insert: {
+          ability_id: string
+          class_id: string
+          created_at?: string
+        }
+        Update: {
+          ability_id?: string
+          class_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "class_abilities_ability_id_fkey"
+            columns: ["ability_id"]
+            isOneToOne: false
+            referencedRelation: "abilities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "class_abilities_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      class_transformations: {
+        Row: {
+          class_id: string
+          created_at: string
+          transformation_id: string
+        }
+        Insert: {
+          class_id: string
+          created_at?: string
+          transformation_id: string
+        }
+        Update: {
+          class_id?: string
+          created_at?: string
+          transformation_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "class_transformations_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "class_transformations_transformation_id_fkey"
+            columns: ["transformation_id"]
+            isOneToOne: false
+            referencedRelation: "transformations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      classes: {
+        Row: {
+          bonus_points: number
+          created_at: string
+          description: string | null
+          id: string
+          modifiers: Json
+          name: string
+          physical_bonus_points: number
+          special_mechanics: Json
+          starting_effects: Json
+        }
+        Insert: {
+          bonus_points?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          modifiers?: Json
+          name: string
+          physical_bonus_points?: number
+          special_mechanics?: Json
+          starting_effects?: Json
+        }
+        Update: {
+          bonus_points?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          modifiers?: Json
+          name?: string
+          physical_bonus_points?: number
+          special_mechanics?: Json
+          starting_effects?: Json
+        }
+        Relationships: []
       }
       damage_over_time_templates: {
         Row: {
@@ -686,39 +1103,171 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      },
+      }
+      race_transformations: {
+        Row: {
+          race_id: string
+          transformation_id: string
+        }
+        Insert: {
+          race_id: string
+          transformation_id: string
+        }
+        Update: {
+          race_id?: string
+          transformation_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "race_transformations_race_id_fkey"
+            columns: ["race_id"]
+            isOneToOne: false
+            referencedRelation: "races"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "race_transformations_transformation_id_fkey"
+            columns: ["transformation_id"]
+            isOneToOne: false
+            referencedRelation: "transformations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       races: {
         Row: {
           bonus_points: number
-          physical_bonus_points: number
           created_at: string
           description: string | null
           id: string
           modifiers: Json
-          starting_effects: Json
           name: string
+          physical_bonus_points: number
+          special_mechanics: Json
+          starting_effects: Json
         }
         Insert: {
           bonus_points?: number
-          physical_bonus_points?: number
           created_at?: string
           description?: string | null
           id?: string
           modifiers?: Json
-          starting_effects?: Json
           name: string
+          physical_bonus_points?: number
+          special_mechanics?: Json
+          starting_effects?: Json
         }
         Update: {
           bonus_points?: number
-          physical_bonus_points?: number
           created_at?: string
           description?: string | null
           id?: string
           modifiers?: Json
-          starting_effects?: Json
           name?: string
+          physical_bonus_points?: number
+          special_mechanics?: Json
+          starting_effects?: Json
         }
         Relationships: []
+      }
+      transformation_abilities: {
+        Row: {
+          ability_id: string
+          created_at: string
+          only_while_transformed: boolean
+          transformation_id: string
+        }
+        Insert: {
+          ability_id: string
+          created_at?: string
+          only_while_transformed?: boolean
+          transformation_id: string
+        }
+        Update: {
+          ability_id?: string
+          created_at?: string
+          only_while_transformed?: boolean
+          transformation_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transformation_abilities_ability_id_fkey"
+            columns: ["ability_id"]
+            isOneToOne: false
+            referencedRelation: "abilities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transformation_abilities_transformation_id_fkey"
+            columns: ["transformation_id"]
+            isOneToOne: false
+            referencedRelation: "transformations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      transformations: {
+        Row: {
+          cooldown_turns: number
+          created_at: string
+          description: string | null
+          duration_turns: number
+          effects: Json
+          end_effects: Json
+          id: string
+          mana_cost: number
+          modifiers: Json
+          name: string
+          owner_character_id: string | null
+          source_transformation_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          cooldown_turns?: number
+          created_at?: string
+          description?: string | null
+          duration_turns?: number
+          effects?: Json
+          end_effects?: Json
+          id?: string
+          mana_cost?: number
+          modifiers?: Json
+          name: string
+          owner_character_id?: string | null
+          source_transformation_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          cooldown_turns?: number
+          created_at?: string
+          description?: string | null
+          duration_turns?: number
+          effects?: Json
+          end_effects?: Json
+          id?: string
+          mana_cost?: number
+          modifiers?: Json
+          name?: string
+          owner_character_id?: string | null
+          source_transformation_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transformations_owner_character_id_fkey"
+            columns: ["owner_character_id"]
+            isOneToOne: false
+            referencedRelation: "characters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transformations_source_transformation_id_fkey"
+            columns: ["source_transformation_id"]
+            isOneToOne: false
+            referencedRelation: "transformations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
@@ -770,34 +1319,64 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      },
+      }
+      virtue_transformations: {
+        Row: {
+          transformation_id: string
+          virtue_id: string
+        }
+        Insert: {
+          transformation_id: string
+          virtue_id: string
+        }
+        Update: {
+          transformation_id?: string
+          virtue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "virtue_transformations_transformation_id_fkey"
+            columns: ["transformation_id"]
+            isOneToOne: false
+            referencedRelation: "transformations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "virtue_transformations_virtue_id_fkey"
+            columns: ["virtue_id"]
+            isOneToOne: false
+            referencedRelation: "virtues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       virtues: {
         Row: {
           bonus_points: number
-          physical_bonus_points: number
           created_at: string
           description: string | null
           id: string
           modifiers: Json
           name: string
+          physical_bonus_points: number
         }
         Insert: {
           bonus_points?: number
-          physical_bonus_points?: number
           created_at?: string
           description?: string | null
           id?: string
           modifiers?: Json
           name: string
+          physical_bonus_points?: number
         }
         Update: {
           bonus_points?: number
-          physical_bonus_points?: number
           created_at?: string
           description?: string | null
           id?: string
           modifiers?: Json
           name?: string
+          physical_bonus_points?: number
         }
         Relationships: []
       }
@@ -806,81 +1385,165 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      advance_combat_turn: {
-        Args: {
-          _mana_regeneration_settings?: Json
-          _battle_id: string
-          _character_id?: string | null
-        }
-        Returns: number
-      }
       activate_character_ability: {
         Args: {
-          _battle_id?: string | null
+          _battle_id?: string
           _character_ability_id: string
+          _extra_mana_cost?: number
           _target_character_id: string
         }
         Returns: number
       }
+      activate_character_transformation: {
+        Args: {
+          _battle_id: string
+          _character_id: string
+          _transformation_id: string
+        }
+        Returns: Json
+      }
+      adjust_character_ability_custom_state_number: {
+        Args: {
+          _character_ability_id: string
+          _delta: number
+          _key: string
+          _minimum?: number
+        }
+        Returns: Json
+      }
+      adjust_character_hp_for_custom_damage: {
+        Args: { _character_id: string; _damage_delta: number }
+        Returns: number
+      }
+      advance_combat_turn: {
+        Args: {
+          _battle_id: string
+          _character_id?: string
+          _mana_regeneration_settings?: Json
+        }
+        Returns: number
+      }
+      apply_ability_healing: {
+        Args: {
+          _apply_debuff_changes?: boolean
+          _apply_resources?: boolean
+          _battle_id: string
+          _character_id: string
+          _config: Json
+        }
+        Returns: undefined
+      }
       apply_battle_damage: {
         Args: {
-          _battle_id: string | null
+          _battle_id: string
           _character_id: string
           _damage_kind: string
-          _damage_type_id: string | null
+          _damage_type_id: string
           _damage_values: Json
-          _magic_level: string | null
-          _source_character_id?: string | null
-          _physical_damage_type_id?: string | null
+          _magic_level: string
+          _physical_damage_type_id?: string
+          _source_character_id?: string
         }
         Returns: Json
       }
       apply_battle_damage_critical: {
         Args: {
-          _battle_id: string | null
+          _battle_id: string
           _character_id: string
           _damage_kind: string
-          _damage_type_id: string | null
+          _damage_type_id: string
           _damage_values: Json
-          _magic_level: string | null
-          _source_character_id?: string | null
-          _physical_damage_type_id?: string | null
+          _magic_level: string
+          _physical_damage_type_id?: string
+          _source_character_id?: string
         }
         Returns: Json
       }
-      trigger_damage_vulnerability_effects: {
+      apply_character_transformation_effects: {
         Args: {
-          _battle_id: string | null
+          _active_duration: number
+          _battle_id: string
           _character_id: string
-          _damage_kind: string
-          _physical_damage_type_id: string | null
-          _damage_type_id: string | null
-          _magic_level: string | null
-          _damage_total: number
+          _effect_group_id: string
+          _effects: Json
+          _is_end_effect: boolean
+          _transformation_id: string
         }
         Returns: number
       }
-      sync_coracao_corrompido_strength_effect_with_bonus: {
+      calculate_character_resource_max: {
         Args: {
+          _attribute_key: string
           _character_id: string
-          _bonus_strength: number
+          _exclude_battle_effect_id?: string
+          _exclude_character_ability_id?: string
+          _extra_active_effects?: Json
+          _extra_passive_effects?: Json
         }
+        Returns: number
+      }
+      can_read_character_photo: {
+        Args: { _photo_character_id: string }
+        Returns: boolean
+      }
+      character_has_no_mana: {
+        Args: { _character_id: string }
+        Returns: boolean
+      }
+      choose_character_class: {
+        Args: { _character_id: string; _class_id: string }
+        Returns: undefined
+      }
+      choose_character_race: {
+        Args: { _character_id: string; _race_id: string }
         Returns: undefined
       }
       choose_character_traits: {
         Args: { _character_id: string; _race_id: string; _virtue_id: string }
         Returns: undefined
       }
-      choose_character_race: {
-        Args: { _character_id: string; _race_id: string | null }
-        Returns: undefined
-      }
       choose_character_virtue: {
-        Args: { _character_id: string; _virtue_id: string | null }
+        Args: { _character_id: string; _virtue_id: string }
         Returns: undefined
       }
       choose_race: {
         Args: { _character_id: string; _race_id: string }
+        Returns: undefined
+      }
+      claim_ability_script_events: {
+        Args: { _batch_size?: number; _battle_id?: string }
+        Returns: {
+          ability_id: string | null
+          attempts: number
+          battle_id: string | null
+          character_ability_id: string | null
+          character_id: string
+          created_at: string
+          effect_id: string | null
+          error_message: string | null
+          event_type: string
+          id: string
+          locked_at: string | null
+          payload: Json
+          processed_at: string | null
+          queue_order: number
+          script_key: string
+          status: string
+          target_character_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "ability_script_events"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      end_character_transformation_internal: {
+        Args: {
+          _character_id: string
+          _force_standalone?: boolean
+          _transformation_id: string
+        }
         Returns: undefined
       }
       get_battle_character_public_states: {
@@ -899,13 +1562,9 @@ export type Database = {
         Returns: boolean
       }
       in_my_battle: { Args: { _battle_id: string }; Returns: boolean }
-      invest_points: {
-        Args: { _allocations: Json; _character_id: string }
-        Returns: undefined
-      }
-      invest_points_from_source: {
-        Args: { _allocations: Json; _character_id: string; _source: string }
-        Returns: undefined
+      increment_character_ability_custom_state_number: {
+        Args: { _character_ability_id: string; _delta: number; _key: string }
+        Returns: Json
       }
       invest_physical_points: {
         Args: { _allocations: Json; _character_id: string }
@@ -915,14 +1574,119 @@ export type Database = {
         Args: { _allocations: Json; _character_id: string; _source: string }
         Returns: undefined
       }
+      invest_points: {
+        Args: { _allocations: Json; _character_id: string }
+        Returns: undefined
+      }
+      invest_points_from_source: {
+        Args: { _allocations: Json; _character_id: string; _source: string }
+        Returns: undefined
+      }
+      merge_character_ability_custom_state: {
+        Args: { _character_ability_id: string; _patch: Json }
+        Returns: Json
+      }
+      queue_ability_script_event: {
+        Args: {
+          _battle_id?: string
+          _character_ability_id: string
+          _character_id: string
+          _effect_id?: string
+          _event_type: string
+          _payload?: Json
+          _target_character_id?: string
+        }
+        Returns: string
+      }
+      refresh_character_mana_for_no_mana: {
+        Args: { _character_id: string }
+        Returns: undefined
+      }
+      scale_character_resource_current: {
+        Args: {
+          _attribute_key: string
+          _character_id: string
+          _new_max: number
+          _old_max: number
+        }
+        Returns: undefined
+      }
+      scale_racial_virtue_effect_json: {
+        Args: { _multiplier: number; _value: Json }
+        Returns: Json
+      }
+      set_character_transformation_image: {
+        Args: {
+          _character_id: string
+          _image_path: string
+          _transformation_id: string
+        }
+        Returns: undefined
+      }
       shares_battle: { Args: { _character_id: string }; Returns: boolean }
+      sync_character_class_effects: {
+        Args: { _character_id: string }
+        Returns: undefined
+      }
+      sync_character_race_effects: {
+        Args: { _character_id: string }
+        Returns: undefined
+      }
+      sync_character_trait_abilities: {
+        Args: { _character_id: string }
+        Returns: undefined
+      }
+      sync_coracao_corrompido_strength_effect: {
+        Args: { _character_id: string }
+        Returns: undefined
+      }
+      sync_coracao_corrompido_strength_effect_internal: {
+        Args: { _bonus_strength?: number; _character_id: string }
+        Returns: undefined
+      }
+      sync_coracao_corrompido_strength_effect_with_bonus: {
+        Args: { _bonus_strength: number; _character_id: string }
+        Returns: undefined
+      }
       sync_my_role: {
         Args: never
         Returns: Database["public"]["Enums"]["app_role"]
       }
+      sync_race_ability_assignments: {
+        Args: { _race_id: string }
+        Returns: undefined
+      }
+      sync_transformation_ability_grants_for_character: {
+        Args: {
+          _active: boolean
+          _character_id: string
+          _transformation_id: string
+        }
+        Returns: undefined
+      }
+      sync_virtue_ability_assignments: {
+        Args: { _virtue_id: string }
+        Returns: undefined
+      }
       tick_character_ability_cooldowns: {
         Args: { _character_id: string }
         Returns: undefined
+      }
+      trigger_damage_vulnerability_effects: {
+        Args: {
+          _battle_id: string
+          _character_id: string
+          _damage_kind: string
+          _damage_total: number
+          _damage_type_id: string
+          _magic_level: string
+          _physical_damage_type_id: string
+        }
+        Returns: number
+      }
+      update_character_ability_custom_attributes: {
+        Args: { _character_ability_id: string; _custom_attributes: Json }
+        Returns: Json
       }
     }
     Enums: {
