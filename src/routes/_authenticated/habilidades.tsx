@@ -138,6 +138,23 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
       toast.error("Uma habilidade ativável precisa ter cooldown de pelo menos 1 turno. Marque como não ativável se não puder ser usada.");
       return;
     }
+    const effectiveAttackEnabled = canActivate && !selfTargetOnly && attackEnabled;
+    const needsPhysicalAttackType = attackDamage.damage_kind === "physical" || attackDamage.damage_kind === "hybrid";
+    const needsMagicalAttackType = attackDamage.damage_kind === "magical" || attackDamage.damage_kind === "hybrid";
+    const selectedPhysicalAttackTypeId = physicalDamageTypes.find((type) => type.id === attackDamage.physical_damage_type_id)?.id
+      ?? physicalDamageTypes[0]?.id
+      ?? null;
+    const selectedMagicalAttackTypeId = magicalDamageTypes.find((type) => type.id === attackDamage.damage_type_id)?.id
+      ?? magicalDamageTypes[0]?.id
+      ?? null;
+    if (effectiveAttackEnabled && needsPhysicalAttackType && !selectedPhysicalAttackTypeId) {
+      toast.error("Cadastre ou selecione pelo menos um tipo de dano físico antes de habilitar Atacar.");
+      return;
+    }
+    if (effectiveAttackEnabled && needsMagicalAttackType && !selectedMagicalAttackTypeId) {
+      toast.error("Cadastre ou selecione pelo menos um tipo de dano mágico antes de habilitar Atacar.");
+      return;
+    }
     const canTriggerEndEffects = effects.some((effect) =>
       effect.effect_type !== "healing" || effect.healing_timing === "per_turn"
     );
@@ -185,13 +202,13 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
       custom_attributes: customAttributes as unknown as Json,
       can_activate: canActivate,
       is_magical: isMagical,
-      attack_enabled: canActivate && !selfTargetOnly && attackEnabled,
+      attack_enabled: effectiveAttackEnabled,
       attack_damage: {
         ...attackDamage,
         attribute_percent: Math.max(0, Math.min(1000, Number(attackDamage.attribute_percent) || 0)),
         fixed_damage: Math.max(0, Math.min(1000000, Number(attackDamage.fixed_damage) || 0)),
-        physical_damage_type_id: attackDamage.physical_damage_type_id || physicalDamageTypes[0]?.id || null,
-        damage_type_id: attackDamage.damage_type_id || magicalDamageTypes[0]?.id || null,
+        physical_damage_type_id: selectedPhysicalAttackTypeId,
+        damage_type_id: selectedMagicalAttackTypeId,
       } as unknown as Json,
       once_per_battle: canActivate && oncePerBattle,
       self_target_only: canActivate && selfTargetOnly,
