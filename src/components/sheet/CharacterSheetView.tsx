@@ -38,7 +38,7 @@ export function CharacterSheetView({
   character, attrs, defs,
 }: { character: Character; attrs: CharacterAttr[]; defs: AttributeDef[] }) {
   const byKey = new Map(attrs.map((a) => [a.attribute_key, a]));
-  const { race, virtue, mods, raceModifiers, virtueModifiers } = useCharacterTraitMods(character.race_id, character.virtue_id);
+  const { race, virtue, classTrait, mods, raceModifiers, classModifiers, virtueModifiers } = useCharacterTraitMods(character.race_id, character.virtue_id, character.class_id);
   const { data: characterAbilities } = useCharacterAbilities(character.id);
   const { data: activeEffects = [] } = useCharacterActiveEffects(character.id);
   const passiveMods = passiveStatusModifiers(characterAbilities);
@@ -65,6 +65,9 @@ export function CharacterSheetView({
             {virtue && (
               <span className="panel px-3 py-1.5 text-xs uppercase tracking-wider text-gold">Virtude: {virtue.name}</span>
             )}
+            {classTrait && (
+              <span className="panel px-3 py-1.5 text-xs uppercase tracking-wider text-gold">Classe: {classTrait.name}</span>
+            )}
             <span className="panel tabular px-3 py-1.5 text-xs uppercase tracking-wider text-gold">
               {character.available_points} ponto{character.available_points === 1 ? "" : "s"} livre{character.available_points === 1 ? "" : "s"}
             </span>
@@ -80,6 +83,7 @@ export function CharacterSheetView({
               const rm = mods[d.key] ?? 0;
               const raceMod = raceModifiers[d.key] ?? 0;
               const virtueMod = virtueModifiers[d.key] ?? 0;
+              const classMod = classModifiers[d.key] ?? 0;
               const physicalPts = d.accepts_points ? physicalAttributePoints(character, d.key) : 0;
               const pts = (a?.points ?? 0) + (d.accepts_points ? rm + physicalPts : 0);
               const bonus = a?.bonus ?? 0;
@@ -102,7 +106,7 @@ export function CharacterSheetView({
                   <StatBar value={cur} max={max} tone={barTone(d.key)} />
                   {d.accepts_points && (
                     <div className="tabular mt-2 text-xs text-muted-foreground">
-                      {pts} pts{(raceMod !== 0 || virtueMod !== 0 || physicalPts !== 0) && <> ({raceMod !== 0 && <>{raceMod > 0 ? "+" : ""}{raceMod} raça</>}{raceMod !== 0 && virtueMod !== 0 && ", "}{virtueMod !== 0 && <>{virtueMod > 0 ? "+" : ""}{virtueMod} virtude</>}{(raceMod !== 0 || virtueMod !== 0) && physicalPts !== 0 && ", "}{physicalPts !== 0 && <span className="text-gold">+{physicalPts} físicos</span>})</>} · {base} por pontos{bonus !== 0 && <> · <span className={bonus > 0 ? "text-gold" : "text-destructive"}>{bonus > 0 ? "+" : ""}{bonus} buff/debuff</span></>}
+                      {pts} pts{(raceMod !== 0 || virtueMod !== 0 || classMod !== 0 || physicalPts !== 0) && <> ({raceMod !== 0 && <>{raceMod > 0 ? "+" : ""}{raceMod} raça</>}{raceMod !== 0 && virtueMod !== 0 && ", "}{virtueMod !== 0 && <>{virtueMod > 0 ? "+" : ""}{virtueMod} virtude</>}{(raceMod !== 0 || virtueMod !== 0) && classMod !== 0 && ", "}{classMod !== 0 && <>{classMod > 0 ? "+" : ""}{classMod} classe</>}{(raceMod !== 0 || virtueMod !== 0 || classMod !== 0) && physicalPts !== 0 && ", "}{physicalPts !== 0 && <span className="text-gold">+{physicalPts} físicos</span>})</>} · {base} por pontos{bonus !== 0 && <> · <span className={bonus > 0 ? "text-gold" : "text-destructive"}>{bonus > 0 ? "+" : ""}{bonus} buff/debuff</span></>}
                     </div>
                   )}
                 </div>
@@ -122,6 +126,7 @@ export function CharacterSheetView({
             const rm = mods[d.key] ?? 0;
             const raceMod = raceModifiers[d.key] ?? 0;
             const virtueMod = virtueModifiers[d.key] ?? 0;
+            const classMod = classModifiers[d.key] ?? 0;
             const physicalPts = d.accepts_points ? physicalAttributePoints(character, d.key) : 0;
             const pts = (a?.points ?? 0) + (d.accepts_points ? rm + physicalPts : 0);
             const bonus = a?.bonus ?? 0;
