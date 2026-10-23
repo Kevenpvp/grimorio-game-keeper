@@ -410,7 +410,7 @@ export function CharacterAbilitiesPanel({
 
   function copyDiceValue(value: string) {
     void navigator.clipboard.writeText(value)
-      .then(() => toast.success(`Copiado: ${value}`))
+      .then(() => toast.success("Dado copiado"))
       .catch(() => toast.error("Não foi possível copiar o dado"));
   }
 
