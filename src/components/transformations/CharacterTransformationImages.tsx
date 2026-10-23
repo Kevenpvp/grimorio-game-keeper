@@ -49,7 +49,7 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
       return data ?? [];
     },
   });
-  const { data: raceLinks = [], isLoading: loadingRaces } = useQuery<Array<{ transformation_id: string }>>({
+  const { data: raceLinks = [], isLoading: loadingRaces, error: raceLinksError } = useQuery<Array<{ transformation_id: string }>>({
     queryKey: ["race-transformations", character.race_id],
     enabled: !!character.race_id,
     queryFn: async () => {
@@ -58,7 +58,7 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
       return data ?? [];
     },
   });
-  const { data: virtueLinks = [], isLoading: loadingVirtues } = useQuery<Array<{ transformation_id: string }>>({
+  const { data: virtueLinks = [], isLoading: loadingVirtues, error: virtueLinksError } = useQuery<Array<{ transformation_id: string }>>({
     queryKey: ["virtue-transformations", character.virtue_id],
     enabled: !!character.virtue_id,
     queryFn: async () => {
@@ -76,7 +76,8 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
     },
   });
 
-  const availableIds = new Set([...raceLinks, ...virtueLinks].map((link) => link.transformation_id));
+  // Include trait grants, personal transformations, and any transformation state already attached to this character.
+  const availableIds = new Set([...raceLinks, ...virtueLinks, ...states].map((link) => link.transformation_id));
   const available = catalog.filter((transformation) => availableIds.has(transformation.id) || transformation.owner_character_id === character.id);
   async function createPersonalTransformation() {
     const name = newTransformationName.trim();
@@ -117,10 +118,12 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
     <section className="panel space-y-4 p-4">
       <div className="flex items-center gap-2">
         <ImagePlus className="h-5 w-5 text-gold" />
-        <h2 className="text-lg text-gold">Imagens das transformações</h2>
+        <h2 className="text-lg text-gold">{isMaster ? "Transformações e imagens da ficha" : "Transformações que você possui"}</h2>
       </div>
       <p className="text-sm text-muted-foreground">
-        Escolha uma imagem para cada transformação da ficha. Você também pode criar uma transformação exclusiva deste personagem, sem adicioná-la ao catálogo geral.
+        {isMaster
+          ? "Veja as transformações disponíveis nesta ficha, escolha uma imagem para cada uma e crie transformações exclusivas do personagem."
+          : "Aqui aparecem as transformações concedidas pela sua raça ou virtude, as transformações exclusivas da sua ficha e o estado de cada uma."}
       </p>
       <div className="flex flex-col gap-2 rounded-md border border-gold/30 p-3 sm:flex-row">
         <Input value={newTransformationName} onChange={(event) => setNewTransformationName(event.target.value)} placeholder="Nome da transformação exclusiva" />
@@ -128,12 +131,18 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
           <Sparkles className="mr-1 h-4 w-4" /> {creatingTransformation ? "Criando..." : "Criar transformação"}
         </Button>
       </div>
-      {statesError && <p className="text-sm text-destructive">Não foi possível carregar as imagens: {String(statesError.message ?? statesError)}</p>}
+      {(statesError || raceLinksError || virtueLinksError) && (
+        <p className="text-sm text-destructive">
+          Não foi possível carregar todas as transformações: {String(statesError?.message ?? raceLinksError?.message ?? virtueLinksError?.message ?? "erro desconhecido")}
+        </p>
+      )}
       {busy ? (
         <p className="text-sm text-muted-foreground">Carregando transformações…</p>
       ) : available.length === 0 ? (
         <p className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
-          Nenhuma transformação foi concedida pela raça ou virtude desta ficha ainda.
+          {isMaster
+            ? "Nenhuma transformação disponível nesta ficha. Vincule transformações à raça/virtude ou crie uma transformação exclusiva."
+            : "Você ainda não possui transformações vinculadas à sua raça, virtude ou ficha. Peça ao mestre para conceder uma."}
         </p>
       ) : (
         <div className="grid gap-3 md:grid-cols-2">
