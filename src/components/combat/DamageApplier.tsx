@@ -578,7 +578,7 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
           </div>
         </details>
       )}
-      <Button disabled={applyingDamage
+      <Button disabled={applyingDamage || applyingEffectsOnly
         || (needsMagic && (!selectedMagicDamageTypeId || magicalDamageTypes.length === 0))
         || (needsPhysical && physicalDamageTypes.length > 0 && !selectedPhysicalDamageTypeId)
         || (loadingTypes && (needsMagic || needsPhysical))}
