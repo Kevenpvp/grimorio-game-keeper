@@ -446,6 +446,7 @@ export function CharacterAbilitiesManager({ characterId }: { characterId: string
       effects: ability.effects,
       passive_effects: ability.passive_effects,
       end_effects: ability.end_effects,
+      once_per_battle: Boolean((ability as Ability & { once_per_battle?: boolean }).once_per_battle),
     });
     if (error) { toast.error(error.message); return; }
     toast.success(`${ability.name} adicionada à ficha`);
