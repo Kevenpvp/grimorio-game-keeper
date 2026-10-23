@@ -577,6 +577,14 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
       void dispatchCustomAbilityScriptEvents(battle.id);
 
       const confirmedTurn = Number(nextTurn);
+      // Cooldowns are part of character_abilities, not the battle snapshot. Refresh them
+      // immediately after the server confirms the turn instead of waiting for the
+      // coalesced Realtime batch below.
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["character-abilities"] }),
+        qc.invalidateQueries({ queryKey: ["character-abilities-battle"] }),
+      ]);
+
       if (Number.isFinite(confirmedTurn)) {
         // Stop an older Realtime-triggered read from overwriting this newly confirmed counter.
         await qc.cancelQueries({ queryKey: ["battles"] });
