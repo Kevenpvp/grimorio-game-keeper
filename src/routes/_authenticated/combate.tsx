@@ -33,7 +33,7 @@ export const Route = createFileRoute("/_authenticated/combate")({
 });
 
 type Attr = { attribute_key: string; current_value: number; max_value: number; points: number; bonus: number };
-type BattleEffect = { id: string; battle_id: string | null; character_id: string; name: string; effect_type: 'status' | 'regeneration' | 'mana_used' | 'no_regen_hp' | 'no_regen_mana' | 'magic_prohibition' | 'no_mana' | 'stun' | 'damage_dealt' | 'damage_reduction' | 'healing' | 'invincible' | 'healing_blocked' | 'damage_vulnerability' | 'damage_over_time'; attribute_key: string | null; polarity: 'buff' | 'debuff'; value_mode: 'percent' | 'fixed'; amount: number; duration: number; duration_scope: 'individual' | 'global'; until_combat_end: boolean; effect_data?: Json; damage_scope?: 'any' | 'physical' | 'magical'; damage_reduction_scope?: 'physical' | 'magical'; damage_reduction_type_id?: string | null; damage_reduction_magic_level?: 'baixa' | 'media' | 'alta' | null; damage_reduction_type_ids?: string[] | null; damage_reduction_magic_levels?: ('baixa' | 'media' | 'alta')[] | null; source_character_ability_id?: string | null; source_race_id?: string | null; source_race_effect_index?: number | null; source_class_id?: string | null; source_class_effect_index?: number | null; effect_group_id?: string | null; is_end_effect?: boolean };
+type BattleEffect = { id: string; battle_id: string | null; character_id: string; name: string; effect_type: 'status' | 'regeneration' | 'mana_used' | 'no_regen_hp' | 'no_regen_mana' | 'magic_prohibition' | 'no_mana' | 'stun' | 'damage_dealt' | 'damage_reduction' | 'healing' | 'invincible' | 'healing_blocked' | 'damage_vulnerability' | 'damage_over_time' | 'mind_control' | 'mental_control_immunity' | 'mental_control_chance' | 'mental_control_resistance' | 'dot_immunity' | 'invisibility'; attribute_key: string | null; polarity: 'buff' | 'debuff'; value_mode: 'percent' | 'fixed'; amount: number; duration: number; duration_scope: 'individual' | 'global'; until_combat_end: boolean; effect_data?: Json; damage_scope?: 'any' | 'physical' | 'magical'; damage_reduction_scope?: 'physical' | 'magical'; damage_reduction_type_id?: string | null; damage_reduction_magic_level?: 'baixa' | 'media' | 'alta' | null; damage_reduction_type_ids?: string[] | null; damage_reduction_magic_levels?: ('baixa' | 'media' | 'alta')[] | null; source_character_ability_id?: string | null; source_race_id?: string | null; source_race_effect_index?: number | null; source_class_id?: string | null; source_class_effect_index?: number | null; effect_group_id?: string | null; is_end_effect?: boolean };
 function damageReductionSummary(effect: BattleEffect, damageTypes: { id: string; name: string }[]) {
   const selectedTypeIds = effect.damage_reduction_type_ids ?? (effect.damage_reduction_type_id ? [effect.damage_reduction_type_id] : []);
   const selectedLevels = effect.damage_reduction_magic_levels ?? (effect.damage_reduction_magic_level ? [effect.damage_reduction_magic_level] : []);
@@ -891,7 +891,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
       </div>
 
             {isMaster && (actor ? (
-        <Actions battleId={battle.id} actor={actor} targets={targets} fighters={fighters} defs={defs} val={val} />
+        <Actions battleId={battle.id} actor={actor} targets={targets} fighters={fighters} defs={defs} val={val} effects={effects} abilitiesOf={abilitiesOf} />
       ) : (
         <p className="text-sm text-muted-foreground">Selecione a opção "Vez" de um personagem para abrir as ações e o teste de esquiva.</p>
       ))}
@@ -1272,13 +1272,215 @@ function BattleAdmin({ battle, fighters, onUpdate }: {
 
 type Roll = { title: string; lines: { who: string; dice: string; detail: string }[] };
 
-function Actions({ battleId, actor, targets, fighters, defs, val }: {
+function MindControlPanel({ battleId, actor, fighters, selectedTargets, effects, abilitiesOf, val }: {
+  battleId: string;
+  actor: Fighter;
+  fighters: Fighter[];
+  selectedTargets: Fighter[];
+  effects: BattleEffect[];
+  abilitiesOf: (fighterId: string) => Array<{ passive_effects?: Array<{ effect_type: string; polarity: string; value_mode: string; amount: number }> }>;
+  val: (f: Fighter, k: string) => number;
+}) {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [selections, setSelections] = useState<Record<string, { selected: boolean; controlled: boolean; duration: string }>>({});
+  const candidates = fighters.filter((fighter) => fighter.id !== actor.id);
+  const activeFor = (characterId: string) => effects.filter((effect) => effect.character_id === characterId && Number(effect.duration) > 0);
+  const passiveFor = (characterId: string) => abilitiesOf(characterId).flatMap((ability) => ability.passive_effects ?? []);
+  const immune = (target: Fighter) =>
+    activeFor(target.id).some((effect) => effect.effect_type === "mental_control_immunity") ||
+    passiveFor(target.id).some((effect) => effect.effect_type === "mental_control_immunity");
+
+  function resistanceFor(target: Fighter) {
+    const controllerModifiers = [
+      ...activeFor(actor.id).filter((effect) => effect.effect_type === "mental_control_chance"),
+      ...passiveFor(actor.id).filter((effect) => effect.effect_type === "mental_control_chance"),
+    ];
+    const targetModifiers = [
+      ...activeFor(target.id).filter((effect) => effect.effect_type === "mental_control_resistance"),
+      ...passiveFor(target.id).filter((effect) => effect.effect_type === "mental_control_resistance"),
+    ];
+    const amount = (effect: { amount: number }) => Math.max(0, Number(effect.amount) || 0);
+    // Os percentuais se acumulam multiplicativamente, em vez de serem somados.
+    const remainingFraction = controllerModifiers
+      .filter((effect) => effect.value_mode === "percent")
+      .reduce((factor, effect) => factor * (1 - Math.min(95, amount(effect)) / 100), 1);
+    const fixedReduction = controllerModifiers
+      .filter((effect) => effect.value_mode !== "percent")
+      .reduce((sum, effect) => sum + amount(effect), 0);
+    const base = Math.max(0, Math.floor(val(target, "mental") / 10));
+    const afterPower = Math.max(0, Math.floor(base * remainingFraction) - fixedReduction);
+    const resistanceMultiplier = Math.min(10, targetModifiers
+      .filter((effect) => effect.value_mode === "percent")
+      .reduce((factor, effect) => factor * (1 + Math.min(500, amount(effect)) / 100), 1));
+    const fixedResistance = targetModifiers
+      .filter((effect) => effect.value_mode !== "percent")
+      .reduce((sum, effect) => sum + amount(effect), 0);
+    const modifier = Math.max(0, Math.floor(afterPower * resistanceMultiplier) + fixedResistance);
+    const sides = 20 + Math.floor(modifier / 20) * 10;
+    return {
+      base,
+      afterPower,
+      modifier,
+      sides,
+      die: "1d" + sides + "+" + modifier,
+      multiplier: resistanceMultiplier,
+      fixedResistance,
+      immune: immune(target),
+    };
+  }
+
+  function showDialog() {
+    const next: Record<string, { selected: boolean; controlled: boolean; duration: string }> = {};
+    for (const target of candidates) {
+      next[target.id] = {
+        selected: selectedTargets.some((selected) => selected.id === target.id),
+        controlled: false,
+        duration: "2",
+      };
+    }
+    setSelections(next);
+    setOpen(true);
+  }
+
+  async function confirmResults() {
+    const chosen = candidates
+      .filter((target) => selections[target.id]?.selected)
+      .map((target) => {
+        const selection = selections[target.id];
+        return {
+          target_id: target.id,
+          controlled: selection?.controlled === true,
+          duration: Number(selection?.duration ?? 2),
+        };
+      });
+    if (chosen.length === 0) {
+      toast.error("Selecione pelo menos um alvo para Controle Mental.");
+      return;
+    }
+    for (const selection of chosen) {
+      const target = candidates.find((fighter) => fighter.id === selection.target_id)!;
+      if (selection.controlled && immune(target)) {
+        toast.error(target.name + " está imune a Controle Mental.");
+        return;
+      }
+      if (selection.controlled && (!Number.isInteger(selection.duration) || selection.duration < 1 || selection.duration > 1000)) {
+        toast.error("A duração do Controle Mental deve ser um inteiro entre 1 e 1000 turnos.");
+        return;
+      }
+    }
+    setBusy(true);
+    try {
+      const { data, error } = await (supabase as any).rpc("apply_mind_control_effects", {
+        _battle_id: battleId,
+        _controller_character_id: actor.id,
+        _target_selections: chosen,
+      });
+      if (error) throw error;
+      const count = Number(data ?? 0);
+      toast.success(count > 0 ? "Controle Mental aplicado a " + count + " alvo(s)." : "Nenhum controle confirmado; nenhum efeito foi aplicado.");
+      setOpen(false);
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["battle-effects", battleId] }),
+        qc.invalidateQueries({ queryKey: ["battles"] }),
+        qc.invalidateQueries({ queryKey: ["character-active-effects"] }),
+      ]);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível aplicar Controle Mental.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button variant="outline" onClick={showDialog} disabled={!candidates.length || busy}>
+          <Brain className="mr-1 h-4 w-4" /> Controle Mental
+        </Button>
+        <span className="text-xs text-muted-foreground">Resistência: 1d20 + Força Mental ÷ 10; o dado escala com o modificador.</span>
+      </div>
+      {open && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-3" role="presentation">
+          <section role="dialog" aria-modal="true" aria-labelledby="mind-control-title" className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-xl border border-border bg-background p-4 shadow-2xl sm:p-6">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 id="mind-control-title" className="flex items-center gap-2 text-xl text-gold"><Brain className="h-5 w-5" /> Controle Mental — {actor.name}</h2>
+                <p className="mt-1 text-sm text-muted-foreground">Marque os alvos, confira os dados para resistir e confirme separadamente quais foram controlados. O resultado final é decidido pelo mestre.</p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setOpen(false)} disabled={busy}>Fechar</Button>
+            </div>
+            <div className="mt-4 space-y-3">
+              {candidates.map((target) => {
+                const state = selections[target.id] ?? { selected: false, controlled: false, duration: "2" };
+                const resistance = resistanceFor(target);
+                return (
+                  <div key={target.id} className={"rounded-lg border p-3 " + (state.selected ? "border-gold/60 bg-gold/5" : "border-border")}>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+                      <label className="flex min-w-0 flex-1 items-start gap-2">
+                        <input type="checkbox" className="mt-1" checked={state.selected} disabled={busy} onChange={(event) => setSelections((current) => ({
+                          ...current,
+                          [target.id]: { ...state, selected: event.target.checked, controlled: event.target.checked ? state.controlled : false },
+                        }))} />
+                        <span><span className="font-semibold">{target.name}</span><span className="block text-xs text-muted-foreground">Força Mental: {val(target, "mental")} → modificador base +{resistance.base}</span></span>
+                      </label>
+                      <div className="sm:min-w-40">
+                        <div className="text-xs text-muted-foreground">Dado para resistir</div>
+                        <div className="font-display text-2xl text-gold">{resistance.die}</div>
+                      </div>
+                    </div>
+                    <div className="mt-2 text-xs text-muted-foreground">
+                      {resistance.immune
+                        ? "Imunidade ativa: este alvo não pode receber Controle Mental."
+                        : "Modificador após Potência de Controle Mental: +" + resistance.afterPower + "; resistência percentual ×" + resistance.multiplier.toFixed(2) + "; resistência fixa +" + resistance.fixedResistance + ". Em +20 o dado passa a 1d30; a cada +20 adicionais, ganha mais 10 faces."}
+                    </div>
+                    {state.selected && (
+                      <div className="mt-3 grid gap-3 border-t border-border/70 pt-3 sm:grid-cols-[1fr_160px]">
+                        <label className="flex items-start gap-2 text-sm">
+                          <input type="checkbox" className="mt-1" checked={state.controlled} disabled={busy || resistance.immune} onChange={(event) => setSelections((current) => ({
+                            ...current,
+                            [target.id]: { ...state, controlled: event.target.checked },
+                          }))} />
+                          <span><span className="font-medium">O mestre confirma que foi controlado</span><span className="block text-xs text-muted-foreground">Só marcar esta opção aplicará o efeito.</span></span>
+                        </label>
+                        {state.controlled && (
+                          <label className="space-y-1 text-xs font-medium">
+                            Duração do controle (turnos)
+                            <Input type="number" min={1} max={1000} step={1} value={state.duration} disabled={busy} onChange={(event) => setSelections((current) => ({
+                              ...current,
+                              [target.id]: { ...state, duration: event.target.value },
+                            }))} />
+                          </label>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-4 flex flex-col-reverse justify-end gap-2 sm:flex-row">
+              <Button variant="outline" onClick={() => setOpen(false)} disabled={busy}>Cancelar</Button>
+              <Button onClick={() => void confirmResults()} disabled={busy || !candidates.some((target) => selections[target.id]?.selected)}>
+                {busy ? "Aplicando controle..." : "Confirmar resultados e aplicar efeitos"}
+              </Button>
+            </div>
+          </section>
+        </div>
+      )}
+    </>
+  );
+}
+
+function Actions({ battleId, actor, targets, fighters, defs, val, effects, abilitiesOf }: {
   battleId: string;
   actor: Fighter;
   targets: Fighter[];
   fighters: Fighter[];
   defs: AttributeDef[];
   val: (f: Fighter, k: string) => number;
+  effects: BattleEffect[];
+  abilitiesOf: (fighterId: string) => Array<{ passive_effects?: Array<{ effect_type: string; polarity: string; value_mode: string; amount: number }> }>;
 }) {
   const [roll, setRoll] = useState<Roll | null>(null);
   const [testKey, setTestKey] = useState("strength");
@@ -1355,6 +1557,7 @@ function Actions({ battleId, actor, targets, fighters, defs, val }: {
     <div className="space-y-4">
       <div className="panel space-y-4 p-4">
         <h2 className="text-xl text-gold">Ações de {actor.name}</h2>
+        <MindControlPanel battleId={battleId} actor={actor} fighters={fighters} selectedTargets={targets} effects={effects} abilitiesOf={abilitiesOf} val={val} />
         {targets.length > 0 && (
           <>
             <div className="rounded-md border border-border p-3">
