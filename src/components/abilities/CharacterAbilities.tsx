@@ -376,7 +376,11 @@ export function CharacterAbilitiesManager({ characterId }: { characterId: string
   const { data: assigned = [], isLoading: assignedLoading } = useCharacterAbilities(characterId);
   const { data: defs } = useDefs();
   const [expanded, setExpanded] = useState(true);
-  const assignedIds = new Set(assigned.map((ability) => ability.ability_id));
+  const [customName, setCustomName] = useState("");
+  const [customDescription, setCustomDescription] = useState("");
+  const [creatingCustom, setCreatingCustom] = useState(false);
+  const db = supabase as any;
+  const assignedIds = new Set(assigned.map((ability) => ability.ability_id).filter(Boolean));
   const available = allAbilities.filter((ability) => !assignedIds.has(ability.id));
 
   async function give(ability: Ability) {
@@ -398,6 +402,38 @@ export function CharacterAbilitiesManager({ characterId }: { characterId: string
     });
     if (error) { toast.error(error.message); return; }
     toast.success(`${ability.name} adicionada à ficha`);
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ["character-abilities", characterId] }),
+      qc.invalidateQueries({ queryKey: ["character-abilities-battle"] }),
+    ]);
+  }
+
+  async function createCustomAbility() {
+    const cleanName = customName.trim();
+    if (!cleanName) { toast.error("Informe o nome da habilidade exclusiva"); return; }
+    setCreatingCustom(true);
+    const { error } = await db.from("character_abilities").insert({
+      character_id: characterId,
+      ability_id: null,
+      name: cleanName,
+      description: customDescription.trim() || null,
+      can_activate: true,
+      self_target_only: false,
+      is_magical: true,
+      is_passive: false,
+      cooldown_turns: 1,
+      cooldown_remaining: 0,
+      mana_cost: 0,
+      effects: [],
+      passive_effects: [],
+      end_effects: [],
+      once_per_battle: false,
+    });
+    setCreatingCustom(false);
+    if (error) { toast.error(error.message); return; }
+    setCustomName("");
+    setCustomDescription("");
+    toast.success("Habilidade exclusiva criada nesta ficha");
     await Promise.all([
       qc.invalidateQueries({ queryKey: ["character-abilities", characterId] }),
       qc.invalidateQueries({ queryKey: ["character-abilities-battle"] }),
@@ -426,6 +462,17 @@ export function CharacterAbilitiesManager({ characterId }: { characterId: string
       </div>
       {expanded && (
         <div className="space-y-4">
+          <div className="space-y-2 rounded-md border border-gold/30 p-3">
+            <Label>Habilidade exclusiva deste personagem</Label>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Input value={customName} onChange={(event) => setCustomName(event.target.value)} placeholder="Nome da habilidade" />
+              <Input value={customDescription} onChange={(event) => setCustomDescription(event.target.value)} placeholder="Descrição (opcional)" />
+            </div>
+            <Button size="sm" onClick={() => void createCustomAbility()} disabled={creatingCustom}>
+              <Plus className="mr-1 h-3.5 w-3.5" /> {creatingCustom ? "Criando..." : "Criar habilidade exclusiva"}
+            </Button>
+            <p className="text-xs text-muted-foreground">Ela existe apenas nesta ficha e pode ser configurada abaixo, sem entrar no catálogo geral.</p>
+          </div>
           {catalogLoading || assignedLoading ? <p className="text-sm text-muted-foreground">Carregando habilidades…</p> : available.length > 0 ? (
             <div className="space-y-2">
               <Label>Adicionar do catálogo</Label>
@@ -454,6 +501,7 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
   const [name, setName] = useState(ability.name);
   const [description, setDescription] = useState(ability.description ?? "");
   const [canActivate, setCanActivate] = useState(ability.can_activate);
+  const [oncePerBattle, setOncePerBattle] = useState(Boolean((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle));
   const [isMagical, setIsMagical] = useState(ability.is_magical);
   const [selfTargetOnly, setSelfTargetOnly] = useState(ability.self_target_only);
   const [cooldown, setCooldown] = useState(String(ability.cooldown_turns));
@@ -468,6 +516,7 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
     setName(ability.name);
     setDescription(ability.description ?? "");
     setCanActivate(ability.can_activate);
+    setOncePerBattle(Boolean((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle));
     setIsMagical(ability.is_magical);
     setSelfTargetOnly(ability.self_target_only);
     setCooldown(String(ability.cooldown_turns));
@@ -505,8 +554,10 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
       return;
     }
     setBusy(true);
-    const { error } = await supabase.from("character_abilities").update({
+    const db = supabase as any;
+    const { error } = await db.from("character_abilities").update({
       name: name.trim(),
+      once_per_battle: canActivate && oncePerBattle,
       description: description.trim() || null,
       can_activate: canActivate,
       is_magical: isMagical,
@@ -594,6 +645,12 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
           <label className="flex min-h-10 items-center gap-2 rounded-md border border-border px-3 py-2 text-sm sm:col-span-2">
             <input type="checkbox" checked={selfTargetOnly} onChange={(e) => setSelfTargetOnly(e.target.checked)} />
             Só pode ser usada no próprio personagem
+          </label>
+        )}
+        {canActivate && (
+          <label className="flex min-h-10 items-center gap-2 rounded-md border border-border px-3 py-2 text-sm sm:col-span-2">
+            <input type="checkbox" checked={oncePerBattle} onChange={(e) => setOncePerBattle(e.target.checked)} />
+            Só pode ser usada 1 vez por combate
           </label>
         )}
         {canActivate && <div className="space-y-1"><Label>Custo base de Mana</Label><Input type="number" min="0" value={manaCost} onChange={(e) => setManaCost(e.target.value)} /></div>}
