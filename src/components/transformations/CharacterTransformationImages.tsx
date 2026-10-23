@@ -7,8 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
-import { parseAbilityEffects, useAbilities, type AbilityEffectDefinition } from "@/lib/abilities";
-import { useDefs } from "@/lib/sheets";
+import { effectSummary, parseAbilityEffects, useAbilities, useDamageTypes, type AbilityEffectDefinition } from "@/lib/abilities";
+import { useDefs, useRaces } from "@/lib/sheets";
 import type { Json } from "@/integrations/supabase/types";
 import { supabase } from "@/integrations/supabase/client";
 import { usePhotoUrl, type Character } from "@/lib/sheets";
@@ -41,6 +41,8 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
   }, [character.id, qc]);
 
   const { data: defs = [] } = useDefs();
+  const { data: damageTypes = [] } = useDamageTypes();
+  const { data: races = [] } = useRaces();
   const { data: catalog = [], isLoading: loadingCatalog } = useQuery<Transformation[]>({
     queryKey: ["transformations", "character-transformation-images", character.id],
     queryFn: async () => {
@@ -125,12 +127,14 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
           ? "Veja as transformações disponíveis nesta ficha, escolha uma imagem para cada uma e crie transformações exclusivas do personagem."
           : "Aqui aparecem as transformações concedidas pela sua raça ou virtude, as transformações exclusivas da sua ficha e o estado de cada uma."}
       </p>
-      <div className="flex flex-col gap-2 rounded-md border border-gold/30 p-3 sm:flex-row">
-        <Input value={newTransformationName} onChange={(event) => setNewTransformationName(event.target.value)} placeholder="Nome da transformação exclusiva" />
-        <Button type="button" onClick={() => void createPersonalTransformation()} disabled={creatingTransformation || !newTransformationName.trim()}>
-          <Sparkles className="mr-1 h-4 w-4" /> {creatingTransformation ? "Criando..." : "Criar transformação"}
-        </Button>
-      </div>
+      {isMaster && (
+        <div className="flex flex-col gap-2 rounded-md border border-gold/30 p-3 sm:flex-row">
+          <Input value={newTransformationName} onChange={(event) => setNewTransformationName(event.target.value)} placeholder="Nome da transformação exclusiva" />
+          <Button type="button" onClick={() => void createPersonalTransformation()} disabled={creatingTransformation || !newTransformationName.trim()}>
+            <Sparkles className="mr-1 h-4 w-4" /> {creatingTransformation ? "Criando..." : "Criar transformação"}
+          </Button>
+        </div>
+      )}
       {(statesError || raceLinksError || virtueLinksError) && (
         <p className="text-sm text-destructive">
           Não foi possível carregar todas as transformações: {String(statesError?.message ?? raceLinksError?.message ?? virtueLinksError?.message ?? "erro desconhecido")}
@@ -181,6 +185,8 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
               grantedByVirtue={virtueLinks.some((link) => link.transformation_id === transformation.id)}
               hasCharacterState={states.some((entry) => entry.transformation_id === transformation.id)}
               defs={defs}
+              damageTypes={damageTypes}
+              races={races}
               onSaved={async () => {
                 await Promise.all([
                   qc.invalidateQueries({ queryKey: ["character-transformations", character.id] }),
@@ -196,7 +202,7 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
 }
 
 function TransformationImageCard({
-  characterId, transformation, state, onSaved, isPersonal, grantedByRace, grantedByVirtue, hasCharacterState, defs,
+  characterId, transformation, state, onSaved, isMaster, isPersonal, grantedByRace, grantedByVirtue, hasCharacterState, defs, damageTypes, races,
 }: {
   characterId: string;
   transformation: Transformation;
@@ -207,6 +213,8 @@ function TransformationImageCard({
   grantedByVirtue: boolean;
   hasCharacterState: boolean;
   defs: NonNullable<ReturnType<typeof useDefs>["data"]>;
+  damageTypes: NonNullable<ReturnType<typeof useDamageTypes>["data"]>;
+  races: NonNullable<ReturnType<typeof useRaces>["data"]>;
   onSaved: () => Promise<void>;
 }) {
   const db = supabase as any;
@@ -228,7 +236,6 @@ function TransformationImageCard({
   const [abilityGrants, setAbilityGrants] = useState<Array<{ ability_id: string; only_while_transformed: boolean }>>([]);
   const { data: savedAbilityGrants = [] } = useQuery<Array<{ ability_id: string; only_while_transformed: boolean }>>({
     queryKey: ["transformation-abilities", transformation.id],
-    enabled: isPersonal,
     queryFn: async () => {
       const { data, error } = await db.from("transformation_abilities").select("ability_id,only_while_transformed").eq("transformation_id", transformation.id);
       if (error) throw error;
@@ -338,29 +345,82 @@ function TransformationImageCard({
             {!grantedByRace && !grantedByVirtue && !isPersonal && hasCharacterState && <span className="rounded bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">Vinculada à ficha</span>}
           </div>
           {state?.active && <p className="mt-1 text-xs font-semibold text-emerald-500">Transformação ativa · {state.cooldown_remaining} turno(s)</p>}
+          {transformation.description && <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">{transformation.description}</p>}
+        </div>
+        <div className="w-full space-y-3 border-t border-border pt-3">
+          <div className="space-y-1.5">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-gold">Modificadores de atributos</h4>
+            {(() => {
+              const raw = transformation.modifiers;
+              const entries = raw && typeof raw === "object" && !Array.isArray(raw)
+                ? Object.entries(raw as Record<string, unknown>).map(([key, value]) => [key, Number(value)] as const).filter(([, value]) => Number.isFinite(value) && value !== 0)
+                : [];
+              return entries.length ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {entries.map(([key, value]) => {
+                    const label = key === "body" ? "Corpo" : key === "sanity" ? "Sanidade" : defs.find((item) => item.key === key)?.label ?? key;
+                    const isPercent = key === "body" || key === "sanity";
+                    return <span key={key} className={`rounded bg-muted px-2 py-1 text-xs ${value > 0 ? "text-emerald-500" : "text-destructive"}`}>
+                      {value > 0 ? "+" : ""}{value}{isPercent ? "%" : ""} {label}
+                    </span>;
+                  })}
+                </div>
+              ) : <p className="text-xs text-muted-foreground">Nenhum modificador de atributo.</p>;
+            })()}
+          </div>
+          <div className="space-y-1.5">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-gold">Efeitos ao ativar</h4>
+            {effects.length ? effects.map((effect, index) => (
+              <p key={index} className="text-xs text-muted-foreground">
+                {effectSummary(effect, defs, damageTypes, races)}
+                {effect.effect_type === "healing" && effect.healing_timing !== "per_turn" ? "" : ` · ${effect.until_combat_end ? "até o fim do combate" : `${effect.duration} turno(s)`}`}
+              </p>
+            )) : <p className="text-xs text-muted-foreground">Nenhum efeito de ativação.</p>}
+          </div>
+          <div className="space-y-1.5">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-gold">Efeitos ao terminar</h4>
+            {endEffects.length ? endEffects.map((effect, index) => (
+              <p key={index} className="text-xs text-muted-foreground">
+                {effectSummary(effect, defs, damageTypes, races)}
+                {effect.effect_type === "healing" && effect.healing_timing !== "per_turn" ? "" : ` · ${effect.until_combat_end ? "até o fim do combate" : `${effect.duration} turno(s)`}`}
+              </p>
+            )) : <p className="text-xs text-muted-foreground">Nenhum efeito de encerramento.</p>}
+          </div>
+          <div className="space-y-1.5">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-gold">Habilidades concedidas</h4>
+            {abilityGrants.length ? abilityGrants.map((grant) => {
+              const grantedAbility = abilityCatalog.find((ability) => ability.id === grant.ability_id);
+              return <p key={grant.ability_id} className="text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">{grantedAbility?.name ?? "Habilidade indisponível"}</span>
+                {grant.only_while_transformed ? " · somente enquanto a transformação estiver ativa" : " · concedida enquanto possuir a transformação"}
+              </p>;
+            }) : <p className="text-xs text-muted-foreground">Nenhuma habilidade concedida.</p>}
+          </div>
         </div>
         <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={(event) => {
           const file = event.target.files?.[0];
           if (file) void upload(file);
           event.target.value = "";
         }} />
-        {isPersonal && (
+        {isMaster && isPersonal && (
           <Button type="button" size="sm" variant="outline" onClick={() => setEditPersonal((value) => !value)}>
             {editPersonal ? "Fechar edição" : "Editar transformação"}
           </Button>
         )}
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" size="sm" variant="outline" onClick={() => inputRef.current?.click()}>
-            <Upload className="mr-1 h-3.5 w-3.5" /> {state?.image_path ? "Trocar imagem" : "Escolher imagem"}
-          </Button>
-          {state?.image_path && (
-            <Button type="button" size="sm" variant="ghost" onClick={() => void remove()}>
-              <Trash2 className="mr-1 h-3.5 w-3.5" /> Remover
+        {isMaster && (
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" size="sm" variant="outline" onClick={() => inputRef.current?.click()}>
+              <Upload className="mr-1 h-3.5 w-3.5" /> {state?.image_path ? "Trocar imagem" : "Escolher imagem"}
             </Button>
-          )}
-        </div>
+            {state?.image_path && (
+              <Button type="button" size="sm" variant="ghost" onClick={() => void remove()}>
+                <Trash2 className="mr-1 h-3.5 w-3.5" /> Remover
+              </Button>
+            )}
+          </div>
+        )}
       </div>
-      {isPersonal && editPersonal && (
+      {isMaster && isPersonal && editPersonal && (
         <div className="mt-3 w-full basis-full space-y-3 rounded-md border border-gold/30 p-3">
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1"><Label>Nome</Label><Input value={name} onChange={(event) => setName(event.target.value)} /></div>
