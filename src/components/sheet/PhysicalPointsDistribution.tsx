@@ -15,26 +15,30 @@ export function PhysicalPointsDistribution({
   const qc = useQueryClient();
   const [alloc, setAlloc] = useState<Record<string, number>>({});
   const [busy, setBusy] = useState(false);
-  const [source, setSource] = useState<"race" | "virtue">("race");
+  const [source, setSource] = useState<"race" | "virtue" | "class">("race");
   useEffect(() => {
     setAlloc({});
     const raceLeft = Math.max(0, character.race_physical_points_granted - allocationTotal(character.race_physical_allocations));
     const virtueLeft = Math.max(0, character.virtue_physical_points_granted - allocationTotal(character.virtue_physical_allocations));
+    const classLeft = Math.max(0, (character.class_physical_points_granted ?? 0) - allocationTotal(character.class_physical_allocations));
     setSource((current) => {
       if (current === "race" && raceLeft > 0) return "race";
       if (current === "virtue" && virtueLeft > 0) return "virtue";
-      return raceLeft > 0 ? "race" : "virtue";
+      if (current === "class" && classLeft > 0) return "class";
+      return raceLeft > 0 ? "race" : virtueLeft > 0 ? "virtue" : "class";
     });
-  }, [character.id, character.race_id, character.virtue_id, character.race_physical_points_granted, character.virtue_physical_points_granted, character.race_physical_allocations, character.virtue_physical_allocations]);
-  const { mods } = useCharacterTraitMods(character.race_id, character.virtue_id);
+  }, [character.id, character.race_id, character.virtue_id, character.class_id, character.race_physical_points_granted, character.virtue_physical_points_granted, character.class_physical_points_granted, character.race_physical_allocations, character.virtue_physical_allocations, character.class_physical_allocations]);
+  const { mods } = useCharacterTraitMods(character.race_id, character.virtue_id, character.class_id);
   const byKey = new Map(attrs.map((a) => [a.attribute_key, a]));
   const raceAlloc = numberAllocation(character.race_physical_allocations);
   const virtueAlloc = numberAllocation(character.virtue_physical_allocations);
+  const classAlloc = numberAllocation(character.class_physical_allocations);
   const raceRemaining = Math.max(0, character.race_physical_points_granted - allocationTotal(raceAlloc));
   const virtueRemaining = Math.max(0, character.virtue_physical_points_granted - allocationTotal(virtueAlloc));
-  const physicalPointsGranted = character.race_physical_points_granted + character.virtue_physical_points_granted;
+  const classRemaining = Math.max(0, (character.class_physical_points_granted ?? 0) - allocationTotal(classAlloc));
+  const physicalPointsGranted = character.race_physical_points_granted + character.virtue_physical_points_granted + (character.class_physical_points_granted ?? 0);
   const spentDraft = Object.values(alloc).reduce((sum, n) => sum + n, 0);
-  const sourceRemaining = source === "race" ? raceRemaining : virtueRemaining;
+  const sourceRemaining = source === "race" ? raceRemaining : source === "virtue" ? virtueRemaining : classRemaining;
   const remaining = sourceRemaining - spentDraft;
   const pointDefs = defs.filter((d) => physicalKeys.has(d.key) && d.accepts_points);
 
@@ -77,7 +81,7 @@ export function PhysicalPointsDistribution({
           <p className="mt-1 text-xs text-muted-foreground">Só podem ser distribuídos em Força, Defesa física, Velocidade e Velocidade de ataque. Estes pontos são separados dos pontos livres normais.</p>
           {physicalPointsGranted === 0 && (
             <p className="mt-2 text-xs text-amber-500">
-              Nenhum ponto físico extra foi concedido a esta ficha. Os bônus como “+5 Força” são modificadores de atributo e não formam esse saldo distribuível. O mestre precisa configurar “Pontos extras de atributos físicos” na raça ou virtude.
+              Nenhum ponto físico extra foi concedido a esta ficha. Os bônus como “+5 Força” são modificadores de atributo e não formam esse saldo distribuível. O mestre precisa configurar “Pontos extras de atributos físicos” na raça, classe ou virtude.
             </p>
           )}
         </div>
@@ -88,6 +92,7 @@ export function PhysicalPointsDistribution({
             onChange={(e) => { setSource(e.target.value as "race" | "virtue"); setAlloc({}); }}>
             <option value="race">Raça ({raceRemaining} disponíveis)</option>
             <option value="virtue">Virtude ({virtueRemaining} disponíveis)</option>
+            <option value="class">Classe ({classRemaining} disponíveis)</option>
           </select>
           <div className="text-xs text-muted-foreground">Pontos físicos desta origem disponíveis: <span className="font-bold text-gold">{remaining}</span></div>
         </div>
@@ -97,6 +102,7 @@ export function PhysicalPointsDistribution({
           const attr = byKey.get(def.key);
           const fromRace = raceAlloc[def.key] ?? 0;
           const fromVirtue = virtueAlloc[def.key] ?? 0;
+          const fromClass = classAlloc[def.key] ?? 0;
           const pending = alloc[def.key] ?? 0;
           const totalPoints = (attr?.points ?? 0) + (mods[def.key] ?? 0)
             + physicalAttributePoints(character, def.key) + pending;
@@ -110,9 +116,9 @@ export function PhysicalPointsDistribution({
                   <div className="tabular text-xl font-bold">{conditionAdjustedValue(character, def.key, computeValue(def, totalPoints))}</div>
                   <div className="tabular text-xs text-muted-foreground">
                     {totalPoints} pts
-                    {(fromRace > 0 || fromVirtue > 0 || pending > 0) && <span className="text-gold"> · físicos {fromRace + fromVirtue + pending}{pending > 0 ? ` (+${pending})` : ""}</span>}
+                    {(fromRace > 0 || fromVirtue > 0 || fromClass > 0 || pending > 0) && <span className="text-gold"> · físicos {fromRace + fromVirtue + pending}{pending > 0 ? ` (+${pending})` : ""}</span>}
                   </div>
-                  {(fromRace > 0 || fromVirtue > 0 || pending > 0) && <div className="mt-1 text-[11px] text-muted-foreground">{fromRace > 0 ? `${fromRace} da raça` : ""}{fromRace > 0 && fromVirtue > 0 ? " · " : ""}{fromVirtue > 0 ? `${fromVirtue} da virtude` : ""}{pending > 0 && <> · +{pending} pendentes da {source === "race" ? "raça" : "virtude"}</>}</div>}
+                  {(fromRace > 0 || fromVirtue > 0 || pending > 0) && <div className="mt-1 text-[11px] text-muted-foreground">{fromRace > 0 ? `${fromRace} da raça` : ""}{fromRace > 0 && fromVirtue > 0 ? " · " : ""}{fromVirtue > 0 ? `${fromVirtue} da virtude` : ""}{(fromRace > 0 || fromVirtue > 0) && fromClass > 0 ? " · " : ""}{fromClass > 0 ? `${fromClass} da classe` : ""}{pending > 0 && <> · +{pending} pendentes da {source === "race" ? "raça" : source === "virtue" ? "virtude" : "classe"}</>}</div>}
                 </div>
                 <div className="flex items-center gap-1">
                   <Button size="icon" variant="outline" className="h-8 w-8" aria-label={`Desfazer ponto físico de ${def.label}`}
