@@ -154,6 +154,9 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
               state={states.find((entry) => entry.transformation_id === transformation.id)}
               isMaster={isMaster}
               isPersonal={transformation.owner_character_id === character.id}
+              grantedByRace={raceLinks.some((link) => link.transformation_id === transformation.id)}
+              grantedByVirtue={virtueLinks.some((link) => link.transformation_id === transformation.id)}
+              hasCharacterState={states.some((entry) => entry.transformation_id === transformation.id)}
               defs={defs}
               onSaved={async () => {
                 await Promise.all([
@@ -170,13 +173,16 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
 }
 
 function TransformationImageCard({
-  characterId, transformation, state, onSaved, isPersonal, defs,
+  characterId, transformation, state, onSaved, isPersonal, grantedByRace, grantedByVirtue, hasCharacterState, defs,
 }: {
   characterId: string;
   transformation: Transformation;
   state?: CharacterTransformationState;
   isMaster: boolean;
   isPersonal: boolean;
+  grantedByRace: boolean;
+  grantedByVirtue: boolean;
+  hasCharacterState: boolean;
   defs: NonNullable<ReturnType<typeof useDefs>["data"]>;
   onSaved: () => Promise<void>;
 }) {
@@ -302,6 +308,12 @@ function TransformationImageCard({
           <p className="text-xs text-muted-foreground">
             Cooldown de {transformation.cooldown_turns} turno(s) · {transformation.mana_cost > 0 ? `${transformation.mana_cost} Mana` : "sem custo de Mana"}
           </p>
+          <div className="mt-1 flex flex-wrap gap-1.5">
+            {grantedByRace && <span className="rounded bg-gold/10 px-2 py-0.5 text-[11px] text-gold">Transformação inicial da raça</span>}
+            {grantedByVirtue && <span className="rounded bg-gold/10 px-2 py-0.5 text-[11px] text-gold">Transformação da virtude</span>}
+            {isPersonal && <span className="rounded bg-violet-500/10 px-2 py-0.5 text-[11px] text-violet-300">Exclusiva do personagem</span>}
+            {!grantedByRace && !grantedByVirtue && !isPersonal && hasCharacterState && <span className="rounded bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">Vinculada à ficha</span>}
+          </div>
           {state?.active && <p className="mt-1 text-xs font-semibold text-emerald-500">Transformação ativa · {state.cooldown_remaining} turno(s)</p>}
         </div>
         <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={(event) => {
