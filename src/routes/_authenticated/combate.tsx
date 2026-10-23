@@ -1326,17 +1326,17 @@ function MindControlPanel({ battleId, actor, fighters, selectedTargets, effects,
     const remainingFraction = controllerModifiers
       .filter((effect) => effect.value_mode === "percent")
       .reduce((factor, effect) => factor * (1 - Math.min(95, amount(effect)) / 100), 1);
-    const fixedReduction = controllerModifiers
+    const fixedReduction = Math.floor(controllerModifiers
       .filter((effect) => effect.value_mode !== "percent")
-      .reduce((sum, effect) => sum + amount(effect), 0);
+      .reduce((sum, effect) => sum + amount(effect), 0));
     const base = Math.max(0, Math.floor(val(target, "mental") / 10));
     const afterPower = Math.max(0, Math.floor(base * remainingFraction) - fixedReduction);
     const resistanceMultiplier = Math.min(10, targetModifiers
       .filter((effect) => effect.value_mode === "percent")
       .reduce((factor, effect) => factor * (1 + Math.min(500, amount(effect)) / 100), 1));
-    const fixedResistance = targetModifiers
+    const fixedResistance = Math.floor(targetModifiers
       .filter((effect) => effect.value_mode !== "percent")
-      .reduce((sum, effect) => sum + amount(effect), 0);
+      .reduce((sum, effect) => sum + amount(effect), 0));
     const modifier = Math.max(0, Math.floor(afterPower * resistanceMultiplier) + fixedResistance);
     const sides = 20 + Math.floor(modifier / 20) * 10;
     return {
