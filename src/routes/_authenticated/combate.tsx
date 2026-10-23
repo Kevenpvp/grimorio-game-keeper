@@ -112,6 +112,7 @@ type TransformationTemplate = {
   duration_turns: number;
   cooldown_turns: number;
   mana_cost: number;
+  owner_character_id?: string | null;
 };
 type TransformationLink = { transformation_id: string; race_id?: string; virtue_id?: string };
 type CharacterTransformationState = {
@@ -346,7 +347,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
   const { data: transformationCatalog = [] } = useQuery<TransformationTemplate[]>({
     queryKey: ["transformations"],
     queryFn: async () => {
-      const { data, error } = await db.from("transformations").select("id,name,description,duration_turns,cooldown_turns,mana_cost").order("name");
+      const { data, error } = await db.from("transformations").select("id,name,description,duration_turns,cooldown_turns,mana_cost,owner_character_id").order("name");
       if (error) throw error;
       return data ?? [];
     },
@@ -383,6 +384,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
     const ids = new Set([
       ...raceTransformationLinks.filter((link) => link.race_id === fighter.race_id).map((link) => link.transformation_id),
       ...virtueTransformationLinks.filter((link) => link.virtue_id === fighter.virtue_id).map((link) => link.transformation_id),
+      ...transformationCatalog.filter((transformation) => transformation.owner_character_id === fighter.id).map((transformation) => transformation.id),
     ]);
     return transformationCatalog.filter((transformation) => ids.has(transformation.id));
   };
