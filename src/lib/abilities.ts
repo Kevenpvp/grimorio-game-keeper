@@ -161,6 +161,7 @@ export function parseAbilityAttackEffectGroups(value: unknown): AbilityAttackEff
       name,
       chance: Math.max(0, Math.min(100, Math.round(chance))),
       effects: parseAbilityEffects(raw.effects),
+      dots: parseAbilityDotEffects(raw.dots),
     }];
   });
 }
