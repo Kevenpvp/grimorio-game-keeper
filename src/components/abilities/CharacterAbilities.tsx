@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { dispatchCustomAbilityScriptEvents } from "@/lib/ability-script-runtime";
 import { useDefs, useMe, useRaces, useClasses } from "@/lib/sheets";
-import { parseAbilityEffects, parseAbilityAttackDamage, useAbilities, useCharacterAbilities, useCharacterActiveEffects, useDamageTypes, type Ability, type AbilityEffectDefinition, type CharacterAbility } from "@/lib/abilities";
+import { parseAbilityEffects, parseAbilityAttackDamage, parseAbilityAttackEffectGroups, useAbilities, useCharacterAbilities, useCharacterActiveEffects, useDamageTypes, type Ability, type AbilityEffectDefinition, type CharacterAbility } from "@/lib/abilities";
 import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
 import type { Json } from "@/integrations/supabase/types";
 import { parseCustomAbilityAttributes, type CustomAbilityAttribute } from "@/lib/custom-ability-scripts";
@@ -359,6 +359,7 @@ export function CharacterAbilitiesPanel({
   const [attackDialogAbilityId, setAttackDialogAbilityId] = useState<string | null>(null);
   const [attackTargetIds, setAttackTargetIds] = useState<string[]>([]);
   const [attackHits, setAttackHits] = useState<Record<string, boolean>>({});
+  const [attackEffectHits, setAttackEffectHits] = useState<Record<string, string[]>>({});
   const [attackExtraDamage, setAttackExtraDamage] = useState<Record<string, string>>({});
   const [attackBusy, setAttackBusy] = useState(false);
   const [attackResolved, setAttackResolved] = useState(false);
@@ -367,6 +368,7 @@ export function CharacterAbilitiesPanel({
   const attackAbility = loadout?.find((ability) => ability.id === attackDialogAbilityId);
   const attackCatalogEntry = abilityCatalog.find((catalogAbility) => catalogAbility.id === attackAbility?.ability_id);
   const attackConfig = attackCatalogEntry?.attack_enabled ? parseAbilityAttackDamage(attackCatalogEntry.attack_damage) : null;
+  const attackEffectGroups = attackCatalogEntry?.attack_enabled ? parseAbilityAttackEffectGroups(attackCatalogEntry.attack_effect_groups) : [];
   const currentAttackTargets = eligibleAttackTargets.filter((target) => attackTargetIds.includes(target.id));
   const statValue = (id: string, key: string) => Math.max(0, Number(getAttributeValue?.(id, key) ?? 0) || 0);
   const attackBaseDamage = attackConfig
@@ -400,6 +402,7 @@ export function CharacterAbilitiesPanel({
     setAttackDialogAbilityId(ability.id);
     setAttackTargetIds(preferred);
     setAttackHits({});
+    setAttackEffectHits({});
     setAttackExtraDamage({});
     setAttackResults({});
     setAttackResolved(false);
@@ -447,6 +450,10 @@ export function CharacterAbilitiesPanel({
         _battle_id: battleId,
         _extra_mana_cost: extraMana,
         _hit_target_ids: hitTargets.map((target) => target.id),
+        _hit_effect_groups: hitTargets.map((target) => ({
+          target_id: target.id,
+          group_ids: (attackEffectHits[target.id] ?? []).filter((groupId) => attackEffectGroups.some((group) => group.id === groupId)),
+        })),
       });
       if (activationError) throw activationError;
 
@@ -827,12 +834,45 @@ export function CharacterAbilitiesPanel({
                         </div>
                         <label className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
                           <input type="checkbox" checked={attackHits[target.id] === true} disabled={attackResolved || attackBusy}
-                            onChange={(event) => setAttackHits((current) => ({ ...current, [target.id]: event.target.checked }))} />
+                            onChange={(event) => {
+                              setAttackHits((current) => ({ ...current, [target.id]: event.target.checked }));
+                              if (!event.target.checked) {
+                                setAttackEffectHits((current) => ({ ...current, [target.id]: [] }));
+                              }
+                            }} />
                           <span className="font-semibold">Acertou</span>
-                          <span className="text-xs text-muted-foreground">— aplica dano e efeitos de alvo</span>
+                          <span className="text-xs text-muted-foreground">— libera dano e efeitos que forem marcados como acertados</span>
                         </label>
                         {attackHits[target.id] && (
-                          <div className="grid gap-2 sm:grid-cols-[1fr_1fr]">
+                          <>
+                            {attackEffectGroups.length > 0 && (
+                              <div className="space-y-2 rounded-md border border-violet-500/30 bg-violet-500/5 p-3">
+                                <div>
+                                  <div className="text-sm font-semibold text-gold">Efeitos que acertaram</div>
+                                  <p className="mt-1 text-xs text-muted-foreground">Marque cada categoria separadamente. Os efeitos de uma categoria não são aplicados se ela não estiver marcada.</p>
+                                </div>
+                                {attackEffectGroups.map((group) => (
+                                  <label key={group.id} className="flex cursor-pointer items-start gap-2 rounded-md border border-border/70 px-3 py-2 text-sm">
+                                    <input type="checkbox" className="mt-1" disabled={attackResolved || attackBusy}
+                                      checked={(attackEffectHits[target.id] ?? []).includes(group.id)}
+                                      onChange={(event) => setAttackEffectHits((current) => {
+                                        const selected = current[target.id] ?? [];
+                                        return {
+                                          ...current,
+                                          [target.id]: event.target.checked
+                                            ? [...new Set([...selected, group.id])]
+                                            : selected.filter((id) => id !== group.id),
+                                        };
+                                      })} />
+                                    <span>
+                                      <span className="block font-medium">{group.name} — {group.chance}% de chance</span>
+                                      <span className="block text-xs text-muted-foreground">{group.effects.length} efeito(s) configurado(s); marque se esta categoria acertou este alvo.</span>
+                                    </span>
+                                  </label>
+                                ))}
+                              </div>
+                            )}
+                            <div className="grid gap-2 sm:grid-cols-[1fr_1fr]">
                             <label className="space-y-1 text-xs font-medium">
                               Dano extra deste alvo
                               <Input type="number" min={0} max={1000000} disabled={attackResolved || attackBusy}
@@ -848,7 +888,7 @@ export function CharacterAbilitiesPanel({
                                   : "Sem atributo de origem"} + {attackConfig.fixed_damage} fixos + {extra} extra; antes de defesa/mitigação
                               </div>
                             </div>
-                          </div>
+                          </>
                         )}
                         {attackResults[target.id] && <p className={`text-xs ${attackResults[target.id].startsWith("Erro") ? "text-destructive" : "text-emerald-500"}`}>{attackResults[target.id]}</p>}
                       </article>
