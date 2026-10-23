@@ -156,7 +156,7 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
   }
 
   const byKey = new Map(attrs.map((a) => [a.attribute_key, a]));
-  const { mods, raceModifiers, classModifiers, virtueModifiers } = useCharacterTraitMods(character.race_id, character.virtue_id, character.class_id);
+  const { mods, raceModifiers, classModifiers, virtueModifiers } = useCharacterTraitMods(character.race_id, character.virtue_id, character.class_id, character.class_custom_modifiers);
   const { data: characterAbilities = [] } = useCharacterAbilities(character.id);
   const { data: activeEffects = [] } = useCharacterActiveEffects(character.id);
   const passiveStatus = passiveStatusModifiers(characterAbilities);
