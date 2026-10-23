@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { HeartPulse, Shield, Sparkles, Swords, Zap, Plus, Trash2, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
@@ -17,14 +17,11 @@ type DamageType = { id: string; name: string; category: "physical" | "magical" }
 export type DamageTarget = { id: string; name: string };
 type DamageSource = { id: string; name: string };
 type ManualDotDraft = { templateId: string; damageMode: "fixed" | "percent"; amount: string; duration: string };
-type DamageConfirmationHandler = (sourceCharacterId: string) => Promise<void>;
-
-export function DamageApplier({ target, battleId = null, sources = [], defaultSourceCharacterId = null, onRegisterDamageConfirmation }: {
+export function DamageApplier({ target, battleId = null, sources = [], defaultSourceCharacterId = null }: {
   target: DamageTarget;
   battleId?: string | null;
   sources?: DamageSource[];
   defaultSourceCharacterId?: string | null;
-  onRegisterDamageConfirmation?: (targetId: string, handler: DamageConfirmationHandler | null) => void;
 }) {
   const qc = useQueryClient();
   const [damageMode, setDamageMode] = useState<"repeat" | "list">("repeat");
@@ -43,7 +40,6 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
   const [selectedDotTemplateId, setSelectedDotTemplateId] = useState("");
   const [sheetPermanent, setSheetPermanent] = useState(false);
   const [applyingEffectsOnly, setApplyingEffectsOnly] = useState(false);
-  const applyDamageRef = useRef<DamageConfirmationHandler | null>(null);
   const { data: defs = [] } = useDefs();
   const { data: dotTemplates = [], isLoading: loadingDotTemplates } = useDotTemplates();
   const { data: sheetEffects = [], refetch: refetchSheetEffects } = useQuery({
@@ -342,15 +338,6 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
     }
   }
 
-  useEffect(() => {
-    applyDamageRef.current = async (sourceId: string) => { await applyDamage(sourceId); };
-  }, [applyDamage]);
-  useEffect(() => {
-    if (!onRegisterDamageConfirmation) return;
-    onRegisterDamageConfirmation(target.id, (sourceId) => applyDamageRef.current ? applyDamageRef.current(sourceId) : Promise.resolve());
-    return () => onRegisterDamageConfirmation(target.id, null);
-  }, [onRegisterDamageConfirmation, target.id]);
-
   async function removeSheetEffect(effect: (typeof sheetEffects)[number]) {
     if (effect.source_race_id || effect.source_class_id || effect.source_virtue_id) return;
     const { data, error } = await supabase.rpc("remove_manual_character_effect", { _effect_id: effect.id });
@@ -586,7 +573,7 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
         {damageKind === "physical" ? <Shield className="mr-1 h-4 w-4" /> :
           damageKind === "magical" ? <Sparkles className="mr-1 h-4 w-4" /> :
           damageKind === "hybrid" ? <Swords className="mr-1 h-4 w-4" /> : <Zap className="mr-1 h-4 w-4" />}
-        {applyingDamage ? "Aplicando…" : `Aplicar dano em ${target.name}`}
+        {applyingDamage ? "Aplicando…" : `Confirmar dano em ${target.name}`}
       </Button>
     </section>
   );
