@@ -5,11 +5,13 @@ export interface CustomAbilityAttribute {
   name: string;
   type: CustomAbilityAttributeType;
   value: number | string | boolean;
+  /** Whether a numeric value is affected by a race multiplier when the ability comes from a virtue. */
+  scale_with_race?: boolean;
 }
 
 export const DEMONIO_INTERNO_DEFAULT_ATTRIBUTES: CustomAbilityAttribute[] = [
-  { key: "porcentagem_maxima_dano_refletido", name: "Porcentagem máxima de dano refletido", type: "number", value: 50 },
-  { key: "percentual_hp_perdido_por_refletir", name: "% de HP que perde para refletir", type: "number", value: 10 },
+  { key: "porcentagem_maxima_dano_refletido", name: "Porcentagem máxima de dano refletido", type: "number", value: 50, scale_with_race: true },
+  { key: "percentual_hp_perdido_por_refletir", name: "% de HP que perde para refletir", type: "number", value: 10, scale_with_race: false },
 ];
 
 export const CUSTOM_ABILITY_SCRIPTS = [
@@ -32,7 +34,7 @@ export function parseCustomAbilityAttributes(value: unknown): CustomAbilityAttri
     if (type === "number") {
       const numeric = Number(raw.value);
       if (!Number.isFinite(numeric)) return [];
-      return [{ key, name, type, value: numeric }];
+      return [{ key, name, type, value: numeric, scale_with_race: raw.scale_with_race !== false }];
     }
     if (type === "boolean") return [{ key, name, type, value: raw.value === true }];
     return [{ key, name, type, value: typeof raw.value === "string" ? raw.value : String(raw.value ?? "") }];
