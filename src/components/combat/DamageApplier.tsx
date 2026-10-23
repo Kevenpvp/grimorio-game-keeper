@@ -116,20 +116,21 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
     try { dotPayload = payloadDots(); }
     catch (error) { toast.error(error instanceof Error ? error.message : String(error)); return false; }
     const sourceId = (sourceOverride ?? sourceCharacterId) || null;
+    const permanentForApplication = !battleId && sheetPermanent;
     const { data, error } = await supabase.rpc("apply_manual_character_effects", {
       _character_id: target.id,
       ...(battleId ? { _battle_id: battleId } : {}),
       ...(sourceId ? { _source_character_id: sourceId } : {}),
       _effects: effects as unknown as Json,
       _dots: dotPayload as unknown as Json,
-      _permanent: !battleId && sheetPermanent,
+      _permanent: permanentForApplication,
     });
     if (error) throw error;
     const count = Number(data ?? 0);
     if (count < 1) {
       toast.info("Nenhum efeito foi aplicado. Confira as imunidades a DoTs e os alvos.");
     } else {
-      toast.success(String(count) + " efeito(s)/DoT(s) aplicado(s) em " + target.name + (sheetPermanent ? " como permanente(s) na ficha." : "."));
+      toast.success(String(count) + " efeito(s)/DoT(s) aplicado(s) em " + target.name + (permanentForApplication ? " como permanente(s) na ficha." : "."));
     }
     await Promise.all([
       qc.invalidateQueries({ queryKey: ["battle-effects"] }),
