@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { dispatchCustomAbilityScriptEvents } from "@/lib/ability-script-runtime";
 import { useDefs, useMe, useRaces, useClasses } from "@/lib/sheets";
-import { parseAbilityEffects, parseAbilityAttackDamage, useAbilities, useCharacterAbilities, useCharacterActiveEffects, useDamageTypes, type Ability, type AbilityEffectDefinition, type CharacterAbility, type AbilityAttackDamageConfig } from "@/lib/abilities";
+import { parseAbilityEffects, parseAbilityAttackDamage, useAbilities, useCharacterAbilities, useCharacterActiveEffects, useDamageTypes, type Ability, type AbilityEffectDefinition, type CharacterAbility } from "@/lib/abilities";
 import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
 import type { Json } from "@/integrations/supabase/types";
 import { parseCustomAbilityAttributes, type CustomAbilityAttribute } from "@/lib/custom-ability-scripts";
