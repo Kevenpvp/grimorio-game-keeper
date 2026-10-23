@@ -405,31 +405,10 @@ export function CharacterAbilitiesPanel({
     setAttackResolved(false);
   }
 
-  function copyAttackRoll(target: TargetOption) {
-    const attackSpeed = statValue(characterId, "atk_speed");
-    const targetSpeed = statValue(target.id, "speed");
-    const attackMod = diceModifier(attackSpeed, targetSpeed);
-    const dodgeMod = diceModifier(targetSpeed, attackSpeed);
-    const text = [
-      "**" + characterName + " — " + (attackAbility?.name ?? "Ataque") + " contra " + target.name + "**",
-      "Lançamento: " + diceText(attackMod) + " — (Velocidade de Ataque " + attackSpeed + " − Velocidade " + targetSpeed + ") ÷ 10, mínimo 0",
-      "Esquiva: " + diceText(dodgeMod) + " — (Velocidade " + targetSpeed + " − Velocidade de Ataque " + attackSpeed + ") ÷ 10, mínimo 0",
-    ].join(String.fromCharCode(10));
-    void navigator.clipboard.writeText(text).then(() => toast.success("Dados de ataque e esquiva copiados")).catch(() => toast.error("Não foi possível copiar os dados"));
-  }
-
-  function copyAllAttackRolls() {
-    const lineBreak = String.fromCharCode(10);
-    const text = currentAttackTargets.map((target) => {
-      const attackSpeed = statValue(characterId, "atk_speed");
-      const targetSpeed = statValue(target.id, "speed");
-      return [
-        "**" + characterName + " — " + (attackAbility?.name ?? "Ataque") + " contra " + target.name + "**",
-        "Lançamento: " + diceText(diceModifier(attackSpeed, targetSpeed)) + " — (Velocidade de Ataque " + attackSpeed + " − Velocidade " + targetSpeed + ") ÷ 10, mínimo 0",
-        "Esquiva: " + diceText(diceModifier(targetSpeed, attackSpeed)) + " — (Velocidade " + targetSpeed + " − Velocidade de Ataque " + attackSpeed + ") ÷ 10, mínimo 0",
-      ].join(lineBreak);
-    }).join(lineBreak + lineBreak);
-    void navigator.clipboard.writeText(text).then(() => toast.success("Dados de todos os alvos copiados")).catch(() => toast.error("Não foi possível copiar os dados"));
+  function copyDiceValue(value: string) {
+    void navigator.clipboard.writeText(value)
+      .then(() => toast.success(`Copiado: ${value}`))
+      .catch(() => toast.error("Não foi possível copiar o dado"));
   }
 
   async function resolveAbilityAttack() {
@@ -807,9 +786,7 @@ export function CharacterAbilitiesPanel({
                 <section className="space-y-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <h3 className="text-sm font-semibold text-gold">Dados para lançar e esquivar</h3>
-                    <Button size="sm" variant="outline" onClick={copyAllAttackRolls} disabled={attackBusy}>
-                      <Copy className="mr-1 h-3.5 w-3.5" /> Copiar todos
-                    </Button>
+
                   </div>
                   {currentAttackTargets.map((target) => {
                     const attackSpeed = statValue(characterId, "atk_speed");
@@ -826,18 +803,26 @@ export function CharacterAbilitiesPanel({
                             <div className="mt-1 text-xs text-muted-foreground">Lançamento: ({attackSpeed} Velocidade de Ataque − {targetSpeed} Velocidade) ÷ 10, mínimo 0</div>
                             <div className="text-xs text-muted-foreground">Esquiva: ({targetSpeed} Velocidade − {attackSpeed} Velocidade de Ataque) ÷ 10, mínimo 0</div>
                           </div>
-                          <Button size="sm" variant="outline" onClick={() => copyAttackRoll(target)} disabled={attackBusy}>
-                            <Copy className="mr-1 h-3.5 w-3.5" /> Copiar dados
-                          </Button>
+
                         </div>
                         <div className="grid gap-2 sm:grid-cols-2">
                           <div className="rounded-md bg-muted/40 p-3">
                             <div className="text-xs text-muted-foreground">Dado de quem lança</div>
-                            <div className="font-display text-2xl text-gold">{diceText(attackMod)}</div>
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="font-display text-2xl text-gold">{diceText(attackMod)}</div>
+                              <Button type="button" size="icon" variant="ghost" className="h-7 w-7" aria-label={`Copiar ${diceText(attackMod)}`} onClick={() => copyDiceValue(diceText(attackMod))} disabled={attackBusy}>
+                                <Copy className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
                           </div>
                           <div className="rounded-md bg-muted/40 p-3">
                             <div className="text-xs text-muted-foreground">Dado de esquiva</div>
-                            <div className="font-display text-2xl text-gold">{diceText(dodgeMod)}</div>
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="font-display text-2xl text-gold">{diceText(dodgeMod)}</div>
+                              <Button type="button" size="icon" variant="ghost" className="h-7 w-7" aria-label={`Copiar ${diceText(dodgeMod)}`} onClick={() => copyDiceValue(diceText(dodgeMod))} disabled={attackBusy}>
+                                <Copy className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
                           </div>
                         </div>
                         <label className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
