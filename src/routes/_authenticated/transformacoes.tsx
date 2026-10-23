@@ -211,6 +211,15 @@ function TransformationEditor({
       updated_at: new Date().toISOString(),
     }).eq("id", transformation.id);
     if (error) { toast.error(error.message); return; }
+    const { error: clearGrantsError } = await db.from("transformation_abilities").delete().eq("transformation_id", transformation.id);
+    if (clearGrantsError) { toast.error("Transformação salva, mas não foi possível atualizar as habilidades concedidas: " + clearGrantsError.message); return; }
+    if (abilityGrants.length > 0) {
+      const { error: grantsError } = await db.from("transformation_abilities").insert(
+        abilityGrants.map((grant) => ({ transformation_id: transformation.id, ...grant }))
+      );
+      if (grantsError) { toast.error("Transformação salva, mas houve erro ao salvar habilidades: " + grantsError.message); return; }
+    }
+    await qc.invalidateQueries({ queryKey: ["transformation-abilities", transformation.id] });
     toast.success("Transformação salva");
     await Promise.all([
       qc.invalidateQueries({ queryKey: ["transformations"] }),
