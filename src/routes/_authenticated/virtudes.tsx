@@ -11,6 +11,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { traitMods, useDefs, useMe, useVirtues, type AttributeDef, type Virtue } from "@/lib/sheets";
 import { useAbilities } from "@/lib/abilities";
 import { TransformationGrantPicker } from "@/components/transformations/TransformationGrantPicker";
+import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
+import { parseAbilityEffects, type AbilityEffectDefinition } from "@/lib/abilities";
+import type { Json } from "@/integrations/supabase/types";
 
 export const Route = createFileRoute("/_authenticated/virtudes")({
   head: () => ({
@@ -99,6 +102,7 @@ function VirtueEditor({ virtue, defs, isNew, onSaved }: { virtue: Virtue; defs: 
   const [bonus, setBonus] = useState(virtue.bonus_points);
   const [physicalBonus, setPhysicalBonus] = useState(virtue.physical_bonus_points);
   const [mods, setMods] = useState(traitMods(virtue));
+  const [startingEffects, setStartingEffects] = useState<AbilityEffectDefinition[]>(parseAbilityEffects(virtue.starting_effects));
 
   async function toggleAbility(abilityId: string, checked: boolean) {
     const result = checked
@@ -127,6 +131,7 @@ function VirtueEditor({ virtue, defs, isNew, onSaved }: { virtue: Virtue; defs: 
       bonus_points: Math.max(0, Math.round(bonus) || 0),
       physical_bonus_points: Math.max(0, Math.round(physicalBonus) || 0),
       modifiers: clean,
+      starting_effects: startingEffects as unknown as Json,
     }).eq("id", virtue.id);
     if (error) { toast.error(error.message); return; }
     toast.success("Virtude salva");
@@ -166,6 +171,20 @@ function VirtueEditor({ virtue, defs, isNew, onSaved }: { virtue: Virtue; defs: 
           <Label>Descrição</Label>
           <Textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
         </div>
+      </div>
+      <div className="rounded-md border border-border p-3">
+        <AbilityEffectsEditor
+          effects={startingEffects}
+          onChange={setStartingEffects}
+          permanent
+          title="Buffs e debuffs iniciais da virtude"
+          description="Estes efeitos são permanentes enquanto o personagem mantiver esta virtude. Não perdem duração ao avançar turnos e não podem ser removidos por habilidades ou outros efeitos; saem quando o mestre troca ou remove a virtude."
+          defs={defs}
+          allowHealing={false}
+          allowPeriodicHealing={false}
+          permanentNote="Efeito permanente enquanto o personagem mantiver esta virtude."
+          allowPermanentMagicProhibition
+        />
       </div>
       <div className="space-y-3">
         <div>
