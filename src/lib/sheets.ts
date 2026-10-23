@@ -209,7 +209,11 @@ export function useCharacterTraitMods(raceId: string | null | undefined, virtueI
   const virtue = virtues?.find((v) => v.id === virtueId) ?? null;
   const raceModifiers = traitMods(race);
   const mechanics = (race as unknown as { special_mechanics?: { duplicate_virtue_effects?: boolean; virtue_effect_multiplier?: number } } | null)?.special_mechanics;
-  const virtueMultiplier = mechanics?.duplicate_virtue_effects
+  const virtueBlacklist = Array.isArray(mechanics?.virtue_effect_blacklist)
+    ? mechanics.virtue_effect_blacklist.filter((id): id is string => typeof id === "string")
+    : [];
+  const virtueIsBlacklisted = !!virtue?.id && virtueBlacklist.includes(virtue.id);
+  const virtueMultiplier = mechanics?.duplicate_virtue_effects && !virtueIsBlacklisted
     ? Math.max(1, Math.min(10, Number(mechanics.virtue_effect_multiplier) || 2))
     : 1;
   const virtueModifiers: RaceMods = Object.fromEntries(
