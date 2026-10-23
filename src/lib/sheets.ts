@@ -219,29 +219,47 @@ export function raceMods(race: Race | null | undefined): RaceMods {
 }
 
 /** Both selected traits contribute to the character's attribute modifiers. */
-export function useCharacterTraitMods(raceId: string | null | undefined, virtueId: string | null | undefined) {
+export function useCharacterTraitMods(
+  raceId: string | null | undefined,
+  virtueId: string | null | undefined,
+  classId?: string | null,
+) {
   const { data: races } = useRaces();
   const { data: virtues } = useVirtues();
+  const { data: classes } = useClasses();
   const race = races?.find((r) => r.id === raceId) ?? null;
   const virtue = virtues?.find((v) => v.id === virtueId) ?? null;
+  const classTrait = classes?.find((c) => c.id === classId) ?? null;
   const raceModifiers = traitMods(race);
-  const mechanics = (race as unknown as { special_mechanics?: { duplicate_virtue_effects?: boolean; virtue_effect_multiplier?: number; virtue_effect_blacklist?: string[] } } | null)?.special_mechanics;
-  const virtueBlacklist = Array.isArray(mechanics?.virtue_effect_blacklist)
-    ? mechanics.virtue_effect_blacklist.filter((id): id is string => typeof id === "string")
-    : [];
-  const virtueIsBlacklisted = !!virtue?.id && virtueBlacklist.includes(virtue.id);
-  const virtueMultiplier = mechanics?.duplicate_virtue_effects && !virtueIsBlacklisted
-    ? Math.max(1, Math.min(10, Number(mechanics.virtue_effect_multiplier) || 2))
-    : 1;
+  const getMechanics = (trait: { special_mechanics?: unknown } | null) => {
+    const value = trait?.special_mechanics;
+    return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  };
+  const raceMechanics = getMechanics(race);
+  const classMechanics = getMechanics(classTrait);
+  const blacklist = (mechanics: Record<string, unknown>) =>
+    Array.isArray(mechanics.virtue_effect_blacklist)
+      ? mechanics.virtue_effect_blacklist.filter((id): id is string => typeof id === "string")
+      : [];
+  const multiplier = (mechanics: Record<string, unknown>) => {
+    if (mechanics.duplicate_virtue_effects !== true || (!!virtue?.id && blacklist(mechanics).includes(virtue.id))) return 1;
+    return Math.max(1, Math.min(10, Number(mechanics.virtue_effect_multiplier) || 2));
+  };
+  const virtueMultiplier = multiplier(raceMechanics) * multiplier(classMechanics);
   const virtueModifiers: RaceMods = Object.fromEntries(
     Object.entries(traitMods(virtue)).map(([key, value]) => [key, value * virtueMultiplier]),
   );
+  const classModifiers = traitMods(classTrait);
   const mods: RaceMods = { ...raceModifiers };
+  for (const [key, value] of Object.entries(classModifiers)) {
+    mods[key] = (mods[key] ?? 0) + value;
+    if (mods[key] === 0) delete mods[key];
+  }
   for (const [key, value] of Object.entries(virtueModifiers)) {
     mods[key] = (mods[key] ?? 0) + value;
     if (mods[key] === 0) delete mods[key];
   }
-  return { race, virtue, raceModifiers, virtueModifiers, mods, races: races ?? [], virtues: virtues ?? [] };
+  return { race, virtue, classTrait, raceModifiers, classModifiers, virtueModifiers, mods, races: races ?? [], virtues: virtues ?? [], classes: classes ?? [] };
 }
 
 /** Legacy race-only helper retained for components that specifically need the race. */
