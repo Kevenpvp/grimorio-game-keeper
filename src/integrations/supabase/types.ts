@@ -16,6 +16,8 @@ export type Database = {
     Tables: {
       abilities: {
         Row: {
+          attack_damage: Json
+          attack_enabled: boolean
           can_activate: boolean
           cooldown_turns: number
           created_at: string
@@ -34,6 +36,8 @@ export type Database = {
           self_target_only: boolean
         }
         Insert: {
+          attack_damage?: Json
+          attack_enabled?: boolean
           can_activate?: boolean
           cooldown_turns?: number
           created_at?: string
