@@ -81,6 +81,38 @@ export type AbilityEffectDefinition = {
   /** When scope is race, only attackers whose character race matches this ID trigger it. */
   damage_received_race_id?: string | null;
 };
+export type AbilityAttackDamageKind = "physical" | "magical" | "hybrid" | "true";
+export type AbilityAttackDamageConfig = {
+  damage_kind: AbilityAttackDamageKind;
+  attribute_key: string | null;
+  attribute_percent: number;
+  fixed_damage: number;
+  physical_damage_type_id: string | null;
+  damage_type_id: string | null;
+  magic_level: DamageMagicLevel;
+};
+
+export function parseAbilityAttackDamage(value: unknown): AbilityAttackDamageConfig {
+  const raw = value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+  const damageKind: AbilityAttackDamageKind = raw.damage_kind === "magical" || raw.damage_kind === "hybrid" || raw.damage_kind === "true"
+    ? raw.damage_kind
+    : "physical";
+  const magicLevel: DamageMagicLevel = raw.magic_level === "media" || raw.magic_level === "alta" ? raw.magic_level : "baixa";
+  const attributePercent = Number(raw.attribute_percent ?? 100);
+  const fixedDamage = Number(raw.fixed_damage ?? 0);
+  return {
+    damage_kind: damageKind,
+    attribute_key: typeof raw.attribute_key === "string" && raw.attribute_key ? raw.attribute_key : null,
+    attribute_percent: Number.isFinite(attributePercent) ? Math.max(0, Math.min(1000, attributePercent)) : 100,
+    fixed_damage: Number.isFinite(fixedDamage) ? Math.max(0, Math.min(1_000_000, fixedDamage)) : 0,
+    physical_damage_type_id: typeof raw.physical_damage_type_id === "string" ? raw.physical_damage_type_id : null,
+    damage_type_id: typeof raw.damage_type_id === "string" ? raw.damage_type_id : null,
+    magic_level: magicLevel,
+  };
+}
+
 export type Ability = Tables<"abilities">;
 export type CharacterAbilityRow = Tables<"character_abilities">;
 export type CharacterAbility = Omit<CharacterAbilityRow, "effects" | "passive_effects" | "end_effects"> & { effects: AbilityEffectDefinition[]; passive_effects: AbilityEffectDefinition[]; end_effects: AbilityEffectDefinition[] };
