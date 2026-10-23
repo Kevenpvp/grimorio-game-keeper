@@ -92,6 +92,31 @@ export type AbilityAttackDamageConfig = {
   magic_level: DamageMagicLevel;
 };
 
+export type AbilityAttackEffectGroup = {
+  id: string;
+  name: string;
+  chance: number;
+  effects: AbilityEffectDefinition[];
+};
+
+export function parseAbilityAttackEffectGroups(value: unknown): AbilityAttackEffectGroup[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item, index): AbilityAttackEffectGroup[] => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+    const raw = item as Record<string, unknown>;
+    const name = typeof raw.name === "string" ? raw.name.trim() : "";
+    const id = typeof raw.id === "string" ? raw.id.trim() : "";
+    const chance = Number(raw.chance ?? 50);
+    if (!name || !id || !Number.isFinite(chance)) return [];
+    return [{
+      id,
+      name,
+      chance: Math.max(0, Math.min(100, Math.round(chance))),
+      effects: parseAbilityEffects(raw.effects),
+    }];
+  });
+}
+
 export function parseAbilityAttackDamage(value: unknown): AbilityAttackDamageConfig {
   const raw = value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
