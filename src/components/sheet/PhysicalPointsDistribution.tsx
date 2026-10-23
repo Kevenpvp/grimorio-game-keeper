@@ -89,7 +89,7 @@ export function PhysicalPointsDistribution({
           <label className="text-xs font-medium">Origem dos pontos físicos</label>
           <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
             value={source} disabled={busy}
-            onChange={(e) => { setSource(e.target.value as "race" | "virtue"); setAlloc({}); }}>
+            onChange={(e) => { setSource(e.target.value as "race" | "virtue" | "class"); setAlloc({}); }}>
             <option value="race">Raça ({raceRemaining} disponíveis)</option>
             <option value="virtue">Virtude ({virtueRemaining} disponíveis)</option>
             <option value="class">Classe ({classRemaining} disponíveis)</option>
@@ -116,9 +116,9 @@ export function PhysicalPointsDistribution({
                   <div className="tabular text-xl font-bold">{conditionAdjustedValue(character, def.key, computeValue(def, totalPoints))}</div>
                   <div className="tabular text-xs text-muted-foreground">
                     {totalPoints} pts
-                    {(fromRace > 0 || fromVirtue > 0 || fromClass > 0 || pending > 0) && <span className="text-gold"> · físicos {fromRace + fromVirtue + pending}{pending > 0 ? ` (+${pending})` : ""}</span>}
+                    {(fromRace > 0 || fromVirtue > 0 || fromClass > 0 || pending > 0) && <span className="text-gold"> · físicos {fromRace + fromVirtue + fromClass + pending}{pending > 0 ? ` (+${pending})` : ""}</span>}
                   </div>
-                  {(fromRace > 0 || fromVirtue > 0 || pending > 0) && <div className="mt-1 text-[11px] text-muted-foreground">{fromRace > 0 ? `${fromRace} da raça` : ""}{fromRace > 0 && fromVirtue > 0 ? " · " : ""}{fromVirtue > 0 ? `${fromVirtue} da virtude` : ""}{(fromRace > 0 || fromVirtue > 0) && fromClass > 0 ? " · " : ""}{fromClass > 0 ? `${fromClass} da classe` : ""}{pending > 0 && <> · +{pending} pendentes da {source === "race" ? "raça" : source === "virtue" ? "virtude" : "classe"}</>}</div>}
+                  {(fromRace > 0 || fromVirtue > 0 || fromClass > 0 || pending > 0) && <div className="mt-1 text-[11px] text-muted-foreground">{fromRace > 0 ? `${fromRace} da raça` : ""}{fromRace > 0 && fromVirtue > 0 ? " · " : ""}{fromVirtue > 0 ? `${fromVirtue} da virtude` : ""}{(fromRace > 0 || fromVirtue > 0) && fromClass > 0 ? " · " : ""}{fromClass > 0 ? `${fromClass} da classe` : ""}{pending > 0 && <> · +{pending} pendentes da {source === "race" ? "raça" : source === "virtue" ? "virtude" : "classe"}</>}</div>}
                 </div>
                 <div className="flex items-center gap-1">
                   <Button size="icon" variant="outline" className="h-8 w-8" aria-label={`Desfazer ponto físico de ${def.label}`}
