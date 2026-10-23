@@ -137,7 +137,8 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
     }
     await Promise.all([
       qc.invalidateQueries({ queryKey: ["battle-effects"] }),
-      qc.invalidateQueries({ queryKey: ["character-active-effects", target.id] }),
+      qc.invalidateQueries({ queryKey: ["character-active-effects"] }),
+      ...(sourceId ? [qc.invalidateQueries({ queryKey: ["character", sourceId] })] : []),
       qc.invalidateQueries({ queryKey: ["battles"] }),
       qc.invalidateQueries({ queryKey: ["character", target.id] }),
       qc.invalidateQueries({ queryKey: ["characters"] }),
