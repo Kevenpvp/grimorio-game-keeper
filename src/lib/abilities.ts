@@ -101,7 +101,7 @@ export type AbilityAttackEffectGroup = {
 
 export function parseAbilityAttackEffectGroups(value: unknown): AbilityAttackEffectGroup[] {
   if (!Array.isArray(value)) return [];
-  return value.flatMap((item, index): AbilityAttackEffectGroup[] => {
+  return value.flatMap((item): AbilityAttackEffectGroup[] => {
     if (!item || typeof item !== "object" || Array.isArray(item)) return [];
     const raw = item as Record<string, unknown>;
     const name = typeof raw.name === "string" ? raw.name.trim() : "";
