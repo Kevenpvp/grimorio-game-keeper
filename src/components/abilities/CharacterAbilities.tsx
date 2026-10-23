@@ -59,7 +59,6 @@ function CharacterAbilityCustomAttributesEditor({
   const qc = useQueryClient();
   const row = ability as CharacterAbility & { custom_attributes?: unknown };
   const source = Array.isArray(row.custom_attributes) ? row.custom_attributes : definitions;
-  const sourceKey = JSON.stringify([definitions, source]);
   const [attributes, setAttributes] = useState<CustomAbilityAttribute[]>(() =>
     mergeCustomAbilityAttributeValues(definitions, source)
   );
@@ -67,7 +66,7 @@ function CharacterAbilityCustomAttributesEditor({
 
   useEffect(() => {
     setAttributes(mergeCustomAbilityAttributeValues(definitions, source));
-  }, [ability.id, sourceKey]);
+  }, [ability.id, definitions, source]);
 
   function changeValue(index: number, value: number | string | boolean) {
     setAttributes((current) => current.map((attribute, i) => i === index ? { ...attribute, value } : attribute));
