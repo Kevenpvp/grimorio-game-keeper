@@ -274,6 +274,7 @@ export type Database = {
           effect_type: string
           id: string
           is_end_effect: boolean
+          is_sheet_permanent: boolean
           name: string
           polarity: string
           source_character_ability_id: string | null
@@ -281,6 +282,8 @@ export type Database = {
           source_class_id: string | null
           source_race_effect_index: number | null
           source_race_id: string | null
+          source_virtue_effect_index: number | null
+          source_virtue_id: string | null
           target_character_id: string | null
           until_combat_end: boolean
           value_mode: string
@@ -304,6 +307,7 @@ export type Database = {
           effect_type: string
           id?: string
           is_end_effect?: boolean
+          is_sheet_permanent?: boolean
           name: string
           polarity?: string
           source_character_ability_id?: string | null
@@ -311,6 +315,8 @@ export type Database = {
           source_class_id?: string | null
           source_race_effect_index?: number | null
           source_race_id?: string | null
+          source_virtue_effect_index?: number | null
+          source_virtue_id?: string | null
           target_character_id?: string | null
           until_combat_end?: boolean
           value_mode?: string
@@ -334,6 +340,7 @@ export type Database = {
           effect_type?: string
           id?: string
           is_end_effect?: boolean
+          is_sheet_permanent?: boolean
           name?: string
           polarity?: string
           source_character_ability_id?: string | null
@@ -341,6 +348,8 @@ export type Database = {
           source_class_id?: string | null
           source_race_effect_index?: number | null
           source_race_id?: string | null
+          source_virtue_effect_index?: number | null
+          source_virtue_id?: string | null
           target_character_id?: string | null
           until_combat_end?: boolean
           value_mode?: string
@@ -386,6 +395,13 @@ export type Database = {
             columns: ["source_race_id"]
             isOneToOne: false
             referencedRelation: "races"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "battle_effects_source_virtue_id_fkey"
+            columns: ["source_virtue_id"]
+            isOneToOne: false
+            referencedRelation: "virtues"
             referencedColumns: ["id"]
           },
           {
@@ -1374,6 +1390,7 @@ export type Database = {
           modifiers: Json
           name: string
           physical_bonus_points: number
+          starting_effects: Json
         }
         Insert: {
           bonus_points?: number
@@ -1383,6 +1400,7 @@ export type Database = {
           modifiers?: Json
           name: string
           physical_bonus_points?: number
+          starting_effects?: Json
         }
         Update: {
           bonus_points?: number
@@ -1392,6 +1410,7 @@ export type Database = {
           modifiers?: Json
           name?: string
           physical_bonus_points?: number
+          starting_effects?: Json
         }
         Relationships: []
       }
@@ -1404,7 +1423,22 @@ export type Database = {
         Args: {
           _battle_id?: string
           _character_ability_id: string
+          _dot_attribute_values?: Json
+          _dot_target_selections?: Json
           _extra_mana_cost?: number
+          _target_character_id: string
+        }
+        Returns: number
+      }
+      activate_character_ability_attack: {
+        Args: {
+          _battle_id?: string
+          _character_ability_id: string
+          _dot_attribute_values?: Json
+          _dot_target_selections?: Json
+          _extra_mana_cost?: number
+          _hit_effect_groups?: Json
+          _hit_target_ids?: string[]
           _target_character_id: string
         }
         Returns: number
@@ -1438,6 +1472,17 @@ export type Database = {
         }
         Returns: number
       }
+      apply_ability_dot_effect_internal: {
+        Args: {
+          _ability_name: string
+          _attribute_values: Json
+          _battle_id: string
+          _caster_character_id: string
+          _dot: Json
+          _target_character_id: string
+        }
+        Returns: undefined
+      }
       apply_ability_healing: {
         Args: {
           _apply_debuff_changes?: boolean
@@ -1461,14 +1506,6 @@ export type Database = {
         }
         Returns: Json
       }
-      apply_mind_control_effects: {
-        Args: {
-          _battle_id: string
-          _controller_character_id: string
-          _target_selections: Json
-        }
-        Returns: number
-      }
       apply_battle_damage_critical: {
         Args: {
           _battle_id: string
@@ -1482,6 +1519,15 @@ export type Database = {
         }
         Returns: Json
       }
+      apply_character_ability_dots: {
+        Args: {
+          _attribute_values?: Json
+          _battle_id: string
+          _character_ability_id: string
+          _target_selections: Json
+        }
+        Returns: number
+      }
       apply_character_transformation_effects: {
         Args: {
           _active_duration: number
@@ -1491,6 +1537,25 @@ export type Database = {
           _effects: Json
           _is_end_effect: boolean
           _transformation_id: string
+        }
+        Returns: number
+      }
+      apply_manual_character_effects: {
+        Args: {
+          _battle_id?: string
+          _character_id: string
+          _dots?: Json
+          _effects?: Json
+          _permanent?: boolean
+          _source_character_id?: string
+        }
+        Returns: number
+      }
+      apply_mind_control_effects: {
+        Args: {
+          _battle_id: string
+          _controller_character_id: string
+          _target_selections: Json
         }
         Returns: number
       }
@@ -1513,8 +1578,16 @@ export type Database = {
         Args: { _character_id: string }
         Returns: boolean
       }
+      character_is_immune_to_dot: {
+        Args: { _battle_id: string; _dot: Json; _target_character_id: string }
+        Returns: boolean
+      }
       choose_character_class: {
-        Args: { _character_id: string; _class_id: string }
+        Args: {
+          _character_id: string
+          _class_id: string
+          _custom_modifiers?: Json
+        }
         Returns: undefined
       }
       choose_character_race: {
@@ -1625,6 +1698,10 @@ export type Database = {
         Args: { _character_id: string }
         Returns: undefined
       }
+      remove_attack_cancellable_effects: {
+        Args: { _battle_id: string; _character_id: string }
+        Returns: number
+      }
       scale_character_resource_current: {
         Args: {
           _attribute_key: string
@@ -1656,6 +1733,10 @@ export type Database = {
         Returns: undefined
       }
       sync_character_trait_abilities: {
+        Args: { _character_id: string }
+        Returns: undefined
+      }
+      sync_character_virtue_effects: {
         Args: { _character_id: string }
         Returns: undefined
       }
