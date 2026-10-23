@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { dispatchCustomAbilityScriptEvents } from "@/lib/ability-script-runtime";
-import { useDefs, useMe, useRaces } from "@/lib/sheets";
+import { useDefs, useMe, useRaces, useClasses } from "@/lib/sheets";
 import { parseAbilityEffects, useAbilities, useCharacterAbilities, useCharacterActiveEffects, useDamageTypes, type Ability, type AbilityEffectDefinition, type CharacterAbility } from "@/lib/abilities";
 import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
 import type { Json } from "@/integrations/supabase/types";
@@ -262,28 +262,42 @@ export function CharacterAbilitiesPanel({
   const { data: defs } = useDefs();
   const { data: damageTypes = [] } = useDamageTypes();
   const { data: races = [] } = useRaces();
+  const { data: classes = [] } = useClasses();
   const { data: abilityCatalog = [] } = useAbilities();
   const db = supabase as any;
-  const { data: characterRaceId = null } = useQuery<string | null>({
-    queryKey: ["character-race-for-custom-ability-attributes", characterId],
+  const { data: characterTraitIds = { raceId: null, classId: null } } = useQuery<{ raceId: string | null; classId: string | null }>({
+    queryKey: ["character-traits-for-custom-ability-attributes", characterId],
     queryFn: async () => {
-      const { data, error } = await db.from("characters").select("race_id").eq("id", characterId).maybeSingle();
+      const { data, error } = await db.from("characters").select("race_id,class_id").eq("id", characterId).maybeSingle();
       if (error) throw error;
-      return (data?.race_id as string | null | undefined) ?? null;
+      return { raceId: (data?.race_id as string | null | undefined) ?? null, classId: (data?.class_id as string | null | undefined) ?? null };
     },
   });
-  const selectedRace = races.find((race) => race.id === characterRaceId);
-  const raceMechanics = (selectedRace as unknown as { special_mechanics?: { duplicate_virtue_effects?: boolean; virtue_effect_multiplier?: number; virtue_effect_blacklist?: string[] } } | undefined)?.special_mechanics;
-  const virtueBlacklist = Array.isArray(raceMechanics?.virtue_effect_blacklist)
-    ? raceMechanics.virtue_effect_blacklist
-    : [];
-  const racialMultiplier = raceMechanics?.duplicate_virtue_effects
-    ? Math.max(1, Math.min(10, Number(raceMechanics.virtue_effect_multiplier) || 2))
-    : 1;
-  const multiplierForAbility = (ability: CharacterAbility | undefined) =>
-    ability?.granted_by_virtue_id && !virtueBlacklist.includes(ability.granted_by_virtue_id)
-      ? racialMultiplier
+  const selectedRace = races.find((race) => race.id === characterTraitIds.raceId);
+  const selectedClass = classes.find((classTrait) => classTrait.id === characterTraitIds.classId);
+  const mechanicsOf = (trait: { special_mechanics?: unknown } | undefined) => {
+    const value = trait?.special_mechanics;
+    return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  };
+  const multiplierForTrait = (mechanics: Record<string, unknown>) => {
+    const blacklist = Array.isArray(mechanics.virtue_effect_blacklist) ? mechanics.virtue_effect_blacklist : [];
+    return mechanics.duplicate_virtue_effects === true && !blacklist.includes(abilityTraitId)
+      ? Math.max(1, Math.min(10, Number(mechanics.virtue_effect_multiplier) || 2))
       : 1;
+  };
+  const multiplierForAbility = (ability: CharacterAbility | undefined) => {
+    const abilityTraitId = ability?.granted_by_virtue_id;
+    if (!abilityTraitId) return 1;
+    const raceMechanics = mechanicsOf(selectedRace);
+    const classMechanics = mechanicsOf(selectedClass);
+    const blacklistContains = (mechanics: Record<string, unknown>) =>
+      Array.isArray(mechanics.virtue_effect_blacklist) && mechanics.virtue_effect_blacklist.includes(abilityTraitId);
+    const scale = (mechanics: Record<string, unknown>) => {
+      if (mechanics.duplicate_virtue_effects !== true || blacklistContains(mechanics)) return 1;
+      return Math.max(1, Math.min(10, Number(mechanics.virtue_effect_multiplier) || 2));
+    };
+    return Math.min(100, scale(raceMechanics) * scale(classMechanics));
+  };
   const { data: usedOnceAbilityIds = [] } = useQuery<string[]>({
     queryKey: ["battle-ability-uses", battleId, characterId],
     enabled: mode === "combat" && !!battleId,
