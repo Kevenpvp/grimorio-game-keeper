@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 
-export type Character = Tables<"characters">;
+export type Character = Tables<"characters"> & { class_id?: string | null; class_points_granted?: number; class_physical_points_granted?: number; class_attribute_allocations?: import("@/integrations/supabase/types").Json; class_physical_allocations?: import("@/integrations/supabase/types").Json; };
 export type AttributeDef = Tables<"attribute_definitions">;
 export type CharacterAttr = Tables<"character_attributes">;
 
@@ -138,6 +138,7 @@ export function conditionAdjustedValue(
 }
 
 export type Race = Tables<"races">;
+export type ClassTrait = Race & { special_mechanics?: import("@/integrations/supabase/types").Json };
 export type Virtue = Tables<"virtues">;
 export type RaceMods = Record<string, number>;
 
@@ -152,11 +153,12 @@ export function numberAllocation(value: unknown): RaceMods {
 }
 
 export function physicalAttributePoints(
-  character: Pick<Character, "race_physical_allocations" | "virtue_physical_allocations">,
+  character: Pick<Character, "race_physical_allocations" | "virtue_physical_allocations"> & Partial<Pick<Character, "class_physical_allocations">>,
   key: string,
 ) {
   return (numberAllocation(character.race_physical_allocations)[key] ?? 0)
-    + (numberAllocation(character.virtue_physical_allocations)[key] ?? 0);
+    + (numberAllocation(character.virtue_physical_allocations)[key] ?? 0)
+    + (numberAllocation(character.class_physical_allocations)[key] ?? 0);
 }
 
 export function allocationTotal(value: unknown) {
@@ -173,6 +175,21 @@ export function useRaces() {
       return data;
     },
   });
+}
+
+export function useClasses() {
+  return useQuery<ClassTrait[]>({
+    queryKey: ["classes"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).from("classes").select("*").order("name");
+      if (error) throw error;
+      return (data ?? []) as ClassTrait[];
+    },
+  });
+}
+
+export function classMods(classTrait: ClassTrait | null | undefined): RaceMods {
+  return traitMods(classTrait);
 }
 
 export function useVirtues() {
