@@ -1702,6 +1702,10 @@ export type Database = {
         Args: { _battle_id: string; _character_id: string }
         Returns: number
       }
+      remove_manual_character_effect: {
+        Args: { _effect_id: string }
+        Returns: boolean
+      }
       scale_character_resource_current: {
         Args: {
           _attribute_key: string
