@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -43,13 +43,23 @@ export function CharacterSheetEffectsManager({ characterId, characterName }: {
     },
   });
 
+  useEffect(() => {
+    const channel = supabase.channel("sheet-effects-" + characterId)
+      .on("postgres_changes", { event: "*", schema: "public", table: "battle_effects", filter: "character_id=eq." + characterId }, () => {
+        void qc.invalidateQueries({ queryKey: ["manual-sheet-effects", characterId] });
+      })
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [characterId, qc]);
+
   async function applyPermanentEffects() {
     if (effects.length === 0 && dots.length === 0) {
       toast.error("Adicione pelo menos um efeito ou DoT permanente.");
       return;
     }
 
-    const dotPayload = dots.map((dot) => {
+    let dotPayload: Array<Record<string, unknown>> = [];
+    try { dotPayload = dots.map((dot) => {
       const template = dotTemplates.find((item) => item.id === dot.templateId);
       if (!template) throw new Error("Selecione um modelo válido para cada DoT.");
       const amount = Number(dot.amount);
@@ -70,7 +80,10 @@ export function CharacterSheetEffectsManager({ characterId, characterName }: {
         damage_amount: amount,
         duration: 1,
       };
-    });
+    }); } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error));
+      return;
+    }
 
     setSaving(true);
     try {
@@ -259,7 +272,7 @@ export function CharacterSheetEffectsManager({ characterId, characterName }: {
                   <div className="min-w-0">
                     <div className="font-medium">{effect.name}</div>
                     <div className="mt-1 text-xs text-muted-foreground">
-                      {effect.effect_type === "damage_over_time" ? "Dano por turno" : effect.effect_type.replaceAll("_", " ")}
+                      {effect.effect_type === "damage_over_time" ? "Dano por turno" : effect.effect_type.replace(/_/g, " ")}
                       {traitName ? " · Concedido pela " + traitName : " · Aplicado diretamente pelo mestre"}
                     </div>
                   </div>
