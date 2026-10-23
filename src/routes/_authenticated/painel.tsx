@@ -13,6 +13,7 @@ import { PointsDistribution } from "@/components/sheet/PointsDistribution";
 import { PhysicalPointsDistribution } from "@/components/sheet/PhysicalPointsDistribution";
 import { RacePicker } from "@/components/sheet/RacePicker";
 import { CharacterAbilitiesPanel } from "@/components/abilities/CharacterAbilities";
+import { CharacterTransformationImages } from "@/components/transformations/CharacterTransformationImages";
 
 export const Route = createFileRoute("/_authenticated/painel")({
   head: () => ({
@@ -70,6 +71,7 @@ function PlayerSheet({ id }: { id: string }) {
   return (
     <div className="space-y-6">
       <RacePicker character={data.character} isMaster={false} />
+      <CharacterTransformationImages character={data.character} />
       <CharacterAbilitiesPanel characterId={data.character.id} characterName={data.character.name} mode="sheet" canUse />
       <CharacterSheetView character={data.character} attrs={data.attrs} defs={defs} />
       <PhysicalPointsDistribution character={data.character} attrs={data.attrs} defs={defs} />
