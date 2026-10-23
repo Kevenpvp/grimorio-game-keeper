@@ -223,6 +223,7 @@ export function useCharacterTraitMods(
   raceId: string | null | undefined,
   virtueId: string | null | undefined,
   classId?: string | null,
+  customClassModifiers?: unknown,
 ) {
   const { data: races } = useRaces();
   const { data: virtues } = useVirtues();
@@ -249,7 +250,10 @@ export function useCharacterTraitMods(
   const virtueModifiers: RaceMods = Object.fromEntries(
     Object.entries(traitMods(virtue)).map(([key, value]) => [key, value * virtueMultiplier]),
   );
-  const classModifiers = traitMods(classTrait);
+  const classModifiers: RaceMods = { ...traitMods(classTrait) };
+  for (const [key, value] of Object.entries(numberAllocation(customClassModifiers))) {
+    classModifiers[key] = (classModifiers[key] ?? 0) + value;
+  }
   const mods: RaceMods = { ...raceModifiers };
   for (const [key, value] of Object.entries(classModifiers)) {
     mods[key] = (mods[key] ?? 0) + value;
