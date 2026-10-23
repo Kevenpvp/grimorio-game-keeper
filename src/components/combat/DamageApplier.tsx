@@ -122,8 +122,8 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
     const sourceId = (sourceOverride ?? sourceCharacterId) || null;
     const { data, error } = await supabase.rpc("apply_manual_character_effects", {
       _character_id: target.id,
-      _battle_id: battleId,
-      _source_character_id: sourceId,
+      ...(battleId ? { _battle_id: battleId } : {}),
+      ...(sourceId ? { _source_character_id: sourceId } : {}),
       _effects: effects as unknown as Json,
       _dots: dotPayload as unknown as Json,
       _permanent: sheetPermanent,
