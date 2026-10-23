@@ -13,25 +13,29 @@ export function PointsDistribution({
   const qc = useQueryClient();
   const [alloc, setAlloc] = useState<Record<string, number>>({});
   const [busy, setBusy] = useState(false);
-  const [source, setSource] = useState<"race" | "virtue" | "base">("base");
+  const [source, setSource] = useState<"race" | "virtue" | "class" | "base">("base");
   const raceAlloc = numberAllocation(character.race_attribute_allocations);
   const virtueAlloc = numberAllocation(character.virtue_attribute_allocations);
+  const classAlloc = numberAllocation(character.class_attribute_allocations);
   const raceRemaining = Math.max(0, character.race_points_granted - allocationTotal(raceAlloc));
   const virtueRemaining = Math.max(0, character.virtue_points_granted - allocationTotal(virtueAlloc));
-  const baseRemaining = Math.max(0, character.available_points - raceRemaining - virtueRemaining);
-  const sourceAvailable = source === "race" ? raceRemaining : source === "virtue" ? virtueRemaining : baseRemaining;
+  const classRemaining = Math.max(0, (character.class_points_granted ?? 0) - allocationTotal(classAlloc));
+  const baseRemaining = Math.max(0, character.available_points - raceRemaining - virtueRemaining - classRemaining);
+  const sourceAvailable = source === "race" ? raceRemaining : source === "virtue" ? virtueRemaining : source === "class" ? classRemaining : baseRemaining;
   useEffect(() => {
     setAlloc({});
     const raceLeft = Math.max(0, character.race_points_granted - allocationTotal(character.race_attribute_allocations));
     const virtueLeft = Math.max(0, character.virtue_points_granted - allocationTotal(character.virtue_attribute_allocations));
-    const baseLeft = Math.max(0, character.available_points - raceLeft - virtueLeft);
+    const classLeft = Math.max(0, (character.class_points_granted ?? 0) - allocationTotal(character.class_attribute_allocations));
+    const baseLeft = Math.max(0, character.available_points - raceLeft - virtueLeft - classLeft);
     setSource((current) => {
       if (current === "race" && raceLeft > 0) return "race";
       if (current === "virtue" && virtueLeft > 0) return "virtue";
+      if (current === "class" && classLeft > 0) return "class";
       if (current === "base" && baseLeft > 0) return "base";
-      return raceLeft > 0 ? "race" : virtueLeft > 0 ? "virtue" : "base";
+      return raceLeft > 0 ? "race" : virtueLeft > 0 ? "virtue" : classLeft > 0 ? "class" : "base";
     });
-  }, [character.id, character.race_id, character.virtue_id, character.race_points_granted, character.virtue_points_granted, character.race_attribute_allocations, character.virtue_attribute_allocations]);
+  }, [character.id, character.race_id, character.virtue_id, character.class_id, character.race_points_granted, character.virtue_points_granted, character.class_points_granted, character.race_attribute_allocations, character.virtue_attribute_allocations, character.class_attribute_allocations]);
   const byKey = new Map(attrs.map((a) => [a.attribute_key, a]));
   const pointDefs = defs.filter((d) => d.accepts_points);
   const spent = Object.values(alloc).reduce((a, b) => a + b, 0);
@@ -43,7 +47,9 @@ export function PointsDistribution({
       ? raceAlloc[key] ?? 0
       : source === "virtue"
         ? virtueAlloc[key] ?? 0
-        : Math.max(0, invested - (raceAlloc[key] ?? 0) - (virtueAlloc[key] ?? 0));
+        : source === "class"
+          ? classAlloc[key] ?? 0
+          : Math.max(0, invested - (raceAlloc[key] ?? 0) - (virtueAlloc[key] ?? 0) - (classAlloc[key] ?? 0));
     const next = (alloc[key] ?? 0) + delta;
     if (delta > 0 && remaining <= 0) return;
     if (next < 0 && (!canRemove || sourceInvested + next < 0)) return;
@@ -90,6 +96,7 @@ export function PointsDistribution({
             onChange={(e) => { setSource(e.target.value as "race" | "virtue" | "base"); setAlloc({}); }}>
             <option value="race">Raça ({raceRemaining} disponíveis)</option>
             <option value="virtue">Virtude ({virtueRemaining} disponíveis)</option>
+            <option value="class">Classe ({classRemaining} disponíveis)</option>
             <option value="base">Pontos livres ({baseRemaining} disponíveis)</option>
           </select>
         </label>
@@ -101,7 +108,8 @@ export function PointsDistribution({
           const total = invested + pending;
           const fromRace = Math.max(0, (raceAlloc[d.key] ?? 0) + (source === "race" ? pending : 0));
           const fromVirtue = Math.max(0, (virtueAlloc[d.key] ?? 0) + (source === "virtue" ? pending : 0));
-          const fromBase = Math.max(0, invested - (raceAlloc[d.key] ?? 0) - (virtueAlloc[d.key] ?? 0) + (source === "base" ? pending : 0));
+          const fromClass = Math.max(0, (classAlloc[d.key] ?? 0) + (source === "class" ? pending : 0));
+          const fromBase = Math.max(0, invested - (raceAlloc[d.key] ?? 0) - (virtueAlloc[d.key] ?? 0) - (classAlloc[d.key] ?? 0) + (source === "base" ? pending : 0));
           return (
             <div key={d.key} className="rounded-md border border-border bg-muted/40 p-3">
               <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
@@ -113,18 +121,20 @@ export function PointsDistribution({
                   <div className="tabular text-xs text-muted-foreground">
                     {total} pts {pending !== 0 && <span className="text-gold">({pending > 0 ? "+" : ""}{pending})</span>}
                   </div>
-                  {(fromRace > 0 || fromVirtue > 0) && (
+                  {(fromRace > 0 || fromVirtue > 0 || fromClass > 0) && (
                     <div className="mt-1 text-[11px] text-muted-foreground">
                       Origem: {fromRace > 0 && <span>{fromRace} raça</span>}
                       {fromRace > 0 && fromVirtue > 0 && " · "}
                       {fromVirtue > 0 && <span>{fromVirtue} virtude</span>}
+                      {(fromRace > 0 || fromVirtue > 0) && fromClass > 0 && " · "}
+                      {fromClass > 0 && <span>{fromClass} classe</span>}
                       {fromBase > 0 && <> · {fromBase} livres</>}
                     </div>
                   )}
                 </div>
                 <div className="flex items-center gap-1">
                   <Button size="icon" variant="outline" className="h-8 w-8" aria-label={`Remover ponto de ${d.label}`}
-                    disabled={pending <= 0 && (!canRemove || (source === "race" ? (raceAlloc[d.key] ?? 0) : source === "virtue" ? (virtueAlloc[d.key] ?? 0) : Math.max(0, invested - (raceAlloc[d.key] ?? 0) - (virtueAlloc[d.key] ?? 0))) + pending <= 0)} onClick={() => change(d.key, -1)}>
+                    disabled={pending <= 0 && (!canRemove || (source === "race" ? (raceAlloc[d.key] ?? 0) : source === "virtue" ? (virtueAlloc[d.key] ?? 0) : source === "class" ? (classAlloc[d.key] ?? 0) : Math.max(0, invested - (raceAlloc[d.key] ?? 0) - (virtueAlloc[d.key] ?? 0) - (classAlloc[d.key] ?? 0))) + pending <= 0)} onClick={() => change(d.key, -1)}>
                     <Minus className="h-4 w-4" />
                   </Button>
                   <Button size="icon" variant="outline" className="h-8 w-8" aria-label={`Adicionar ponto em ${d.label}`}
