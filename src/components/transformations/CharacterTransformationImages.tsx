@@ -3,10 +3,17 @@ import { ImagePlus, Trash2, Upload, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
+import { parseAbilityEffects, type AbilityEffectDefinition } from "@/lib/abilities";
+import { useDefs } from "@/lib/sheets";
+import type { Json } from "@/integrations/supabase/types";
 import { supabase } from "@/integrations/supabase/client";
 import { usePhotoUrl, type Character } from "@/lib/sheets";
 
-type Transformation = { id: string; name: string; description: string | null; cooldown_turns: number; mana_cost: number; owner_character_id?: string | null };
+type Transformation = { id: string; name: string; description: string | null; duration_turns: number; cooldown_turns: number; mana_cost: number; modifiers: Json; effects: Json; end_effects: Json; owner_character_id?: string | null };
 type CharacterTransformationState = { transformation_id: string; image_path: string | null; active: boolean; cooldown_remaining: number };
 
 export function CharacterTransformationImages({ character, isMaster = false }: { character: Character; isMaster?: boolean }) {
@@ -33,10 +40,11 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
     return () => { void supabase.removeChannel(channel); };
   }, [character.id, qc]);
 
+  const { data: defs = [] } = useDefs();
   const { data: catalog = [], isLoading: loadingCatalog } = useQuery<Transformation[]>({
     queryKey: ["transformations"],
     queryFn: async () => {
-      const { data, error } = await db.from("transformations").select("id,name,description,cooldown_turns,mana_cost,owner_character_id").order("name");
+      const { data, error } = await db.from("transformations").select("*").order("name");
       if (error) throw error;
       return data ?? [];
     },
@@ -136,6 +144,8 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
               transformation={transformation}
               state={states.find((entry) => entry.transformation_id === transformation.id)}
               isMaster={isMaster}
+              isPersonal={transformation.owner_character_id === character.id}
+              defs={defs}
               onSaved={async () => {
                 await Promise.all([
                   qc.invalidateQueries({ queryKey: ["character-transformations", character.id] }),
@@ -151,17 +161,39 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
 }
 
 function TransformationImageCard({
-  characterId, transformation, state, onSaved,
+  characterId, transformation, state, onSaved, isPersonal, defs,
 }: {
   characterId: string;
   transformation: Transformation;
   state?: CharacterTransformationState;
   isMaster: boolean;
+  isPersonal: boolean;
+  defs: NonNullable<ReturnType<typeof useDefs>["data"]>;
   onSaved: () => Promise<void>;
 }) {
   const db = supabase as any;
   const inputRef = useRef<HTMLInputElement>(null);
   const imageUrl = usePhotoUrl(state?.image_path);
+  const [editPersonal, setEditPersonal] = useState(false);
+  const [name, setName] = useState(transformation.name);
+  const [description, setDescription] = useState(transformation.description ?? "");
+  const [duration, setDuration] = useState(String(transformation.duration_turns ?? 3));
+  const [cooldown, setCooldown] = useState(String(transformation.cooldown_turns));
+  const [manaCost, setManaCost] = useState(String(transformation.mana_cost));
+  const [modifiers, setModifiers] = useState<Record<string, number>>(() => {
+    const raw = transformation.modifiers;
+    return raw && typeof raw === "object" && !Array.isArray(raw) ? Object.fromEntries(Object.entries(raw).map(([key, value]) => [key, Number(value) || 0])) : {};
+  });
+  const [effects, setEffects] = useState<AbilityEffectDefinition[]>(parseAbilityEffects(transformation.effects));
+  const [endEffects, setEndEffects] = useState<AbilityEffectDefinition[]>(parseAbilityEffects(transformation.end_effects));
+  useEffect(() => {
+    setName(transformation.name); setDescription(transformation.description ?? "");
+    setDuration(String(transformation.duration_turns ?? 3)); setCooldown(String(transformation.cooldown_turns));
+    setManaCost(String(transformation.mana_cost));
+    const raw = transformation.modifiers;
+    setModifiers(raw && typeof raw === "object" && !Array.isArray(raw) ? Object.fromEntries(Object.entries(raw).map(([key, value]) => [key, Number(value) || 0])) : {});
+    setEffects(parseAbilityEffects(transformation.effects)); setEndEffects(parseAbilityEffects(transformation.end_effects));
+  }, [transformation]);
   async function upload(file: File) {
     if (!file.type.startsWith("image/")) { toast.error("Escolha um arquivo de imagem"); return; }
     if (file.size > 8 * 1024 * 1024) { toast.error("A imagem deve ter no máximo 8 MB"); return; }
@@ -188,6 +220,26 @@ function TransformationImageCard({
     }
     toast.success(`Imagem de ${transformation.name} salva`);
     await onSaved();
+  }
+
+  async function savePersonalTransformation() {
+    if (!name.trim()) { toast.error("Informe o nome da transformação"); return; }
+    const cleanModifiers = Object.fromEntries(Object.entries(modifiers).map(([key, value]) => [key, Math.round(Number(value) || 0)]).filter(([, value]) => value !== 0));
+    const { error } = await db.from("transformations").update({
+      name: name.trim(), description: description.trim() || null,
+      duration_turns: Math.max(1, Math.min(1000, Math.floor(Number(duration) || 1))),
+      cooldown_turns: Math.max(1, Math.min(1000, Math.floor(Number(cooldown) || 1))),
+      mana_cost: Math.max(0, Math.min(1000000, Math.floor(Number(manaCost) || 0))),
+      modifiers: cleanModifiers,
+      effects: effects.map((effect) => ({ ...effect, duration: Math.max(1, effect.duration) })) as unknown as Json,
+      end_effects: endEffects.map((effect) => ({ ...effect, duration: Math.max(1, effect.duration) })) as unknown as Json,
+      updated_at: new Date().toISOString(),
+    }).eq("id", transformation.id).eq("owner_character_id", characterId);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Transformação exclusiva salva");
+    await qc.invalidateQueries({ queryKey: ["transformations"] });
+    await onSaved();
+    setEditPersonal(false);
   }
 
   async function remove() {
@@ -227,6 +279,11 @@ function TransformationImageCard({
           if (file) void upload(file);
           event.target.value = "";
         }} />
+        {isPersonal && (
+          <Button type="button" size="sm" variant="outline" onClick={() => setEditPersonal((value) => !value)}>
+            {editPersonal ? "Fechar edição" : "Editar transformação"}
+          </Button>
+        )}
         <div className="flex flex-wrap gap-2">
           <Button type="button" size="sm" variant="outline" onClick={() => inputRef.current?.click()}>
             <Upload className="mr-1 h-3.5 w-3.5" /> {state?.image_path ? "Trocar imagem" : "Escolher imagem"}
@@ -238,6 +295,33 @@ function TransformationImageCard({
           )}
         </div>
       </div>
+      {isPersonal && editPersonal && (
+        <div className="mt-3 space-y-3 rounded-md border border-gold/30 p-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1"><Label>Nome</Label><Input value={name} onChange={(event) => setName(event.target.value)} /></div>
+            <div className="space-y-1"><Label>Duração (turnos)</Label><Input type="number" min={1} max={1000} value={duration} onChange={(event) => setDuration(event.target.value)} /></div>
+            <div className="space-y-1"><Label>Cooldown (turnos)</Label><Input type="number" min={1} max={1000} value={cooldown} onChange={(event) => setCooldown(event.target.value)} /></div>
+            <div className="space-y-1"><Label>Custo de Mana</Label><Input type="number" min={0} max={1000000} value={manaCost} onChange={(event) => setManaCost(event.target.value)} /></div>
+            <div className="space-y-1 sm:col-span-2"><Label>Descrição</Label><Textarea rows={2} value={description} onChange={(event) => setDescription(event.target.value)} /></div>
+          </div>
+          <div className="space-y-2 rounded-md border border-border p-3">
+            <Label>Modificadores de atributos</Label>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {defs.map((definition) => <div key={definition.key} className="space-y-1">
+                <Label>{definition.label}</Label>
+                <Input type="number" value={modifiers[definition.key] ?? 0} onChange={(event) => setModifiers((current) => ({ ...current, [definition.key]: Number(event.target.value) || 0 }))} />
+              </div>)}
+              {(["body", "sanity"] as const).map((key) => <div key={key} className="space-y-1">
+                <Label>{key === "body" ? "Corpo (%)" : "Sanidade (%)"}</Label>
+                <Input type="number" min={-100} max={100} value={modifiers[key] ?? 0} onChange={(event) => setModifiers((current) => ({ ...current, [key]: Number(event.target.value) || 0 }))} />
+              </div>)}
+            </div>
+          </div>
+          <AbilityEffectsEditor effects={effects} onChange={setEffects} permanent={false} title="Efeitos ao transformar" description="Efeitos aplicados ao ativar esta transformação." defs={defs} />
+          <AbilityEffectsEditor effects={endEffects} onChange={setEndEffects} permanent={false} title="Efeitos ao terminar" description="Efeitos aplicados quando a transformação acaba." defs={defs} allowPeriodicHealing={false} />
+          <Button type="button" onClick={() => void savePersonalTransformation()}>Salvar transformação exclusiva</Button>
+        </div>
+      )}
     </div>
   );
 }
