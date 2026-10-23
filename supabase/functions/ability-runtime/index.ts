@@ -32,7 +32,7 @@ type QueuedAbilityEvent = {
   queue_order: number | string;
 };
 
-type CharacterRow = { id: string; name: string; player_name?: string | null; body?: number; sanity?: number };
+type CharacterRow = { id: string; name: string; player_name?: string | null; body?: number; sanity?: number; race_id?: string | null };
 type ObjectValue = Record<string, unknown>;
 
 function respond(body: unknown, status = 200) {
@@ -116,7 +116,7 @@ async function loadCharacter(service: ReturnType<typeof createClient>, id: strin
   if (!id) return null;
   const { data, error } = await service
     .from("characters")
-    .select("id,name,player_name,body,sanity")
+    .select("id,name,player_name,body,sanity,race_id")
     .eq("id", id)
     .maybeSingle();
   if (error) throw error;
@@ -127,7 +127,7 @@ async function buildContext(service: ReturnType<typeof createClient>, event: Que
   if (!event.character_id) throw new Error("O personagem dono da habilidade não existe mais.");
   const [assignmentResult, abilityResult, caster, target, battleResult] = await Promise.all([
     event.character_ability_id
-      ? service.from("character_abilities").select("id,ability_id,name,character_id,custom_state").eq("id", event.character_ability_id).maybeSingle()
+      ? service.from("character_abilities").select("id,ability_id,name,character_id,custom_state,custom_attributes,granted_by_virtue_id").eq("id", event.character_ability_id).maybeSingle()
       : Promise.resolve({ data: null, error: null }),
     event.ability_id
       ? service.from("abilities").select("id,name,custom_script_key,custom_attributes").eq("id", event.ability_id).maybeSingle()
@@ -146,19 +146,39 @@ async function buildContext(service: ReturnType<typeof createClient>, event: Que
   const payload = asObject(event.payload);
   const rawEffect = asObject(payload.effect);
   const battle = battleResult.data as { id: string; name: string; turn_count: number; active: boolean } | null;
-  const assignment = assignmentResult.data as { id: string; ability_id: string; name: string; custom_state?: unknown } | null;
+  const assignment = assignmentResult.data as { id: string; ability_id: string; name: string; custom_state?: unknown; custom_attributes?: unknown; granted_by_virtue_id?: string | null } | null;
   const ability = abilityResult.data as { id: string; name: string; custom_script_key: string | null; custom_attributes?: unknown } | null;
   const individualTurn = Number(payload.turn_count);
   const rawState = asObject(assignment?.custom_state);
-  const customAttributes: Record<string, number | string | boolean> = {};
-  if (Array.isArray(ability?.custom_attributes)) {
-    for (const rawAttribute of ability.custom_attributes) {
-      const attribute = asObject(rawAttribute);
-      if (typeof attribute.key !== "string" || !attribute.key.trim()) continue;
-      if (attribute.type === "number" && Number.isFinite(Number(attribute.value))) customAttributes[attribute.key] = Number(attribute.value);
-      else if (attribute.type === "boolean") customAttributes[attribute.key] = attribute.value === true;
-      else if (attribute.type === "string" && typeof attribute.value === "string") customAttributes[attribute.key] = attribute.value;
+  // Prefer this character's configuration. Null means "use the catalogue defaults".
+  const selectedAttributes = Array.isArray(assignment?.custom_attributes)
+    ? assignment.custom_attributes
+    : Array.isArray(ability?.custom_attributes) ? ability.custom_attributes : [];
+  let racialMultiplier = 1;
+  if (assignment?.granted_by_virtue_id && caster.race_id) {
+    const { data: raceRow, error: raceError } = await service
+      .from("races")
+      .select("special_mechanics")
+      .eq("id", caster.race_id)
+      .maybeSingle();
+    if (raceError) throw raceError;
+    const mechanics = asObject(raceRow?.special_mechanics);
+    if (mechanics.duplicate_virtue_effects === true) {
+      const configuredMultiplier = Number(mechanics.virtue_effect_multiplier ?? 2);
+      racialMultiplier = Number.isFinite(configuredMultiplier)
+        ? Math.max(1, Math.min(10, configuredMultiplier))
+        : 2;
     }
+  }
+  const customAttributes: Record<string, number | string | boolean> = {};
+  for (const rawAttribute of selectedAttributes) {
+    const attribute = asObject(rawAttribute);
+    if (typeof attribute.key !== "string" || !attribute.key.trim()) continue;
+    if (attribute.type === "number" && Number.isFinite(Number(attribute.value))) {
+      // Only numeric custom values are multiplied; text flags and booleans remain unchanged.
+      customAttributes[attribute.key] = Number(attribute.value) * racialMultiplier;
+    } else if (attribute.type === "boolean") customAttributes[attribute.key] = attribute.value === true;
+    else if (attribute.type === "string" && typeof attribute.value === "string") customAttributes[attribute.key] = attribute.value;
   }
   const rawDamage = asObject(payload.dano);
   const damage = Object.keys(rawDamage).length ? rawDamage as unknown as AbilityScriptContext["dano"] : null;
