@@ -99,7 +99,7 @@ function CharacterAbilityCustomAttributesEditor({
         <p className="mt-1 text-xs text-muted-foreground">
           Esses valores são exclusivos do personagem e não alteram a habilidade no catálogo.
           {ability.granted_by_virtue_id && multiplier > 1
-            ? ` A raça aplica ${multiplier}× aos valores numéricos durante os cálculos.`
+            ? ` A raça ou classe aplica ${multiplier}× aos valores numéricos durante os cálculos.`
             : ""}
         </p>
       </div>
@@ -435,7 +435,7 @@ export function CharacterAbilitiesPanel({
               <div className="flex flex-wrap gap-1.5">
                 {activeEffects.map((effect) => (
                   <span key={effect.id} className="rounded bg-muted px-2 py-1 text-xs">
-                    {effect.name} · {effect.source_race_id ? "permanente (raça)" : effect.until_combat_end ? "até o fim do combate" : `${effect.duration} turno(s)`}
+                    {effect.name} · {(effect as typeof effect & { source_class_id?: string | null }).source_class_id ? "permanente (classe)" : effect.source_race_id ? "permanente (raça)" : effect.until_combat_end ? "até o fim do combate" : `${effect.duration} turno(s)`}
                   </span>
                 ))}
               </div>
