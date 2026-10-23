@@ -411,11 +411,24 @@ export function CharacterAbilitiesPanel({
     const attackMod = diceModifier(attackSpeed, targetSpeed);
     const dodgeMod = diceModifier(targetSpeed, attackSpeed);
     const text = [
-      `**${characterName} — ${attackAbility?.name ?? "Ataque"} contra ${target.name}**`,
-      `Lançamento: ${diceText(attackMod)} — (Velocidade de Ataque ${attackSpeed} − Velocidade ${targetSpeed}) ÷ 10, mínimo 0`,
-      `Esquiva: ${diceText(dodgeMod)} — (Velocidade ${targetSpeed} − Velocidade de Ataque ${attackSpeed}) ÷ 10, mínimo 0`,
+      \`**\${characterName} — \${attackAbility?.name ?? "Ataque"} contra \${target.name}**\`,
+      \`Lançamento: \${diceText(attackMod)} — (Velocidade de Ataque \${attackSpeed} − Velocidade \${targetSpeed}) ÷ 10, mínimo 0\`,
+      \`Esquiva: \${diceText(dodgeMod)} — (Velocidade \${targetSpeed} − Velocidade de Ataque \${attackSpeed}) ÷ 10, mínimo 0\`,
     ].join("\n");
     void navigator.clipboard.writeText(text).then(() => toast.success("Dados de ataque e esquiva copiados")).catch(() => toast.error("Não foi possível copiar os dados"));
+  }
+
+  function copyAllAttackRolls() {
+    const text = currentAttackTargets.map((target) => {
+      const attackSpeed = statValue(characterId, "atk_speed");
+      const targetSpeed = statValue(target.id, "speed");
+      return [
+        \`**\${characterName} — \${attackAbility?.name ?? "Ataque"} contra \${target.name}**\`,
+        \`Lançamento: \${diceText(diceModifier(attackSpeed, targetSpeed))} — (Velocidade de Ataque \${attackSpeed} − Velocidade \${targetSpeed}) ÷ 10, mínimo 0\`,
+        \`Esquiva: \${diceText(diceModifier(targetSpeed, attackSpeed))} — (Velocidade \${targetSpeed} − Velocidade de Ataque \${attackSpeed}) ÷ 10, mínimo 0\`,
+      ].join("\n");
+    }).join("\n\n");
+    void navigator.clipboard.writeText(text).then(() => toast.success("Dados de todos os alvos copiados")).catch(() => toast.error("Não foi possível copiar os dados"));
   }
 
   async function resolveAbilityAttack() {
@@ -791,7 +804,12 @@ export function CharacterAbilitiesPanel({
               </section>
               {currentAttackTargets.length > 0 && (
                 <section className="space-y-3">
-                  <h3 className="text-sm font-semibold text-gold">Dados para lançar e esquivar</h3>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="text-sm font-semibold text-gold">Dados para lançar e esquivar</h3>
+                    <Button size="sm" variant="outline" onClick={copyAllAttackRolls} disabled={attackBusy}>
+                      <Copy className="mr-1 h-3.5 w-3.5" /> Copiar todos
+                    </Button>
+                  </div>
                   {currentAttackTargets.map((target) => {
                     const attackSpeed = statValue(characterId, "atk_speed");
                     const targetSpeed = statValue(target.id, "speed");
@@ -841,7 +859,7 @@ export function CharacterAbilitiesPanel({
                               <div className="text-[11px] text-muted-foreground">
                                 {attackConfig.attribute_key
                                   ? `${attackConfig.attribute_percent}% de ${defs?.find((def) => def.key === attackConfig.attribute_key)?.label ?? attackConfig.attribute_key} (${statValue(characterId, attackConfig.attribute_key)})`
-                                  : "Sem atributo de origem"} + ${attackConfig.fixed_damage} fixos + ${extra} extra; antes de defesa/mitigação
+                                  : "Sem atributo de origem"} + {attackConfig.fixed_damage} fixos + {extra} extra; antes de defesa/mitigação
                               </div>
                             </div>
                           </div>
