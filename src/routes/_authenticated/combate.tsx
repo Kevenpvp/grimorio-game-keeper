@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { dispatchCustomAbilityScriptEvents } from "@/lib/ability-script-runtime";
 
-import { computeValue, conditionAdjustedValue, physicalAttributePoints, traitMods, useDefs, useMe, useRaces, useVirtues, useClasses, type AttributeDef } from "@/lib/sheets";
+import { computeValue, conditionAdjustedValue, physicalAttributePoints, traitMods, numberAllocation, useDefs, useMe, useRaces, useVirtues, useClasses, type AttributeDef } from "@/lib/sheets";
 import { Portrait } from "@/components/sheet/CharacterSheetView";
 import { StatBar } from "@/components/sheet/StatBar";
 import { cn } from "@/lib/utils";
@@ -100,7 +100,7 @@ function periodicHealingSummary(effect: BattleEffect) {
 }
 
 type Fighter = {
-  id: string; name: string; player_name: string; photo_path: string | null; race_id: string | null; virtue_id: string | null; class_id: string | null; owner_id: string | null;
+  id: string; name: string; player_name: string; photo_path: string | null; race_id: string | null; virtue_id: string | null; class_id: string | null; owner_id: string | null; class_custom_modifiers?: Json;
   race_physical_allocations: Json; virtue_physical_allocations: Json; class_physical_allocations: Json; race_physical_points_granted: number; virtue_physical_points_granted: number; class_physical_points_granted: number;
   body: number; sanity: number; participant_turn_count?: number;
   character_attributes: Attr[];
@@ -508,6 +508,9 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
     };
     const combined = { ...traitMods(race) };
     for (const [key, value] of Object.entries(traitMods(classTrait))) combined[key] = (combined[key] ?? 0) + value;
+    // Bônus concedidos individualmente pelo mestre junto com a classe. Eles valem em combate
+    // enquanto o personagem mantiver essa classe, sem alterar os bônus-base da classe.
+    for (const [key, value] of Object.entries(numberAllocation(f.class_custom_modifiers))) combined[key] = (combined[key] ?? 0) + value;
     const virtueMultiplier = multiplier(getMechanics(race)) * multiplier(getMechanics(classTrait));
     for (const [key, value] of Object.entries(traitMods(virtues?.find((v) => v.id === f.virtue_id)))) {
       combined[key] = (combined[key] ?? 0) + value * virtueMultiplier;
