@@ -690,3 +690,5 @@ $function$
 
 REVOKE ALL ON FUNCTION public.activate_character_ability_attack(uuid,uuid,uuid,integer,uuid[],jsonb) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.activate_character_ability_attack(uuid,uuid,uuid,integer,uuid[],jsonb) TO authenticated;
+
+NOTIFY pgrst, 'reload schema';
