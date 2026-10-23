@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { dispatchCustomAbilityScriptEvents } from "@/lib/ability-script-runtime";
-import { useDefs, useRaces } from "@/lib/sheets";
+import { useDefs, useMe, useRaces } from "@/lib/sheets";
 import { parseAbilityEffects, useAbilities, useCharacterAbilities, useCharacterActiveEffects, useDamageTypes, type Ability, type AbilityEffectDefinition, type CharacterAbility } from "@/lib/abilities";
 import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
 import type { Json } from "@/integrations/supabase/types";
@@ -323,6 +323,9 @@ export function CharacterAbilitiesPanel({
                     </Button>
                   )}
                 </div>
+                {mode === "combat" && battleId && (
+                  <BattleAbilityOverrideEditor ability={ability} battleId={battleId} />
+                )}
                 {mode === "combat" && ability.can_activate && ability.mana_cost > 0 && (
                   <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-violet-500/30 p-2">
                     <Label className="text-xs">Mana extra nesta utilização</Label>
@@ -736,5 +739,94 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
         </div>
       )}
     </article>
+  );
+}
+
+
+function BattleAbilityOverrideEditor({ ability, battleId }: { ability: CharacterAbility; battleId: string }) {
+  const { data: me } = useMe();
+  const qc = useQueryClient();
+  const db = supabase as any;
+  const [open, setOpen] = useState(false);
+  const [manaCost, setManaCost] = useState(String(ability.mana_cost));
+  const [effects, setEffects] = useState<AbilityEffectDefinition[]>(parseAbilityEffects(ability.effects));
+  const [endEffects, setEndEffects] = useState<AbilityEffectDefinition[]>(parseAbilityEffects(ability.end_effects));
+  const [keepAfterUse, setKeepAfterUse] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const { data: existing } = useQuery({
+    queryKey: ["battle-ability-override", battleId, ability.id],
+    enabled: !!me?.isMaster && open,
+    queryFn: async () => {
+      const { data, error } = await db.from("battle_ability_overrides").select("override_values,keep_after_use")
+        .eq("battle_id", battleId).eq("character_ability_id", ability.id).maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+  useEffect(() => {
+    const values = existing?.override_values && typeof existing.override_values === "object" ? existing.override_values as Record<string, unknown> : {};
+    setManaCost(String(values.mana_cost ?? ability.mana_cost));
+    setEffects(parseAbilityEffects(values.effects ?? ability.effects));
+    setEndEffects(parseAbilityEffects(values.end_effects ?? ability.end_effects));
+    setKeepAfterUse(Boolean(existing?.keep_after_use));
+  }, [existing, ability.id, ability.mana_cost, ability.effects, ability.end_effects]);
+
+  if (!me?.isMaster) return null;
+  async function saveOverride() {
+    const cost = Math.floor(Number(manaCost));
+    if (!Number.isFinite(cost) || cost < 0 || cost > 1000000) { toast.error("O custo de Mana deve ficar entre 0 e 1.000.000"); return; }
+    setSaving(true);
+    const { error } = await db.from("battle_ability_overrides").upsert({
+      battle_id: battleId,
+      character_ability_id: ability.id,
+      override_values: {
+        mana_cost: cost,
+        effects: effects.map((effect) => ({ ...effect, duration: Math.max(1, effect.duration) })),
+        end_effects: endEffects.map((effect) => ({ ...effect, duration: Math.max(1, effect.duration) })),
+      },
+      keep_after_use: keepAfterUse,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "battle_id,character_ability_id" });
+    setSaving(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success(keepAfterUse ? "Alterações mantidas durante este combate" : "Alterações serão usadas uma vez e depois restauradas");
+    await qc.invalidateQueries({ queryKey: ["battle-ability-override", battleId, ability.id] });
+    setOpen(false);
+  }
+  async function resetOverride() {
+    const { error } = await db.from("battle_ability_overrides").delete().eq("battle_id", battleId).eq("character_ability_id", ability.id);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Valores originais restaurados");
+    await qc.invalidateQueries({ queryKey: ["battle-ability-override", battleId, ability.id] });
+    setOpen(false);
+  }
+  return (
+    <div className="mt-3">
+      <Button type="button" size="sm" variant="outline" onClick={() => setOpen((value) => !value)}>
+        {open ? "Fechar mudança de valores" : "Mudar valores"}
+      </Button>
+      {open && (
+        <div className="mt-3 space-y-4 rounded-md border border-amber-500/35 bg-amber-500/5 p-3">
+          <div>
+            <h4 className="font-semibold text-amber-300">Alterações temporárias de combate</h4>
+            <p className="mt-1 text-xs text-muted-foreground">Esses valores não alteram a ficha permanente e são apagados quando o combate termina.</p>
+          </div>
+          <div className="space-y-1">
+            <Label>Custo de Mana nesta batalha</Label>
+            <Input type="number" min={0} max={1000000} value={manaCost} onChange={(event) => setManaCost(event.target.value)} />
+          </div>
+          <AbilityEffectsEditor effects={effects} onChange={setEffects} permanent={false} title="Efeitos alterados nesta batalha" description="Os atributos afetados por esses efeitos também são temporários." defs={[]} />
+          <AbilityEffectsEditor effects={endEffects} onChange={setEndEffects} permanent={false} title="Efeitos ao terminar" description="Efeitos de encerramento temporários para esta batalha." defs={[]} allowPeriodicHealing={false} />
+          <label className="flex items-start gap-2 text-sm">
+            <input type="checkbox" className="mt-1" checked={keepAfterUse} onChange={(event) => setKeepAfterUse(event.target.checked)} />
+            <span><strong>Manter Alterações</strong><span className="block text-xs text-muted-foreground">Marcado: usar os valores alterados nas próximas ativações. Desmarcado: usar uma vez e restaurar os valores originais.</span></span>
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" onClick={() => void saveOverride()} disabled={saving}>{saving ? "Salvando..." : "Salvar alterações"}</Button>
+            <Button size="sm" variant="outline" onClick={() => void resetOverride()}>Restaurar valores originais</Button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
