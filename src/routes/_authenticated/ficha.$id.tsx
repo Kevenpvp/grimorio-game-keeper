@@ -109,7 +109,7 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
   });
 
   const { data: sourceCharacters = [] } = useQuery({
-    queryKey: ["characters"],
+    queryKey: ["damage-source-characters"],
     queryFn: async () => {
       const { data, error } = await supabase.from("characters").select("id,name").order("name");
       if (error) throw error;
