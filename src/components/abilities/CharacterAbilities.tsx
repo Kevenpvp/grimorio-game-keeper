@@ -141,6 +141,17 @@ export function CharacterAbilitiesPanel({
   const { data: damageTypes = [] } = useDamageTypes();
   const { data: races = [] } = useRaces();
   const { data: abilityCatalog = [] } = useAbilities();
+  const db = supabase as any;
+  const { data: usedOnceAbilityIds = [] } = useQuery<string[]>({
+    queryKey: ["battle-ability-uses", battleId, characterId],
+    enabled: mode === "combat" && !!battleId,
+    queryFn: async () => {
+      const { data, error } = await db.from("character_ability_battle_uses")
+        .select("character_ability_id").eq("battle_id", battleId!).eq("character_id", characterId);
+      if (error) throw error;
+      return (data ?? []).map((row: { character_ability_id: string }) => row.character_ability_id);
+    },
+  });
   const demonioAssignment = (loadout ?? []).find((assigned) => {
     const catalogEntry = abilityCatalog.find((candidate) => candidate.id === assigned.ability_id);
     return catalogEntry?.custom_script_key === "demonio_interno"
@@ -199,6 +210,10 @@ export function CharacterAbilitiesPanel({
 
   async function activate(ability: CharacterAbility) {
     if (!canUse || !ability.can_activate || ability.cooldown_turns <= 0 || ability.cooldown_remaining > 0 || busyId) return;
+    if ((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle && mode === "combat" && usedOnceAbilityIds.includes(ability.id)) {
+      toast.error("Esta habilidade já foi usada neste combate.");
+      return;
+    }
     setBusyId(ability.id);
     const { data: spentMana, error } = await supabase.rpc("activate_character_ability", {
       _character_ability_id: ability.id,
@@ -207,6 +222,16 @@ export function CharacterAbilitiesPanel({
     });
     setBusyId(null);
     if (error) { toast.error(error.message); return; }
+    if ((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle && mode === "combat" && battleId) {
+      const { error: useError } = await db.from("character_ability_battle_uses").insert({
+        battle_id: battleId, character_ability_id: ability.id, character_id: characterId,
+      });
+      if (useError) {
+        toast.error("A habilidade foi ativada, mas não foi possível registrar o uso único: " + useError.message);
+      } else {
+        await qc.invalidateQueries({ queryKey: ["battle-ability-uses", battleId, characterId] });
+      }
+    }
     toast.success(`${ability.name} ativada!${typeof spentMana === "number" && spentMana > 0 ? ` Mana gasta: ${spentMana}.` : ""}`);
     void dispatchCustomAbilityScriptEvents(mode === "combat" ? battleId : null);
     await Promise.all([
@@ -277,6 +302,11 @@ export function CharacterAbilitiesPanel({
                         {ability.is_magical ? "Habilidade Mágica" : "Não mágica"}
                       </span>
                       {ability.can_activate && ability.self_target_only && <span className="rounded bg-muted px-2 py-1">Só em si mesmo</span>}
+                      {Boolean((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle) && (
+                        <span className={`rounded px-2 py-1 ${mode === "combat" && usedOnceAbilityIds.includes(ability.id) ? "bg-muted text-muted-foreground" : "bg-amber-500/10 text-amber-400"}`}>
+                          {mode === "combat" && usedOnceAbilityIds.includes(ability.id) ? "Já usada neste combate" : "1 uso por combate"}
+                        </span>
+                      )}
                   {!ability.can_activate ? (
                         <span className="rounded bg-gold/10 px-2 py-1 text-gold"><Sparkles className="mr-1 inline h-3 w-3" /> Não ativável</span>
                       ) : (
