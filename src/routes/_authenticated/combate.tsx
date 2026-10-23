@@ -477,9 +477,14 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
   const { data: battleAbilities = [] } = useBattleCharacterAbilities(battle.id, fighterIds);
   const abilitiesOf = (fighterId: string) => battleAbilities.filter((ability) => ability.character_id === fighterId);
   const modsOf = (f: Fighter) => {
-    const combined = { ...traitMods(races?.find((r) => r.id === f.race_id)) };
+    const race = races?.find((r) => r.id === f.race_id);
+    const mechanics = (race as unknown as { special_mechanics?: { duplicate_virtue_effects?: boolean; virtue_effect_multiplier?: number } } | undefined)?.special_mechanics;
+    const multiplier = mechanics?.duplicate_virtue_effects
+      ? Math.max(1, Math.min(10, Number(mechanics.virtue_effect_multiplier) || 2))
+      : 1;
+    const combined = { ...traitMods(race) };
     for (const [key, value] of Object.entries(traitMods(virtues?.find((v) => v.id === f.virtue_id)))) {
-      combined[key] = (combined[key] ?? 0) + value;
+      combined[key] = (combined[key] ?? 0) + value * multiplier;
       if (combined[key] === 0) delete combined[key];
     }
     return combined;
