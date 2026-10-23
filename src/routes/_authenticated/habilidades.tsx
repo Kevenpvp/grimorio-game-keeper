@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
-import { parseAbilityEffects, parseAbilityAttackDamage, useAbilities, useDamageTypes, type Ability, type AbilityEffectDefinition, type AbilityAttackDamageConfig, type AbilityAttackDamageKind } from "@/lib/abilities";
+import { parseAbilityEffects, parseAbilityAttackDamage, parseAbilityAttackEffectGroups, useAbilities, useDamageTypes, type Ability, type AbilityEffectDefinition, type AbilityAttackDamageConfig, type AbilityAttackDamageKind, type AbilityAttackEffectGroup } from "@/lib/abilities";
 import {
   CUSTOM_ABILITY_SCRIPTS,
   DEMONIO_INTERNO_DEFAULT_ATTRIBUTES,
@@ -99,6 +99,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
   const [isMagical, setIsMagical] = useState(ability.is_magical);
   const [attackEnabled, setAttackEnabled] = useState(ability.attack_enabled);
   const [attackDamage, setAttackDamage] = useState<AbilityAttackDamageConfig>(() => parseAbilityAttackDamage(ability.attack_damage));
+  const [attackEffectGroups, setAttackEffectGroups] = useState<AbilityAttackEffectGroup[]>(() => parseAbilityAttackEffectGroups(ability.attack_effect_groups));
   const { data: damageTypes = [] } = useDamageTypes();
   const physicalDamageTypes = damageTypes.filter((type) => type.category === "physical");
   const magicalDamageTypes = damageTypes.filter((type) => type.category === "magical");
@@ -120,6 +121,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
     setIsMagical(ability.is_magical);
     setAttackEnabled(ability.attack_enabled);
     setAttackDamage(parseAbilityAttackDamage(ability.attack_damage));
+    setAttackEffectGroups(parseAbilityAttackEffectGroups(ability.attack_effect_groups));
     setOncePerBattle(Boolean((ability as Ability & { once_per_battle?: boolean }).once_per_battle));
     setSelfTargetOnly(ability.self_target_only);
     setCooldown(String(ability.cooldown_turns));
@@ -210,6 +212,14 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
         physical_damage_type_id: selectedPhysicalAttackTypeId,
         damage_type_id: selectedMagicalAttackTypeId,
       } as unknown as Json,
+      attack_effect_groups: attackEffectGroups
+        .filter((group) => group.name.trim() && group.effects.length > 0)
+        .map((group) => ({
+          id: group.id,
+          name: group.name.trim(),
+          chance: Math.max(0, Math.min(100, Math.round(Number(group.chance) || 0))),
+          effects: group.effects.map((effect) => ({ ...effect, duration: Math.max(1, effect.duration) })),
+        })) as unknown as Json,
       once_per_battle: canActivate && oncePerBattle,
       self_target_only: canActivate && selfTargetOnly,
       is_passive: !canActivate,
@@ -372,6 +382,53 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
             <p className="text-xs text-muted-foreground">
               Exemplo: Força 100, atributo em 100% e dano fixo adicional 20 = 120 de dano base antes da defesa. No combate, o mestre poderá somar dano extra para cada alvo.
             </p>
+            <div className="space-y-3 border-t border-border/70 pt-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h4 className="text-sm font-semibold text-gold">Efeitos por chance de acerto</h4>
+                  <p className="mt-1 text-xs text-muted-foreground">Crie categorias como 50% de acerto. No popup, o mestre decide separadamente para cada alvo se os efeitos daquela categoria acertaram.</p>
+                </div>
+                <Button type="button" size="sm" variant="outline" onClick={() => setAttackEffectGroups((current) => [
+                  ...current,
+                  { id: crypto.randomUUID(), name: "Efeitos", chance: 50, effects: [] },
+                ])}>
+                  <Plus className="mr-1 h-3.5 w-3.5" /> Adicionar categoria
+                </Button>
+              </div>
+              {attackEffectGroups.length === 0 && (
+                <p className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">Nenhuma categoria de efeitos configurada.</p>
+              )}
+              {attackEffectGroups.map((group, index) => (
+                <section key={group.id} className="space-y-3 rounded-md border border-border p-3">
+                  <div className="grid gap-3 sm:grid-cols-[1fr_140px_auto] sm:items-end">
+                    <label className="space-y-1 text-xs font-medium">
+                      Nome da categoria
+                      <Input value={group.name} onChange={(event) => setAttackEffectGroups((current) => current.map((entry) =>
+                        entry.id === group.id ? { ...entry, name: event.target.value } : entry
+                      ))} placeholder="Ex.: Efeitos do veneno" />
+                    </label>
+                    <label className="space-y-1 text-xs font-medium">
+                      Chance de acerto (%)
+                      <Input type="number" min={0} max={100} value={group.chance}
+                        onChange={(event) => setAttackEffectGroups((current) => current.map((entry) =>
+                          entry.id === group.id ? { ...entry, chance: Math.max(0, Math.min(100, Math.round(Number(event.target.value) || 0))) } : entry
+                        ))} />
+                    </label>
+                    <Button type="button" size="sm" variant="destructive" onClick={() => setAttackEffectGroups((current) => current.filter((entry) => entry.id !== group.id))}>
+                      <Trash2 className="mr-1 h-3.5 w-3.5" /> Remover
+                    </Button>
+                  </div>
+                  <AbilityEffectsEditor
+                    effects={group.effects}
+                    onChange={(next) => setAttackEffectGroups((current) => current.map((entry) => entry.id === group.id ? { ...entry, effects: next } : entry))}
+                    permanent={false}
+                    title={`Efeitos — ${group.chance}% de acerto`}
+                    description="Estes efeitos só são aplicados no alvo quando o mestre marcar esta categoria como acertada no popup do ataque."
+                    defs={defs}
+                  />
+                </section>
+              ))}
+            </div>
           </div>
         )}
       </section>
