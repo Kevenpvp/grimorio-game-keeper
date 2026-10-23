@@ -273,10 +273,17 @@ export function CharacterAbilitiesPanel({
     },
   });
   const selectedRace = races.find((race) => race.id === characterRaceId);
-  const raceMechanics = (selectedRace as unknown as { special_mechanics?: { duplicate_virtue_effects?: boolean; virtue_effect_multiplier?: number } } | undefined)?.special_mechanics;
+  const raceMechanics = (selectedRace as unknown as { special_mechanics?: { duplicate_virtue_effects?: boolean; virtue_effect_multiplier?: number; virtue_effect_blacklist?: string[] } } | undefined)?.special_mechanics;
+  const virtueBlacklist = Array.isArray(raceMechanics?.virtue_effect_blacklist)
+    ? raceMechanics.virtue_effect_blacklist
+    : [];
   const racialMultiplier = raceMechanics?.duplicate_virtue_effects
     ? Math.max(1, Math.min(10, Number(raceMechanics.virtue_effect_multiplier) || 2))
     : 1;
+  const multiplierForAbility = (ability: CharacterAbility | undefined) =>
+    ability?.granted_by_virtue_id && !virtueBlacklist.includes(ability.granted_by_virtue_id)
+      ? racialMultiplier
+      : 1;
   const { data: usedOnceAbilityIds = [] } = useQuery<string[]>({
     queryKey: ["battle-ability-uses", battleId, characterId],
     enabled: mode === "combat" && !!battleId,
@@ -297,7 +304,7 @@ export function CharacterAbilitiesPanel({
   const demonioAssignedCustomAttributes = (demonioAssignment as (CharacterAbility & { custom_attributes?: unknown }) | undefined)?.custom_attributes;
   const demonioCustomAttributes = effectiveCustomAbilityAttributes(
     Array.isArray(demonioAssignedCustomAttributes) ? demonioAssignedCustomAttributes : demonioCatalogEntry?.custom_attributes,
-    demonioAssignment?.granted_by_virtue_id ? racialMultiplier : 1,
+    multiplierForAbility(demonioAssignment),
   );
   const demonioHeat = numericStateValue(demonioAssignment?.custom_state, "dano_superaquecimento");
   const demonioReflectPercent = customNumberAttribute(
@@ -472,7 +479,7 @@ export function CharacterAbilitiesPanel({
                   return <CharacterAbilityCustomAttributesEditor
                     ability={ability}
                     definitions={catalogEntry.custom_attributes}
-                    multiplier={ability.granted_by_virtue_id ? racialMultiplier : 1}
+                    multiplier={multiplierForAbility(ability)}
                   />;
                 })()}
                 {mode === "combat" && ability.can_activate && ability.mana_cost > 0 && (
