@@ -122,7 +122,7 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
       ...(sourceId ? { _source_character_id: sourceId } : {}),
       _effects: effects as unknown as Json,
       _dots: dotPayload as unknown as Json,
-      _permanent: sheetPermanent,
+      _permanent: !battleId && sheetPermanent,
     });
     if (error) throw error;
     const count = Number(data ?? 0);
@@ -471,7 +471,7 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
             onChange={setEffects}
             defs={defs}
             title="Efeitos para aplicar junto com o dano"
-            description="Os efeitos são aplicados no alvo deste painel. Use a opção permanente para registrá-los na ficha, fora da duração da batalha."
+            description={battleId ? "Os efeitos e DoTs são temporários durante o combate e seguem a duração configurada." : "Os efeitos e DoTs são aplicados diretamente na ficha. Marque como permanentes somente os que devem continuar fora de combate."}
             allowHealing={false}
           />
           <div className="space-y-3 rounded-md border border-border p-3">
@@ -523,15 +523,17 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
               );
             })}
           </div>
-          <label className="flex cursor-pointer items-start gap-2 rounded-md border border-emerald-500/40 bg-emerald-500/5 p-3 text-sm">
-            <input type="checkbox" className="mt-1" checked={sheetPermanent} onChange={(event) => setSheetPermanent(event.target.checked)} />
-            <span>
-              <span className="block font-semibold text-emerald-400">Permanente na ficha</span>
-              <span className="mt-0.5 block text-xs text-muted-foreground">
-                Os efeitos e DoTs ficam fora da batalha e não perdem duração, não são removidos por limpeza, “remover ao atacar” nem pelo fim do combate. Só o mestre pode removê-los manualmente.
+          {!battleId && (
+            <label className="flex cursor-pointer items-start gap-2 rounded-md border border-emerald-500/40 bg-emerald-500/5 p-3 text-sm">
+              <input type="checkbox" className="mt-1" checked={sheetPermanent} onChange={(event) => setSheetPermanent(event.target.checked)} />
+              <span>
+                <span className="block font-semibold text-emerald-400">Permanente na ficha</span>
+                <span className="mt-0.5 block text-xs text-muted-foreground">
+                  Este efeito ficará fora de combate, não perderá duração nem será removido por limpezas automáticas. Só o mestre poderá removê-lo manualmente.
+                </span>
               </span>
-            </span>
-          </label>
+            </label>
+          )}
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="outline" disabled={applyingEffectsOnly || applyingDamage || (!effects.length && !dots.length)}
               onClick={() => void applyEffectsOnly()}>
