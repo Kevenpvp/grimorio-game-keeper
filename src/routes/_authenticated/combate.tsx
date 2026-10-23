@@ -1392,10 +1392,10 @@ function MindControlPanel({ battleId, actor, fighters, selectedTargets, effects,
     }
     setBusy(true);
     try {
-      const { data, error } = await (supabase as any).rpc("apply_mind_control_effects", {
+      const { data, error } = await supabase.rpc("apply_mind_control_effects", {
         _battle_id: battleId,
         _controller_character_id: actor.id,
-        _target_selections: chosen,
+        _target_selections: chosen as unknown as Json,
       });
       if (error) throw error;
       const count = Number(data ?? 0);
