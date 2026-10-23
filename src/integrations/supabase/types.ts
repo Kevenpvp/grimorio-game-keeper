@@ -1458,6 +1458,14 @@ export type Database = {
         }
         Returns: Json
       }
+      apply_mind_control_effects: {
+        Args: {
+          _battle_id: string
+          _controller_character_id: string
+          _target_selections: Json
+        }
+        Returns: number
+      }
       apply_battle_damage_critical: {
         Args: {
           _battle_id: string
