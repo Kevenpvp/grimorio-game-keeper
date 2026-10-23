@@ -1,17 +1,19 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ImagePlus, Trash2, Upload, Sparkles } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { usePhotoUrl, type Character } from "@/lib/sheets";
 
-type Transformation = { id: string; name: string; description: string | null; cooldown_turns: number; mana_cost: number };
+type Transformation = { id: string; name: string; description: string | null; cooldown_turns: number; mana_cost: number; owner_character_id?: string | null };
 type CharacterTransformationState = { transformation_id: string; image_path: string | null; active: boolean; cooldown_remaining: number };
 
 export function CharacterTransformationImages({ character, isMaster = false }: { character: Character; isMaster?: boolean }) {
   const db = supabase as any;
   const qc = useQueryClient();
+  const [newTransformationName, setNewTransformationName] = useState("");
+  const [creatingTransformation, setCreatingTransformation] = useState(false);
 
   useEffect(() => {
     const channel = supabase
@@ -34,7 +36,7 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
   const { data: catalog = [], isLoading: loadingCatalog } = useQuery<Transformation[]>({
     queryKey: ["transformations"],
     queryFn: async () => {
-      const { data, error } = await db.from("transformations").select("id,name,description,cooldown_turns,mana_cost").order("name");
+      const { data, error } = await db.from("transformations").select("id,name,description,cooldown_turns,mana_cost,owner_character_id").order("name");
       if (error) throw error;
       return data ?? [];
     },
@@ -67,7 +69,40 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
   });
 
   const availableIds = new Set([...raceLinks, ...virtueLinks].map((link) => link.transformation_id));
-  const available = catalog.filter((transformation) => availableIds.has(transformation.id));
+  const available = catalog.filter((transformation) => availableIds.has(transformation.id) || transformation.owner_character_id === character.id);
+  async function createPersonalTransformation() {
+    const name = newTransformationName.trim();
+    if (!name) { toast.error("Informe o nome da transformação"); return; }
+    setCreatingTransformation(true);
+    const { data, error } = await db.from("transformations").insert({
+      owner_character_id: character.id,
+      name,
+      description: "",
+      duration_turns: 3,
+      cooldown_turns: 3,
+      mana_cost: 0,
+      modifiers: {},
+      effects: [],
+      end_effects: [],
+    }).select("id").single();
+    if (error) { setCreatingTransformation(false); toast.error(error.message); return; }
+    const { error: stateError } = await db.from("character_transformations").insert({
+      character_id: character.id, transformation_id: data.id, active: false, cooldown_remaining: 0,
+    });
+    setCreatingTransformation(false);
+    if (stateError) {
+      await db.from("transformations").delete().eq("id", data.id);
+      toast.error("A transformação foi criada, mas não pôde ser vinculada à ficha: " + stateError.message);
+      return;
+    }
+    setNewTransformationName("");
+    toast.success("Transformação exclusiva criada nesta ficha");
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ["transformations"] }),
+      qc.invalidateQueries({ queryKey: ["character-transformations", character.id] }),
+      qc.invalidateQueries({ queryKey: ["battle-character-transformations"] }),
+    ]);
+  }
   const busy = loadingCatalog || loadingRaces || loadingVirtues || loadingStates;
 
   return (
@@ -77,8 +112,14 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
         <h2 className="text-lg text-gold">Imagens das transformações</h2>
       </div>
       <p className="text-sm text-muted-foreground">
-        Escolha uma imagem para cada transformação concedida pela raça ou virtude atual. Durante o combate, os outros jogadores verão essa imagem enquanto a transformação estiver ativa. Sem imagem personalizada, o retrato normal continuará sendo usado.
+        Escolha uma imagem para cada transformação da ficha. Você também pode criar uma transformação exclusiva deste personagem, sem adicioná-la ao catálogo geral.
       </p>
+      <div className="flex flex-col gap-2 rounded-md border border-gold/30 p-3 sm:flex-row">
+        <Input value={newTransformationName} onChange={(event) => setNewTransformationName(event.target.value)} placeholder="Nome da transformação exclusiva" />
+        <Button type="button" onClick={() => void createPersonalTransformation()} disabled={creatingTransformation || !newTransformationName.trim()}>
+          <Sparkles className="mr-1 h-4 w-4" /> {creatingTransformation ? "Criando..." : "Criar transformação"}
+        </Button>
+      </div>
       {statesError && <p className="text-sm text-destructive">Não foi possível carregar as imagens: {String(statesError.message ?? statesError)}</p>}
       {busy ? (
         <p className="text-sm text-muted-foreground">Carregando transformações…</p>
