@@ -4,7 +4,7 @@ import { Check, Shield } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { useClasses, useDefs, type Character, type ClassTrait, type Trait } from "@/lib/sheets";
+import { useClasses, useDefs, type Character, type ClassTrait } from "@/lib/sheets";
 import { parseAbilityEffects, useAbilities } from "@/lib/abilities";
 import { ModsList } from "@/components/sheet/RacePicker";
 import { TransformationGrantPicker } from "@/components/transformations/TransformationGrantPicker";
@@ -112,7 +112,7 @@ export function ClassPicker({ character, isMaster }: { character: Character; isM
                 </div>
                 <div className="mt-2">
                   <ModsList
-                    race={classTrait as Trait}
+                    race={classTrait}
                     defs={defs}
                     abilities={grantedAbilities}
                     transformations={grantedTransformations}
