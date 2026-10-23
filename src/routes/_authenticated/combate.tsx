@@ -227,7 +227,7 @@ function useLiveBattles(isMaster: boolean, userId: string | undefined) {
     queryKey: ["battles", userId, isMaster],
     enabled: !!userId,
     queryFn: async () => {
-      const masterSelection = "*, battle_participants(sort_order,turn_count, characters(id,name,player_name,photo_path,race_id,virtue_id,class_id,owner_id,race_physical_allocations,virtue_physical_allocations,class_physical_allocations,race_physical_points_granted,virtue_physical_points_granted,class_physical_points_granted,body,sanity,character_attributes(attribute_key,current_value,max_value,points,bonus)))";
+      const masterSelection = "*, battle_participants(sort_order,turn_count, characters(id,name,player_name,photo_path,race_id,virtue_id,class_id,class_custom_modifiers,owner_id,race_physical_allocations,virtue_physical_allocations,class_physical_allocations,race_physical_points_granted,virtue_physical_points_granted,class_physical_points_granted,body,sanity,character_attributes(attribute_key,current_value,max_value,points,bonus)))";
       const playerSelection = "*, battle_participants(sort_order,turn_count, characters(id,name,player_name,photo_path,owner_id,race_id,virtue_id,class_id))";
       const { data, error } = await supabase
         .from("battles")
@@ -251,7 +251,7 @@ function useLiveBattles(isMaster: boolean, userId: string | undefined) {
 
       const { data: ownedCharacters, error: ownedError } = await supabase
         .from("characters")
-        .select("id,name,player_name,photo_path,owner_id,race_id,virtue_id,class_id,race_physical_allocations,virtue_physical_allocations,class_physical_allocations,race_physical_points_granted,virtue_physical_points_granted,class_physical_points_granted,body,sanity,character_attributes(attribute_key,current_value,max_value,points,bonus)")
+        .select("id,name,player_name,photo_path,owner_id,race_id,virtue_id,class_id,class_custom_modifiers,race_physical_allocations,virtue_physical_allocations,class_physical_allocations,race_physical_points_granted,virtue_physical_points_granted,class_physical_points_granted,body,sanity,character_attributes(attribute_key,current_value,max_value,points,bonus)")
         .in("id", ownIds);
       if (ownedError) throw ownedError;
 
@@ -1181,6 +1181,10 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
           }
           if (effectType === "damage_reduction" && reductionScope === "magical" && damageTypes.length === 0) {
             toast.error("Cadastre ao menos um tipo mágico antes de criar esta mitigação.");
+            return;
+          }
+          if (effectType === "dot_immunity" && dotImmunityScope === "specific" && dotImmunityTemplateIds.length === 0) {
+            toast.error("Selecione pelo menos um DoT específico para bloquear.");
             return;
           }
           onAddEffect({
