@@ -301,10 +301,10 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
       const reductionSummary = damageKind === "physical"
         ? reductionPart("Mitigação física recebida", physicalReductionFixed, physicalReductionPercent)
         : damageKind === "magical"
-          ? reductionPart(`Mitigação mágica recebida para ${typeName} / grau ${magicLevel}`, magicalReductionFixed, magicalReductionPercent)
+          ? reductionPart(`Mitigação mágica recebida para ${magicTypeName} / grau ${magicLevel}`, magicalReductionFixed, magicalReductionPercent)
           : damageKind === "hybrid"
             ? reductionPart("Mitigação da metade física", physicalReductionFixed, physicalReductionPercent)
-              + reductionPart(`Mitigação da metade mágica (${typeName}, grau ${magicLevel})`, magicalReductionFixed, magicalReductionPercent)
+              + reductionPart(`Mitigação da metade mágica (${magicTypeName}, grau ${magicLevel})`, magicalReductionFixed, magicalReductionPercent)
             : "";
       const criticalSummary = result.critical_damage === true ? "⚔️ DANO CRÍTICO ×2 aplicado. " : "";
       toast.success(
@@ -324,7 +324,7 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
         // and the source (causou_dano), so refresh both the stored state and live HP cost.
         qc.invalidateQueries({ queryKey: ["character-abilities", target.id] }),
         ...(sourceCharacterId
-          ? [qc.invalidateQueries({ queryKey: ["character-abilities", sourceCharacterId] })]
+          ? [qc.invalidateQueries({ queryKey: ["character-abilities", effectiveSourceCharacterId] })]
           : []),
         qc.invalidateQueries({ queryKey: ["character-abilities-battle"] }),
         // Vulnerabilidade de Dano may create a new status effect after this hit.
@@ -343,7 +343,7 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
 
   useEffect(() => {
     applyDamageRef.current = async (sourceId: string) => { await applyDamage(sourceId); };
-  });
+  }, [applyDamage]);
   useEffect(() => {
     if (!onRegisterDamageConfirmation) return;
     onRegisterDamageConfirmation(target.id, (sourceId) => applyDamageRef.current ? applyDamageRef.current(sourceId) : Promise.resolve());
@@ -484,6 +484,7 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
             defs={defs}
             title="Efeitos para aplicar junto com o dano"
             description="Os efeitos são aplicados no alvo deste painel. Use a opção permanente para registrá-los na ficha, fora da duração da batalha."
+            allowHealing={false}
           />
           <div className="space-y-3 rounded-md border border-border p-3">
             <div>
