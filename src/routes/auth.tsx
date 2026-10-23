@@ -83,30 +83,17 @@ function AuthPage() {
   async function google() {
     setBusy(true);
     try {
-      // Sempre abrimos o OAuth em outra aba. No preview não publicado do Lovable,
-      // redirecionar a aba atual para o Google pode encerrar a sessão do preview;
-      // depois do callback, o proxy pode responder 404 em vez de recarregar o app.
-      const { data, error } = await supabase.auth.signInWithOAuth({
+      // Deixa o Supabase iniciar o fluxo OAuth normalmente na mesma aba.
+      // Assim, o callback retorna ao endereço atual do app sem popup nem redirecionamento manual.
+      const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
           redirectTo: window.location.origin,
-          skipBrowserRedirect: true,
         },
       });
       if (error) throw error;
-      if (!data?.url) throw new Error("Não foi possível gerar o endereço de login com Google.");
-
-      const popup = window.open(data.url, "_blank");
-      if (!popup) {
-        throw new Error("O navegador bloqueou a janela de login. Permita pop-ups para o Grimório e tente novamente.");
-      }
-      // A autenticação usa o callback e armazenamento do próprio Supabase;
-      // o popup não precisa controlar a aba original.
-      try { popup.opener = null; } catch { /* Alguns navegadores não permitem alterar opener. */ }
-      toast.info("Login do Google aberto em outra aba. Conclua por lá; esta aba do Grimório ficará aberta.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Não foi possível entrar com Google");
-    } finally {
       setBusy(false);
     }
   }
