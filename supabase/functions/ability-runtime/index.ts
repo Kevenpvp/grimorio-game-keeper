@@ -175,8 +175,8 @@ async function buildContext(service: ReturnType<typeof createClient>, event: Que
     const attribute = asObject(rawAttribute);
     if (typeof attribute.key !== "string" || !attribute.key.trim()) continue;
     if (attribute.type === "number" && Number.isFinite(Number(attribute.value))) {
-      // Only numeric custom values are multiplied; text flags and booleans remain unchanged.
-      customAttributes[attribute.key] = Number(attribute.value) * racialMultiplier;
+      // Only numeric attributes explicitly eligible for racial scaling are multiplied.
+      customAttributes[attribute.key] = Number(attribute.value) * (attribute.scale_with_race === false ? 1 : racialMultiplier);
     } else if (attribute.type === "boolean") customAttributes[attribute.key] = attribute.value === true;
     else if (attribute.type === "string" && typeof attribute.value === "string") customAttributes[attribute.key] = attribute.value;
   }
