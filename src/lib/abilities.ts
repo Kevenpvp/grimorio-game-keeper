@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Tables } from "@/integrations/supabase/types";
 import { supabase } from "@/integrations/supabase/client";
 
-export type AbilityEffectType = "status" | "regeneration" | "mana_regeneration" | "mana_used" | "no_regen_hp" | "no_regen_mana" | "magic_prohibition" | "stun" | "damage_dealt" | "damage_reduction" | "damage_received" | "damage_vulnerability" | "no_mana" | "healing" | "invincible" | "healing_blocked" | "magic_healing_reversal";
+export type AbilityEffectType = "status" | "regeneration" | "mana_regeneration" | "mana_used" | "no_regen_hp" | "no_regen_mana" | "magic_prohibition" | "stun" | "damage_dealt" | "damage_reduction" | "damage_received" | "damage_vulnerability" | "no_mana" | "healing" | "invincible" | "healing_blocked" | "magic_healing_reversal" | "mental_control_immunity" | "mental_control_chance" | "mental_control_resistance" | "dot_immunity" | "invisibility";
 export type DamageScope = "any" | "physical" | "magical";
 export type DamageReductionScope = "physical" | "magical";
 export type DamageReceivedScope = "any" | "physical" | "magical" | "race";
@@ -16,6 +16,9 @@ export type AbilityEffectDefinition = {
   apply_both_on_activation?: boolean;
   /** If true, the effect remains active until its battle ends, independent of turn advances. */
   until_combat_end?: boolean;
+  remove_on_attack?: boolean;
+  dot_immunity_scope?: "all" | "physical" | "magical" | "specific";
+  dot_immunity_template_ids?: string[];
   /** Instant restoration or a healing buff that ticks on each combat turn advance. */
   healing_timing?: "instant" | "per_turn";
   healing_hp_enabled?: boolean;
@@ -187,13 +190,26 @@ export function parseAbilityAttackDamage(value: unknown): AbilityAttackDamageCon
   };
 }
 
+export type DotTemplateOption = Pick<Tables<"damage_over_time_templates">, "id" | "name" | "damage_kind" | "physical_damage_type_id" | "damage_type_id" | "magic_level">;
+
+export function useDotTemplates() {
+  return useQuery({
+    queryKey: ["damage-over-time-templates"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("damage_over_time_templates").select("id,name,damage_kind,physical_damage_type_id,damage_type_id,magic_level").order("name");
+      if (error) throw error;
+      return (data ?? []) as DotTemplateOption[];
+    },
+  });
+}
+
 export type Ability = Tables<"abilities">;
 export type CharacterAbilityRow = Tables<"character_abilities">;
 export type CharacterAbility = Omit<CharacterAbilityRow, "effects" | "passive_effects" | "end_effects"> & { effects: AbilityEffectDefinition[]; passive_effects: AbilityEffectDefinition[]; end_effects: AbilityEffectDefinition[] };
 
 export function parseAbilityEffects(value: unknown, nested = false): AbilityEffectDefinition[] {
   if (!Array.isArray(value)) return [];
-  const validTypes: AbilityEffectType[] = ["status", "regeneration", "mana_regeneration", "mana_used", "no_regen_hp", "no_regen_mana", "magic_prohibition", "stun", "damage_dealt", "damage_reduction", "damage_received", "damage_vulnerability", "no_mana", "healing", "invincible", "healing_blocked", "magic_healing_reversal"];
+  const validTypes: AbilityEffectType[] = ["status", "regeneration", "mana_regeneration", "mana_used", "no_regen_hp", "no_regen_mana", "magic_prohibition", "stun", "damage_dealt", "damage_reduction", "damage_received", "damage_vulnerability", "no_mana", "healing", "invincible", "healing_blocked", "magic_healing_reversal", "mental_control_immunity", "mental_control_chance", "mental_control_resistance", "dot_immunity", "invisibility"];
   return value.flatMap((item): AbilityEffectDefinition[] => {
     if (!item || typeof item !== "object") return [];
     const raw = item as Record<string, unknown>;
@@ -201,7 +217,7 @@ export function parseAbilityEffects(value: unknown, nested = false): AbilityEffe
     const effectType = raw.effect_type as AbilityEffectType;
     const polarity = effectType === "no_mana" || effectType === "healing_blocked" || effectType === "magic_prohibition" || effectType === "magic_healing_reversal" || effectType === "damage_received"
       ? "debuff"
-      : effectType === "damage_reduction" || effectType === "invincible"
+      : effectType === "damage_reduction" || effectType === "invincible" || effectType === "mental_control_immunity" || effectType === "mental_control_chance" || effectType === "mental_control_resistance" || effectType === "dot_immunity" || effectType === "invisibility"
         ? "buff"
         : raw.polarity === "debuff" ? "debuff" : "buff";
     const valueMode = raw.value_mode === "percent" ? "percent" : "fixed";
@@ -316,6 +332,11 @@ export function parseAbilityEffects(value: unknown, nested = false): AbilityEffe
         ? raw.magic_healing_reversal_damage_mode : "healing_amount",
       magic_healing_reversal_custom_damage: Math.max(0, Math.min(1_000_000,
         Number.isFinite(Number(raw.magic_healing_reversal_custom_damage)) ? Number(raw.magic_healing_reversal_custom_damage) : 0)),
+      remove_on_attack: raw.remove_on_attack === true,
+      dot_immunity_scope: raw.dot_immunity_scope === "physical" || raw.dot_immunity_scope === "magical" || raw.dot_immunity_scope === "specific" ? raw.dot_immunity_scope : "all",
+      dot_immunity_template_ids: Array.isArray(raw.dot_immunity_template_ids)
+        ? [...new Set(raw.dot_immunity_template_ids.filter((item): item is string => typeof item === "string"))]
+        : [],
     }];
   });
 }
