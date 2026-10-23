@@ -92,11 +92,59 @@ export type AbilityAttackDamageConfig = {
   magic_level: DamageMagicLevel;
 };
 
+export type AbilityDotDamageMode = "fixed" | "percent" | "attribute";
+export type AbilityDotEffect = {
+  id: string;
+  name: string;
+  damage_kind: "physical" | "magical";
+  physical_damage_type_id: string | null;
+  damage_type_id: string | null;
+  magic_level: DamageMagicLevel | null;
+  damage_mode: AbilityDotDamageMode;
+  damage_amount: number;
+  attribute_key: string | null;
+  attribute_percent: number;
+  fixed_damage: number;
+  duration: number;
+};
+
+export function parseAbilityDotEffects(value: unknown): AbilityDotEffect[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item, index): AbilityDotEffect[] => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+    const raw = item as Record<string, unknown>;
+    const name = typeof raw.name === "string" && raw.name.trim() ? raw.name.trim() : "DoT";
+    const damageKind = raw.damage_kind === "magical" ? "magical" : raw.damage_kind === "physical" ? "physical" : null;
+    const mode: AbilityDotDamageMode = raw.damage_mode === "percent" || raw.damage_mode === "attribute" ? raw.damage_mode : "fixed";
+    const magicLevel = raw.magic_level === "media" || raw.magic_level === "alta" ? raw.magic_level : raw.magic_level === "baixa" ? "baixa" : null;
+    const amount = Number(raw.damage_amount ?? 10);
+    const attributePercent = Number(raw.attribute_percent ?? 100);
+    const fixedDamage = Number(raw.fixed_damage ?? 0);
+    const duration = Number(raw.duration ?? 3);
+    if (!damageKind) return [];
+    return [{
+      id: typeof raw.id === "string" && raw.id.trim() ? raw.id : `dot-${index + 1}`,
+      name,
+      damage_kind: damageKind,
+      physical_damage_type_id: typeof raw.physical_damage_type_id === "string" ? raw.physical_damage_type_id : null,
+      damage_type_id: typeof raw.damage_type_id === "string" ? raw.damage_type_id : null,
+      magic_level: magicLevel,
+      damage_mode: mode,
+      damage_amount: Number.isFinite(amount) ? Math.max(0, Math.min(1_000_000, amount)) : 10,
+      attribute_key: typeof raw.attribute_key === "string" && raw.attribute_key ? raw.attribute_key : null,
+      attribute_percent: Number.isFinite(attributePercent) ? Math.max(0, Math.min(1000, attributePercent)) : 100,
+      fixed_damage: Number.isFinite(fixedDamage) ? Math.max(0, Math.min(1_000_000, fixedDamage)) : 0,
+      duration: Number.isFinite(duration) ? Math.max(1, Math.min(1000, Math.floor(duration))) : 3,
+    }];
+  });
+}
+
 export type AbilityAttackEffectGroup = {
   id: string;
   name: string;
   chance: number;
   effects: AbilityEffectDefinition[];
+  dots: AbilityDotEffect[];
 };
 
 export function parseAbilityAttackEffectGroups(value: unknown): AbilityAttackEffectGroup[] {
