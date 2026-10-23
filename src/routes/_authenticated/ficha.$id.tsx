@@ -108,6 +108,15 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
     },
   });
 
+  const { data: sourceCharacters = [] } = useQuery({
+    queryKey: ["characters"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("characters").select("id,name").order("name");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["character", character.id] });
     qc.invalidateQueries({ queryKey: ["characters"] });
@@ -251,7 +260,7 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
           <CharacterTransformationImages character={character} isMaster />
           <CharacterAbilitiesManager characterId={character.id} />
 
-          <DamageApplier target={{ id: character.id, name: character.name }} />
+          <DamageApplier target={{ id: character.id, name: character.name }} sources={sourceCharacters.filter((source) => source.id !== character.id).map((source) => ({ id: source.id, name: source.name }))} />
 
           <section className="grid gap-4 sm:grid-cols-2">
             <NumberField label="Pontos disponíveis" icon="sparkles" value={character.available_points}
