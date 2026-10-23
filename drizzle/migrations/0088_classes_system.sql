@@ -1111,7 +1111,7 @@ CREATE TRIGGER classes_sync_starting_effects AFTER UPDATE OF starting_effects ON
 FOR EACH ROW EXECUTE FUNCTION public.sync_character_class_effects_after_template_change();
 DROP TRIGGER IF EXISTS classes_sync_trait_dependents ON public.classes;
 CREATE TRIGGER classes_sync_trait_dependents
-AFTER UPDATE OF name, description, modifiers, special_mechanics, starting_effects ON public.classes
+AFTER UPDATE OF name, description, modifiers, special_mechanics ON public.classes
 FOR EACH ROW EXECUTE FUNCTION public.sync_class_trait_dependents();
 
 DROP TRIGGER IF EXISTS characters_sync_class_assignments_insert ON public.characters;
