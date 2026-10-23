@@ -1,8 +1,8 @@
 import type { Json } from "@/integrations/supabase/types";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient, type QueryClient, type QueryKey } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronUp, Crosshair, Dices, Plus, Swords, Trash2, Copy, Footprints, RotateCw, Minus, Brain, Activity, Sparkles, CheckCircle2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ChevronDown, ChevronUp, Crosshair, Dices, Plus, Swords, Trash2, Copy, Footprints, RotateCw, Minus, Brain, Activity, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1504,33 +1504,10 @@ function Actions({ battleId, actor, targets, fighters, defs, val, effects, abili
 }) {
   const [roll, setRoll] = useState<Roll | null>(null);
   const [testKey, setTestKey] = useState("strength");
-  const [confirmingDamage, setConfirmingDamage] = useState(false);
-  const damageConfirmHandlers = useRef(new Map<string, (sourceCharacterId: string) => Promise<void>>());
-  const registerDamageConfirmation = useCallback((targetId: string, handler: ((sourceCharacterId: string) => Promise<void>) | null) => {
-    if (handler) damageConfirmHandlers.current.set(targetId, handler);
-    else damageConfirmHandlers.current.delete(targetId);
-  }, []);
   const [dodgeFromId, setDodgeFromId] = useState(() => targets[0]?.id ?? fighters.find((f) => f.id !== actor.id)?.id ?? "");
   const label = (k: string) => defs.find((d) => d.key === k)?.label ?? k;
   const dodgeFrom = fighters.find((f) => f.id === dodgeFromId && f.id !== actor.id);
   const testable = defs;
-
-  async function confirmDamage() {
-    if (targets.length === 0) { toast.error("Selecione pelo menos um alvo."); return; }
-    const missing = targets.filter((target) => !damageConfirmHandlers.current.has(target.id));
-    if (missing.length > 0) { toast.error("Os painéis de dano ainda estão carregando. Tente novamente."); return; }
-    setConfirmingDamage(true);
-    try {
-      for (const target of targets) {
-        const handler = damageConfirmHandlers.current.get(target.id);
-        if (handler) await handler(actor.id);
-      }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Não foi possível confirmar o dano.");
-    } finally {
-      setConfirmingDamage(false);
-    }
-  }
 
   function attack() {
     const aAtk = val(actor, "atk_speed");
@@ -1611,9 +1588,6 @@ function Actions({ battleId, actor, targets, fighters, defs, val, effects, abili
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Button onClick={attack}><Swords className="mr-1 h-4 w-4" /> Atacar todos</Button>
-              <Button variant="outline" onClick={() => void confirmDamage()} disabled={confirmingDamage}>
-                <CheckCircle2 className="mr-1 h-4 w-4" /> {confirmingDamage ? "Confirmando dano…" : "Confirmar dano"}
-              </Button>
               <select className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={testKey} onChange={(e) => setTestKey(e.target.value)}>
                 {testable.map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
               </select>
@@ -1658,7 +1632,7 @@ function Actions({ battleId, actor, targets, fighters, defs, val, effects, abili
           <p className="text-sm text-muted-foreground">Cada alvo tem campos próprios para quantidade e valores de dano; aplicar em um alvo não altera os outros.</p>
           {targets.map((target) => <DamageApplier key={target.id} target={target} battleId={battleId}
             sources={fighters.filter((fighter) => fighter.id !== target.id).map((fighter) => ({ id: fighter.id, name: fighter.name }))}
-            defaultSourceCharacterId={actor.id} onRegisterDamageConfirmation={registerDamageConfirmation} />)}
+            defaultSourceCharacterId={actor.id} />)}
         </div>
       )}
     </div>
