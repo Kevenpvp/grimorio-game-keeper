@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
-import { parseAbilityEffects, parseAbilityAttackDamage, parseAbilityAttackEffectGroups, useAbilities, useDamageTypes, type Ability, type AbilityEffectDefinition, type AbilityAttackDamageConfig, type AbilityAttackDamageKind, type AbilityAttackEffectGroup } from "@/lib/abilities";
+import { parseAbilityEffects, parseAbilityAttackDamage, parseAbilityAttackEffectGroups, parseAbilityDotEffects, useAbilities, useDamageTypes, type Ability, type AbilityEffectDefinition, type AbilityAttackDamageConfig, type AbilityAttackDamageKind, type AbilityAttackEffectGroup, type AbilityDotEffect } from "@/lib/abilities";
 import {
   CUSTOM_ABILITY_SCRIPTS,
   DEMONIO_INTERNO_DEFAULT_ATTRIBUTES,
@@ -47,7 +47,7 @@ function HabilidadesPage() {
 
   async function create() {
     const { data, error } = await supabase.from("abilities").insert({
-      name: "Nova habilidade", description: "", is_passive: false, can_activate: true, is_magical: true, self_target_only: false, cooldown_turns: 1, mana_cost: 0, effects: [], passive_effects: [], end_effects: [], attack_effect_groups: [], custom_script_key: null, custom_attributes: [],
+      name: "Nova habilidade", description: "", is_passive: false, can_activate: true, is_magical: true, self_target_only: false, cooldown_turns: 1, mana_cost: 0, effects: [], passive_effects: [], end_effects: [], dot_effects: [], attack_effect_groups: [], custom_script_key: null, custom_attributes: [],
     }).select("id").single();
     if (error) { toast.error(error.message); return; }
     setSearch("");
@@ -89,6 +89,167 @@ function HabilidadesPage() {
   );
 }
 
+type DotDamageTypeOption = { id: string; name: string };
+type DotAttributeOption = { key: string; label: string };
+
+function createAbilityDot(physicalTypes: DotDamageTypeOption[], magicalTypes: DotDamageTypeOption[]): AbilityDotEffect {
+  return {
+    id: crypto.randomUUID(),
+    name: "Novo DoT",
+    damage_kind: "physical",
+    physical_damage_type_id: physicalTypes[0]?.id ?? null,
+    damage_type_id: magicalTypes[0]?.id ?? null,
+    magic_level: null,
+    damage_mode: "fixed",
+    damage_amount: 10,
+    attribute_key: null,
+    attribute_percent: 100,
+    fixed_damage: 0,
+    duration: 3,
+  };
+}
+
+function AbilityDotEffectsEditor({
+  dots, onChange, defs, physicalTypes, magicalTypes, title, description,
+}: {
+  dots: AbilityDotEffect[];
+  onChange: (next: AbilityDotEffect[]) => void;
+  defs: DotAttributeOption[];
+  physicalTypes: DotDamageTypeOption[];
+  magicalTypes: DotDamageTypeOption[];
+  title: string;
+  description: string;
+}) {
+  function update(dotId: string, patch: Partial<AbilityDotEffect>) {
+    onChange(dots.map((dot) => dot.id === dotId ? { ...dot, ...patch } : dot));
+  }
+
+  return (
+    <section className="space-y-3 rounded-md border border-orange-500/25 bg-orange-500/[0.03] p-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h4 className="text-sm font-semibold text-gold">{title}</h4>
+          <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+        </div>
+        <Button type="button" size="sm" variant="outline" onClick={() => onChange([...dots, createAbilityDot(physicalTypes, magicalTypes)])}>
+          <Plus className="mr-1 h-3.5 w-3.5" /> Adicionar DoT
+        </Button>
+      </div>
+      {!dots.length && <p className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">Nenhum DoT configurado.</p>}
+      {dots.map((dot) => (
+        <article key={dot.id} className="space-y-3 rounded-md border border-border bg-background/50 p-3">
+          <div className="flex items-start gap-2">
+            <label className="min-w-0 flex-1 space-y-1 text-xs font-medium">
+              Nome do DoT
+              <Input maxLength={120} value={dot.name} onChange={(event) => update(dot.id, { name: event.target.value })} placeholder="Veneno, queimadura, sangramento..." />
+            </label>
+            <Button type="button" size="icon" variant="ghost" className="mt-5 shrink-0 text-destructive" aria-label={"Remover DoT " + dot.name} onClick={() => onChange(dots.filter((entry) => entry.id !== dot.id))}>
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="space-y-1 text-xs font-medium">
+              Categoria de dano
+              <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={dot.damage_kind}
+                onChange={(event) => {
+                  const kind = event.target.value as "physical" | "magical";
+                  update(dot.id, {
+                    damage_kind: kind,
+                    physical_damage_type_id: kind === "physical" ? (physicalTypes.find((type) => type.id === dot.physical_damage_type_id)?.id ?? physicalTypes[0]?.id ?? null) : null,
+                    damage_type_id: kind === "magical" ? (magicalTypes.find((type) => type.id === dot.damage_type_id)?.id ?? magicalTypes[0]?.id ?? null) : null,
+                    magic_level: kind === "magical" ? (dot.magic_level ?? "baixa") : null,
+                  });
+                }}>
+                <option value="physical">Físico</option>
+                <option value="magical">Mágico</option>
+              </select>
+            </label>
+            <label className="space-y-1 text-xs font-medium">
+              Cálculo do dano por turno
+              <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={dot.damage_mode}
+                onChange={(event) => update(dot.id, { damage_mode: event.target.value as AbilityDotEffect["damage_mode"] })}>
+                <option value="fixed">Dano fixo</option>
+                <option value="percent">% do HP máximo do alvo</option>
+                <option value="attribute">Baseado em um atributo do lançador</option>
+              </select>
+            </label>
+            {dot.damage_kind === "physical" ? (
+              <label className="space-y-1 text-xs font-medium">
+                Tipo de dano físico
+                <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={dot.physical_damage_type_id ?? ""}
+                  onChange={(event) => update(dot.id, { physical_damage_type_id: event.target.value || null })}>
+                  <option value="">Selecione um tipo físico</option>
+                  {physicalTypes.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}
+                </select>
+              </label>
+            ) : (
+              <>
+                <label className="space-y-1 text-xs font-medium">
+                  Tipo de dano mágico
+                  <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={dot.damage_type_id ?? ""}
+                    onChange={(event) => update(dot.id, { damage_type_id: event.target.value || null })}>
+                    <option value="">Selecione um tipo mágico</option>
+                    {magicalTypes.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}
+                  </select>
+                </label>
+                <label className="space-y-1 text-xs font-medium">
+                  Grau da magia
+                  <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={dot.magic_level ?? "baixa"}
+                    onChange={(event) => update(dot.id, { magic_level: event.target.value as "baixa" | "media" | "alta" })}>
+                    <option value="baixa">Baixa</option>
+                    <option value="media">Média</option>
+                    <option value="alta">Alta</option>
+                  </select>
+                </label>
+              </>
+            )}
+            {dot.damage_mode !== "attribute" ? (
+              <label className="space-y-1 text-xs font-medium">
+                {dot.damage_mode === "percent" ? "Percentual por turno (%)" : "Dano bruto por turno"}
+                <Input type="number" min={dot.damage_mode === "percent" ? 0.1 : 1} max={dot.damage_mode === "percent" ? 1000 : 1000000}
+                  step={dot.damage_mode === "percent" ? "any" : "1"} value={dot.damage_amount}
+                  onChange={(event) => update(dot.id, { damage_amount: Number(event.target.value) || 0 })} />
+              </label>
+            ) : (
+              <>
+                <label className="space-y-1 text-xs font-medium">
+                  Atributo do lançador
+                  <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={dot.attribute_key ?? ""}
+                    onChange={(event) => update(dot.id, { attribute_key: event.target.value || null })}>
+                    <option value="">Selecione um atributo</option>
+                    {defs.filter((def) => !["hp", "mana"].includes(def.key)).map((def) => <option key={def.key} value={def.key}>{def.label}</option>)}
+                  </select>
+                </label>
+                <label className="space-y-1 text-xs font-medium">
+                  Percentual do atributo (%)
+                  <Input type="number" min={0} max={1000} step="any" value={dot.attribute_percent}
+                    onChange={(event) => update(dot.id, { attribute_percent: Math.max(0, Math.min(1000, Number(event.target.value) || 0)) })} />
+                </label>
+                <label className="space-y-1 text-xs font-medium">
+                  Dano fixo adicional
+                  <Input type="number" min={0} max={1000000} step="1" value={dot.fixed_damage}
+                    onChange={(event) => update(dot.id, { fixed_damage: Math.max(0, Math.min(1000000, Number(event.target.value) || 0)) })} />
+                </label>
+              </>
+            )}
+            <label className="space-y-1 text-xs font-medium">
+              Duração (turnos do alvo)
+              <Input type="number" min={1} max={1000} step={1} value={dot.duration}
+                onChange={(event) => update(dot.id, { duration: Math.max(1, Math.min(1000, Math.floor(Number(event.target.value) || 1))) })} />
+            </label>
+          </div>
+          {dot.damage_mode === "attribute" && (
+            <p className="text-xs text-muted-foreground">
+              O valor efetivo do atributo é multiplicado pelo percentual e somado ao dano fixo. O dano é calculado quando a habilidade é usada e esse valor fica salvo para cada tick do DoT.
+            </p>
+          )}
+          {dot.damage_mode === "percent" && <p className="text-xs text-muted-foreground">O percentual é calculado sobre o HP máximo do alvo a cada turno.</p>}
+        </article>
+      ))}
+    </section>
+  );
+}
+
 function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; defs: NonNullable<ReturnType<typeof useDefs>["data"]>; isNew: boolean; onSaved: () => void }) {
   const qc = useQueryClient();
   const [name, setName] = useState(ability.name);
@@ -99,6 +260,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
   const [isMagical, setIsMagical] = useState(ability.is_magical);
   const [attackEnabled, setAttackEnabled] = useState(ability.attack_enabled);
   const [attackDamage, setAttackDamage] = useState<AbilityAttackDamageConfig>(() => parseAbilityAttackDamage(ability.attack_damage));
+  const [dotEffects, setDotEffects] = useState<AbilityDotEffect[]>(() => parseAbilityDotEffects(ability.dot_effects));
   const [attackEffectGroups, setAttackEffectGroups] = useState<AbilityAttackEffectGroup[]>(() => parseAbilityAttackEffectGroups(ability.attack_effect_groups));
   const { data: damageTypes = [] } = useDamageTypes();
   const physicalDamageTypes = damageTypes.filter((type) => type.category === "physical");
@@ -121,6 +283,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
     setIsMagical(ability.is_magical);
     setAttackEnabled(ability.attack_enabled);
     setAttackDamage(parseAbilityAttackDamage(ability.attack_damage));
+    setDotEffects(parseAbilityDotEffects(ability.dot_effects));
     setAttackEffectGroups(parseAbilityAttackEffectGroups(ability.attack_effect_groups));
     setOncePerBattle(Boolean((ability as Ability & { once_per_battle?: boolean }).once_per_battle));
     setSelfTargetOnly(ability.self_target_only);
@@ -173,6 +336,19 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
       toast.error("Revise os atributos extras: cada um precisa de nome, chave API única e valor válido.");
       return;
     }
+    const allConfiguredDots = [...dotEffects, ...attackEffectGroups.flatMap((group) => group.dots)];
+    if (allConfiguredDots.some((dot) =>
+      !dot.name.trim() ||
+      !Number.isFinite(dot.duration) || dot.duration < 1 || dot.duration > 1000 ||
+      (dot.damage_kind === "physical" && !physicalDamageTypes.some((type) => type.id === dot.physical_damage_type_id)) ||
+      (dot.damage_kind === "magical" && (!magicalDamageTypes.some((type) => type.id === dot.damage_type_id) || !["baixa", "media", "alta"].includes(dot.magic_level ?? ""))) ||
+      (dot.damage_mode === "attribute" && (!dot.attribute_key || !defs.some((def) => def.key === dot.attribute_key) || !Number.isFinite(dot.attribute_percent) || dot.attribute_percent < 0 || dot.attribute_percent > 1000 || !Number.isFinite(dot.fixed_damage) || dot.fixed_damage < 0 || dot.fixed_damage > 1000000)) ||
+      (dot.damage_mode === "percent" && (!Number.isFinite(dot.damage_amount) || dot.damage_amount <= 0 || dot.damage_amount > 1000)) ||
+      (dot.damage_mode === "fixed" && (!Number.isInteger(dot.damage_amount) || dot.damage_amount < 1 || dot.damage_amount > 1000000))
+    )) {
+      toast.error("Revise os DoTs: nome, tipo de dano, cálculo, atributo e duração precisam ser válidos.");
+      return;
+    }
     const allConfiguredEffects = [...effects, ...passiveEffects, ...endEffects];
     const hasInvalidHealing = allConfiguredEffects.some((effect) =>
       effect.effect_type === "healing" &&
@@ -212,13 +388,29 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
         physical_damage_type_id: selectedPhysicalAttackTypeId,
         damage_type_id: selectedMagicalAttackTypeId,
       } as unknown as Json,
+      dot_effects: dotEffects.map((dot) => ({
+        ...dot,
+        name: dot.name.trim(),
+        damage_amount: Math.max(0, Math.min(1000000, Number(dot.damage_amount) || 0)),
+        attribute_percent: Math.max(0, Math.min(1000, Number(dot.attribute_percent) || 0)),
+        fixed_damage: Math.max(0, Math.min(1000000, Number(dot.fixed_damage) || 0)),
+        duration: Math.max(1, Math.min(1000, Math.floor(Number(dot.duration) || 1))),
+      })) as unknown as Json,
       attack_effect_groups: attackEffectGroups
-        .filter((group) => group.name.trim() && group.effects.length > 0)
+        .filter((group) => group.name.trim() && (group.effects.length > 0 || group.dots.length > 0))
         .map((group) => ({
           id: group.id,
           name: group.name.trim(),
           chance: Math.max(0, Math.min(100, Math.round(Number(group.chance) || 0))),
           effects: group.effects.map((effect) => ({ ...effect, duration: Math.max(1, effect.duration) })),
+          dots: group.dots.map((dot) => ({
+            ...dot,
+            name: dot.name.trim(),
+            damage_amount: Math.max(0, Math.min(1000000, Number(dot.damage_amount) || 0)),
+            attribute_percent: Math.max(0, Math.min(1000, Number(dot.attribute_percent) || 0)),
+            fixed_damage: Math.max(0, Math.min(1000000, Number(dot.fixed_damage) || 0)),
+            duration: Math.max(1, Math.min(1000, Math.floor(Number(dot.duration) || 1))),
+          })),
         })) as unknown as Json,
       once_per_battle: canActivate && oncePerBattle,
       self_target_only: canActivate && selfTargetOnly,
@@ -390,7 +582,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
                 </div>
                 <Button type="button" size="sm" variant="outline" onClick={() => setAttackEffectGroups((current) => [
                   ...current,
-                  { id: crypto.randomUUID(), name: "Efeitos", chance: 50, effects: [] },
+                  { id: crypto.randomUUID(), name: "Efeitos", chance: 50, effects: [], dots: [] },
                 ])}>
                   <Plus className="mr-1 h-3.5 w-3.5" /> Adicionar categoria
                 </Button>
@@ -426,12 +618,30 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
                     description="Estes efeitos só são aplicados no alvo quando o mestre marcar esta categoria como acertada no popup do ataque."
                     defs={defs}
                   />
+                  <AbilityDotEffectsEditor
+                    dots={group.dots}
+                    onChange={(dots) => setAttackEffectGroups((current) => current.map((entry) => entry.id === group.id ? { ...entry, dots } : entry))}
+                    defs={defs}
+                    physicalTypes={physicalDamageTypes}
+                    magicalTypes={magicalDamageTypes}
+                    title={"DoTs — " + group.chance + "% de acerto"}
+                    description="Estes DoTs só entram se o mestre marcar esta categoria como acertada para o alvo no popup."
+                  />
                 </section>
               ))}
             </div>
           </div>
         )}
       </section>
+      <AbilityDotEffectsEditor
+        dots={dotEffects}
+        onChange={setDotEffects}
+        defs={defs}
+        physicalTypes={physicalDamageTypes}
+        magicalTypes={magicalDamageTypes}
+        title="DoTs garantidos (fora do ataque)"
+        description="Ao usar Ativar, o DoT é aplicado ao alvo escolhido sem rolagem de acerto. Se usar Atacar, ele é aplicado a todos os alvos selecionados, independentemente de terem sido marcados como acertados."
+      />
       <div className="space-y-1.5">
         <Label>Descrição</Label>
         <Textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="O que a habilidade faz..." />
