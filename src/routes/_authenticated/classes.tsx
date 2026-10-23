@@ -49,7 +49,7 @@ function ClassesPage() {
   }
 
   const normalizedSearch = search.trim().toLocaleLowerCase("pt-BR");
-  const visibleRaces = classes
+  const visibleClasses = classes
     .filter((classTrait) => classTrait.name.toLocaleLowerCase("pt-BR").includes(normalizedSearch))
     .slice()
     .sort((a, b) => {
@@ -72,13 +72,13 @@ function ClassesPage() {
         <Input className="pl-9" aria-label="Pesquisar classes pelo nome" placeholder="Pesquisar classe pelo nome..." value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
       {!classes.length && <p className="text-muted-foreground">Nenhuma classe ainda.</p>}
-      {classes.length > 0 && visibleRaces.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma classe encontrada para “{search}”.</p>}
-      {visibleRaces.map((r) => <ClassEditor key={r.id} classTrait={r} defs={defs} isNew={pendingSaveIds.includes(r.id)} onSaved={() => setPendingSaveIds((current) => current.filter((id) => id !== r.id))} />)}
+      {classes.length > 0 && visibleClasses.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma classe encontrada para “{search}”.</p>}
+      {visibleClasses.map((r) => <ClassEditor key={r.id} classTrait={r} defs={defs} isNew={pendingSaveIds.includes(r.id)} onSaved={() => setPendingSaveIds((current) => current.filter((id) => id !== r.id))} />)}
     </div>
   );
 }
 
-function ClassEditor({ classTrait, defs, isNew, onSaved }: { classTrait: Race; defs: AttributeDef[]; isNew: boolean; onSaved: () => void }) {
+function ClassEditor({ classTrait, defs, isNew, onSaved }: { classTrait: ClassTrait; defs: AttributeDef[]; isNew: boolean; onSaved: () => void }) {
   const qc = useQueryClient();
   const db = supabase as any;
   const { data: virtues = [], isLoading: virtuesLoading } = useVirtues();
