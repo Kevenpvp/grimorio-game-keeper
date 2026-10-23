@@ -417,7 +417,7 @@ export function CharacterAbilitiesPanel({
   );
 }
 
-export function CharacterAbilitiesManager({ characterId }: { characterId: string }) {
+export function CharacterAbilitiesManager({ characterId, personalOnly = false }: { characterId: string; personalOnly?: boolean }) {
   const qc = useQueryClient();
   const { data: allAbilities = [], isLoading: catalogLoading } = useAbilities();
   const { data: assigned = [], isLoading: assignedLoading } = useCharacterAbilities(characterId);
@@ -428,7 +428,10 @@ export function CharacterAbilitiesManager({ characterId }: { characterId: string
   const [creatingCustom, setCreatingCustom] = useState(false);
   const db = supabase as any;
   const assignedIds = new Set(assigned.map((ability) => ability.ability_id).filter(Boolean));
-  const available = allAbilities.filter((ability) => !assignedIds.has(ability.id));
+  const managedAssigned = personalOnly
+    ? assigned.filter((ability) => !ability.ability_id && !ability.granted_by_virtue_id && !ability.granted_by_race_id && !ability.granted_by_transformation_id)
+    : assigned;
+  const available = personalOnly ? [] : allAbilities.filter((ability) => !assignedIds.has(ability.id));
 
   async function give(ability: Ability) {
     const { error } = await supabase.from("character_abilities").insert({
@@ -493,8 +496,8 @@ export function CharacterAbilitiesManager({ characterId }: { characterId: string
     <section className="panel space-y-4 p-4 sm:p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="flex items-center gap-2 text-lg text-gold"><WandSparkles className="h-5 w-5" /> Habilidades da ficha</h2>
-          <p className="mt-1 text-xs text-muted-foreground">Adicione habilidades do catálogo. Depois, personalize custo, cooldown e efeitos para este personagem.</p>
+          <h2 className="flex items-center gap-2 text-lg text-gold"><WandSparkles className="h-5 w-5" /> {personalOnly ? "Habilidades exclusivas do personagem" : "Habilidades da ficha"}</h2>
+          <p className="mt-1 text-xs text-muted-foreground">{personalOnly ? "Crie e configure habilidades que pertencem somente a esta ficha." : "Adicione habilidades do catálogo. Depois, personalize custo, cooldown e efeitos para este personagem."}</p>
         </div>
         <Button
           type="button"
@@ -521,7 +524,7 @@ export function CharacterAbilitiesManager({ characterId }: { characterId: string
             </Button>
             <p className="text-xs text-muted-foreground">Ela existe apenas nesta ficha e pode ser configurada abaixo, sem entrar no catálogo geral.</p>
           </div>
-          {catalogLoading || assignedLoading ? <p className="text-sm text-muted-foreground">Carregando habilidades…</p> : available.length > 0 ? (
+          {catalogLoading || assignedLoading ? <p className="text-sm text-muted-foreground">Carregando habilidades…</p> : !personalOnly && available.length > 0 ? (
             <div className="space-y-2">
               <Label>Adicionar do catálogo</Label>
               <div className="flex flex-wrap gap-2">
@@ -532,11 +535,11 @@ export function CharacterAbilitiesManager({ characterId }: { characterId: string
                 ))}
               </div>
             </div>
-          ) : (
+          ) : !personalOnly ? (
             <p className="text-xs text-muted-foreground">{allAbilities.length ? "Todas as habilidades do catálogo já foram atribuídas." : "O mestre ainda não cadastrou habilidades."}</p>
-          )}
+          ) : null}
           <div className="space-y-3">
-            {assigned.map((ability) => <AssignedAbilityEditor key={ability.id} ability={ability} defs={defs!} />)}
+            {managedAssigned.map((ability) => <AssignedAbilityEditor key={ability.id} ability={ability} defs={defs!} />)}
           </div>
         </div>
       )}
