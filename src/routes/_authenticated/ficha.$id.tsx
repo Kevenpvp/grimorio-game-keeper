@@ -66,7 +66,7 @@ function FichaPage() {
         <RacePicker character={data.character} isMaster={false} />
         <CharacterTransformationImages character={data.character} />
         <CharacterAbilitiesManager characterId={data.character.id} personalOnly />
-        <CharacterAbilitiesPanel characterId={data.character.id} characterName={data.character.name} mode="sheet" canUse={false} />
+        <CharacterAbilitiesPanel characterId={data.character.id} characterName={data.character.name} mode="sheet" canUse={false} allowCustomAttributeEdit />
         <CharacterSheetView character={data.character} attrs={data.attrs} defs={defs} />
         {/* Keep this panel before normal points: physical grants must be visible to the player without being buried below the regular allocation panel. */}
         <PhysicalPointsDistribution character={data.character} attrs={data.attrs} defs={defs} />
