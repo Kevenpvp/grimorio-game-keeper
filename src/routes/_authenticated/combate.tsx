@@ -826,7 +826,11 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                   })}
                   <CharacterAbilitiesPanel characterId={f.id} characterName={f.name} mode="combat"
                     canUse={isMaster && battle.active} showActiveEffects={isOwnFighter} battleId={battle.id}
-                    targets={fighters.map((target) => ({ id: target.id, name: target.name }))} />
+                    targets={fighters.map((target) => ({ id: target.id, name: target.name }))}
+                    getAttributeValue={(characterId, attributeKey) => {
+                      const target = fighters.find((fighter) => fighter.id === characterId);
+                      return target ? val(target, attributeKey) : 0;
+                    }} />
                   {isOwnFighter && <div className="grid grid-cols-2 gap-2 text-xs">
                     <div className="rounded border border-border p-2"><span className="text-muted-foreground">Corpo</span><div className="font-semibold">{f.body}%</div></div>
                     <div className="rounded border border-border p-2"><span className="text-muted-foreground">Sanidade</span><div className="font-semibold">{f.sanity}%</div></div>
