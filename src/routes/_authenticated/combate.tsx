@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { dispatchCustomAbilityScriptEvents } from "@/lib/ability-script-runtime";
 
-import { computeValue, conditionAdjustedValue, physicalAttributePoints, traitMods, useDefs, useMe, useRaces, useVirtues, type AttributeDef } from "@/lib/sheets";
+import { computeValue, conditionAdjustedValue, physicalAttributePoints, traitMods, useDefs, useMe, useRaces, useVirtues, useClasses, type AttributeDef } from "@/lib/sheets";
 import { Portrait } from "@/components/sheet/CharacterSheetView";
 import { StatBar } from "@/components/sheet/StatBar";
 import { cn } from "@/lib/utils";
@@ -33,7 +33,7 @@ export const Route = createFileRoute("/_authenticated/combate")({
 });
 
 type Attr = { attribute_key: string; current_value: number; max_value: number; points: number; bonus: number };
-type BattleEffect = { id: string; battle_id: string | null; character_id: string; name: string; effect_type: 'status' | 'regeneration' | 'mana_used' | 'no_regen_hp' | 'no_regen_mana' | 'magic_prohibition' | 'no_mana' | 'stun' | 'damage_dealt' | 'damage_reduction' | 'healing' | 'invincible' | 'healing_blocked' | 'damage_vulnerability' | 'damage_over_time'; attribute_key: string | null; polarity: 'buff' | 'debuff'; value_mode: 'percent' | 'fixed'; amount: number; duration: number; duration_scope: 'individual' | 'global'; until_combat_end: boolean; effect_data?: Json; damage_scope?: 'any' | 'physical' | 'magical'; damage_reduction_scope?: 'physical' | 'magical'; damage_reduction_type_id?: string | null; damage_reduction_magic_level?: 'baixa' | 'media' | 'alta' | null; damage_reduction_type_ids?: string[] | null; damage_reduction_magic_levels?: ('baixa' | 'media' | 'alta')[] | null; source_character_ability_id?: string | null; source_race_id?: string | null; source_race_effect_index?: number | null; effect_group_id?: string | null; is_end_effect?: boolean };
+type BattleEffect = { id: string; battle_id: string | null; character_id: string; name: string; effect_type: 'status' | 'regeneration' | 'mana_used' | 'no_regen_hp' | 'no_regen_mana' | 'magic_prohibition' | 'no_mana' | 'stun' | 'damage_dealt' | 'damage_reduction' | 'healing' | 'invincible' | 'healing_blocked' | 'damage_vulnerability' | 'damage_over_time'; attribute_key: string | null; polarity: 'buff' | 'debuff'; value_mode: 'percent' | 'fixed'; amount: number; duration: number; duration_scope: 'individual' | 'global'; until_combat_end: boolean; effect_data?: Json; damage_scope?: 'any' | 'physical' | 'magical'; damage_reduction_scope?: 'physical' | 'magical'; damage_reduction_type_id?: string | null; damage_reduction_magic_level?: 'baixa' | 'media' | 'alta' | null; damage_reduction_type_ids?: string[] | null; damage_reduction_magic_levels?: ('baixa' | 'media' | 'alta')[] | null; source_character_ability_id?: string | null; source_race_id?: string | null; source_race_effect_index?: number | null; source_class_id?: string | null; source_class_effect_index?: number | null; effect_group_id?: string | null; is_end_effect?: boolean };
 function damageReductionSummary(effect: BattleEffect, damageTypes: { id: string; name: string }[]) {
   const selectedTypeIds = effect.damage_reduction_type_ids ?? (effect.damage_reduction_type_id ? [effect.damage_reduction_type_id] : []);
   const selectedLevels = effect.damage_reduction_magic_levels ?? (effect.damage_reduction_magic_level ? [effect.damage_reduction_magic_level] : []);
@@ -100,8 +100,8 @@ function periodicHealingSummary(effect: BattleEffect) {
 }
 
 type Fighter = {
-  id: string; name: string; player_name: string; photo_path: string | null; race_id: string | null; virtue_id: string | null; owner_id: string | null;
-  race_physical_allocations: Json; virtue_physical_allocations: Json; race_physical_points_granted: number; virtue_physical_points_granted: number;
+  id: string; name: string; player_name: string; photo_path: string | null; race_id: string | null; virtue_id: string | null; class_id: string | null; owner_id: string | null;
+  race_physical_allocations: Json; virtue_physical_allocations: Json; class_physical_allocations: Json; race_physical_points_granted: number; virtue_physical_points_granted: number; class_physical_points_granted: number;
   body: number; sanity: number; participant_turn_count?: number;
   character_attributes: Attr[];
 };
@@ -118,7 +118,7 @@ type TransformationTemplate = {
   owner_character_id?: string | null;
   source_transformation_id?: string | null;
 };
-type TransformationLink = { transformation_id: string; race_id?: string; virtue_id?: string };
+type TransformationLink = { transformation_id: string; race_id?: string; virtue_id?: string; class_id?: string };
 type CharacterTransformationState = {
   character_id: string;
   transformation_id: string;
@@ -211,6 +211,9 @@ function useLiveBattles(isMaster: boolean, userId: string | undefined) {
       .on("postgres_changes", { event: "*", schema: "public", table: "virtue_transformations" }, () => {
         scheduleCombatRefresh(qc, ["battle-virtue-transformations"], ["battles"]);
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "class_transformations" }, () => {
+        scheduleCombatRefresh(qc, ["battle-class-transformations"], ["battles"]);
+      })
       .on("postgres_changes", { event: "*", schema: "public", table: "abilities" }, () => {
         scheduleCombatRefresh(qc, ["abilities"]);
       })
@@ -221,8 +224,8 @@ function useLiveBattles(isMaster: boolean, userId: string | undefined) {
     queryKey: ["battles", userId, isMaster],
     enabled: !!userId,
     queryFn: async () => {
-      const masterSelection = "*, battle_participants(sort_order,turn_count, characters(id,name,player_name,photo_path,race_id,virtue_id,owner_id,race_physical_allocations,virtue_physical_allocations,race_physical_points_granted,virtue_physical_points_granted,body,sanity,character_attributes(attribute_key,current_value,max_value,points,bonus)))";
-      const playerSelection = "*, battle_participants(sort_order,turn_count, characters(id,name,player_name,photo_path,owner_id,race_id,virtue_id))";
+      const masterSelection = "*, battle_participants(sort_order,turn_count, characters(id,name,player_name,photo_path,race_id,virtue_id,class_id,owner_id,race_physical_allocations,virtue_physical_allocations,class_physical_allocations,race_physical_points_granted,virtue_physical_points_granted,class_physical_points_granted,body,sanity,character_attributes(attribute_key,current_value,max_value,points,bonus)))";
+      const playerSelection = "*, battle_participants(sort_order,turn_count, characters(id,name,player_name,photo_path,owner_id,race_id,virtue_id,class_id))";
       const { data, error } = await supabase
         .from("battles")
         .select(isMaster ? masterSelection : playerSelection)
@@ -230,7 +233,7 @@ function useLiveBattles(isMaster: boolean, userId: string | undefined) {
       if (error) throw error;
       if (isMaster || !userId) return data ?? [];
 
-      type PublicCharacter = { id: string; name: string; player_name: string; photo_path: string | null; owner_id: string | null; race_id: string | null; virtue_id: string | null };
+      type PublicCharacter = { id: string; name: string; player_name: string; photo_path: string | null; owner_id: string | null; race_id: string | null; virtue_id: string | null; class_id: string | null };
       type PublicParticipant = { characters: PublicCharacter | null; [key: string]: unknown };
       type PublicBattle = { battle_participants?: PublicParticipant[]; [key: string]: unknown };
       const publicBattles = (data ?? []) as unknown as PublicBattle[];
@@ -245,7 +248,7 @@ function useLiveBattles(isMaster: boolean, userId: string | undefined) {
 
       const { data: ownedCharacters, error: ownedError } = await supabase
         .from("characters")
-        .select("id,name,player_name,photo_path,owner_id,race_id,virtue_id,race_physical_allocations,virtue_physical_allocations,race_physical_points_granted,virtue_physical_points_granted,body,sanity,character_attributes(attribute_key,current_value,max_value,points,bonus)")
+        .select("id,name,player_name,photo_path,owner_id,race_id,virtue_id,class_id,race_physical_allocations,virtue_physical_allocations,class_physical_allocations,race_physical_points_granted,virtue_physical_points_granted,class_physical_points_granted,body,sanity,character_attributes(attribute_key,current_value,max_value,points,bonus)")
         .in("id", ownIds);
       if (ownedError) throw ownedError;
 
@@ -322,6 +325,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
   const { data: defs } = useDefs();
   const { data: races } = useRaces();
   const { data: virtues } = useVirtues();
+  const { data: classes } = useClasses();
   const qc = useQueryClient();
   const [selectedTargetIds, setSelectedTargetIds] = useState<string[]>(() => battle.target_character_id ? [battle.target_character_id] : []);
   const [manaRegenSettings, setManaRegenSettings] = useState<Record<string, { mode: "percent" | "fixed"; amount: string }>>({});
@@ -387,6 +391,14 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
       return data ?? [];
     },
   });
+  const { data: classTransformationLinks = [] } = useQuery<TransformationLink[]>({
+    queryKey: ["battle-class-transformations"],
+    queryFn: async () => {
+      const { data, error } = await db.from("class_transformations").select("class_id,transformation_id");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
   const { data: transformationStates = [] } = useQuery<CharacterTransformationState[]>({
     queryKey: ["battle-character-transformations", battle.id, fighterIds],
     enabled: fighterIds.length > 0,
@@ -403,6 +415,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
     const ids = new Set([
       ...raceTransformationLinks.filter((link) => link.race_id === fighter.race_id).map((link) => link.transformation_id),
       ...virtueTransformationLinks.filter((link) => link.virtue_id === fighter.virtue_id).map((link) => link.transformation_id),
+      ...classTransformationLinks.filter((link) => link.class_id === fighter.class_id).map((link) => link.transformation_id),
       ...transformationCatalog.filter((transformation) => transformation.owner_character_id === fighter.id).map((transformation) => transformation.id),
     ]);
     const overriddenIds = new Set(transformationCatalog
@@ -478,17 +491,23 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
   const abilitiesOf = (fighterId: string) => battleAbilities.filter((ability) => ability.character_id === fighterId);
   const modsOf = (f: Fighter) => {
     const race = races?.find((r) => r.id === f.race_id);
-    const mechanics = (race as unknown as { special_mechanics?: { duplicate_virtue_effects?: boolean; virtue_effect_multiplier?: number; virtue_effect_blacklist?: string[] } } | undefined)?.special_mechanics;
-    const virtueBlacklist = Array.isArray(mechanics?.virtue_effect_blacklist)
-      ? mechanics.virtue_effect_blacklist.filter((id): id is string => typeof id === "string")
-      : [];
-    const virtueIsBlacklisted = !!f.virtue_id && virtueBlacklist.includes(f.virtue_id);
-    const multiplier = mechanics?.duplicate_virtue_effects && !virtueIsBlacklisted
-      ? Math.max(1, Math.min(10, Number(mechanics.virtue_effect_multiplier) || 2))
-      : 1;
+    const classTrait = classes?.find((c) => c.id === f.class_id);
+    const getMechanics = (trait: { special_mechanics?: unknown } | undefined) => {
+      const value = trait?.special_mechanics;
+      return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+    };
+    const multiplier = (mechanics: Record<string, unknown>) => {
+      const blacklist = Array.isArray(mechanics.virtue_effect_blacklist) ? mechanics.virtue_effect_blacklist : [];
+      const blacklisted = !!f.virtue_id && blacklist.includes(f.virtue_id);
+      return mechanics.duplicate_virtue_effects === true && !blacklisted
+        ? Math.max(1, Math.min(10, Number(mechanics.virtue_effect_multiplier) || 2))
+        : 1;
+    };
     const combined = { ...traitMods(race) };
+    for (const [key, value] of Object.entries(traitMods(classTrait))) combined[key] = (combined[key] ?? 0) + value;
+    const virtueMultiplier = multiplier(getMechanics(race)) * multiplier(getMechanics(classTrait));
     for (const [key, value] of Object.entries(traitMods(virtues?.find((v) => v.id === f.virtue_id)))) {
-      combined[key] = (combined[key] ?? 0) + value * multiplier;
+      combined[key] = (combined[key] ?? 0) + value * virtueMultiplier;
       if (combined[key] === 0) delete combined[key];
     }
     return combined;
@@ -1061,15 +1080,15 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
             return <div key={effect.id} className="w-full rounded-md border border-border bg-muted/30 p-2">
               <div className="flex items-start gap-2">
                 <button type="button" aria-expanded={expanded} onClick={() => setExpandedEffectId(expanded ? null : effect.id)} className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded px-1 py-1 text-left text-xs hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold">
-                  <span className="min-w-0"><span className="font-medium">{effect.name}</span><span className="ml-2 text-muted-foreground">({effect.source_race_id ? "permanente (raça)" : effect.until_combat_end ? "até o fim do combate" : `${effect.duration} turno(s)`})</span></span>
+                  <span className="min-w-0"><span className="font-medium">{effect.name}</span><span className="ml-2 text-muted-foreground">({effect.source_class_id ? "permanente (classe)" : effect.source_race_id ? "permanente (raça)" : effect.until_combat_end ? "até o fim do combate" : `${effect.duration} turno(s)`})</span></span>
                   <span aria-hidden="true" className="shrink-0 text-muted-foreground">{expanded ? "−" : "+"}</span>
                 </button>
-                {!effect.source_race_id && <button type="button" aria-label={`Remover efeito ${effect.name}`} title="Remover efeito" onClick={() => onRemoveEffect(effect.id)} className="rounded px-2 py-1 text-muted-foreground hover:bg-destructive/15 hover:text-destructive"><span className="text-sm leading-none">×</span></button>}
+                {!effect.source_race_id && !effect.source_class_id && <button type="button" aria-label={`Remover efeito ${effect.name}`} title="Remover efeito" onClick={() => onRemoveEffect(effect.id)} className="rounded px-2 py-1 text-muted-foreground hover:bg-destructive/15 hover:text-destructive"><span className="text-sm leading-none">×</span></button>}
               </div>
               {expanded && <div className="mt-2 border-t border-border pt-2 text-xs" role="status">
                 <div className="font-semibold">{effect.name}</div>
                 <div className="mt-1">{details}</div>
-                <div className="mt-1 text-muted-foreground">{effect.source_race_id ? "Efeito permanente concedido pela raça; não é removido por cura nem pelo avanço de turnos." : effect.until_combat_end ? "Permanece ativo até o combate ser encerrado." : `Duração restante: ${effect.duration} turno(s). Diminui quando o turno individual deste personagem avança ou no avanço do turno geral.`}</div>
+                <div className="mt-1 text-muted-foreground">{effect.source_class_id ? "Efeito permanente concedido pela classe; não é removido por cura nem pelo avanço de turnos." : effect.source_race_id ? "Efeito permanente concedido pela raça; não é removido por cura nem pelo avanço de turnos." : effect.until_combat_end ? "Permanece ativo até o combate ser encerrado." : `Duração restante: ${effect.duration} turno(s). Diminui quando o turno individual deste personagem avança ou no avanço do turno geral.`}</div>
               </div>}
             </div>;
           })}
