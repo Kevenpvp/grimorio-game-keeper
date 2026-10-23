@@ -478,7 +478,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
   const abilitiesOf = (fighterId: string) => battleAbilities.filter((ability) => ability.character_id === fighterId);
   const modsOf = (f: Fighter) => {
     const race = races?.find((r) => r.id === f.race_id);
-    const mechanics = (race as unknown as { special_mechanics?: { duplicate_virtue_effects?: boolean; virtue_effect_multiplier?: number } } | undefined)?.special_mechanics;
+    const mechanics = (race as unknown as { special_mechanics?: { duplicate_virtue_effects?: boolean; virtue_effect_multiplier?: number; virtue_effect_blacklist?: string[] } } | undefined)?.special_mechanics;
     const virtueBlacklist = Array.isArray(mechanics?.virtue_effect_blacklist)
       ? mechanics.virtue_effect_blacklist.filter((id): id is string => typeof id === "string")
       : [];
