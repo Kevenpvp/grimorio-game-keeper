@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
-import { parseAbilityEffects, type AbilityEffectDefinition } from "@/lib/abilities";
+import { parseAbilityEffects, useAbilities, type AbilityEffectDefinition } from "@/lib/abilities";
 import { useDefs } from "@/lib/sheets";
 import type { Json } from "@/integrations/supabase/types";
 import { supabase } from "@/integrations/supabase/client";
@@ -186,6 +186,18 @@ function TransformationImageCard({
   });
   const [effects, setEffects] = useState<AbilityEffectDefinition[]>(parseAbilityEffects(transformation.effects));
   const [endEffects, setEndEffects] = useState<AbilityEffectDefinition[]>(parseAbilityEffects(transformation.end_effects));
+  const { data: abilityCatalog = [] } = useAbilities();
+  const [abilityGrants, setAbilityGrants] = useState<Array<{ ability_id: string; only_while_transformed: boolean }>>([]);
+  const { data: savedAbilityGrants = [] } = useQuery<Array<{ ability_id: string; only_while_transformed: boolean }>>({
+    queryKey: ["transformation-abilities", transformation.id],
+    enabled: isPersonal,
+    queryFn: async () => {
+      const { data, error } = await db.from("transformation_abilities").select("ability_id,only_while_transformed").eq("transformation_id", transformation.id);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  useEffect(() => { setAbilityGrants(savedAbilityGrants); }, [savedAbilityGrants]);
   useEffect(() => {
     setName(transformation.name); setDescription(transformation.description ?? "");
     setDuration(String(transformation.duration_turns ?? 3)); setCooldown(String(transformation.cooldown_turns));
@@ -236,6 +248,15 @@ function TransformationImageCard({
       updated_at: new Date().toISOString(),
     }).eq("id", transformation.id).eq("owner_character_id", characterId);
     if (error) { toast.error(error.message); return; }
+    const { error: clearGrantsError } = await db.from("transformation_abilities").delete().eq("transformation_id", transformation.id);
+    if (clearGrantsError) { toast.error("Transformação salva, mas não foi possível atualizar habilidades concedidas: " + clearGrantsError.message); return; }
+    if (abilityGrants.length > 0) {
+      const { error: grantsError } = await db.from("transformation_abilities").insert(
+        abilityGrants.map((grant) => ({ transformation_id: transformation.id, ...grant }))
+      );
+      if (grantsError) { toast.error("Transformação salva, mas não foi possível salvar habilidades concedidas: " + grantsError.message); return; }
+    }
+    await qc.invalidateQueries({ queryKey: ["transformation-abilities", transformation.id] });
     toast.success("Transformação exclusiva salva");
     await qc.invalidateQueries({ queryKey: ["transformations"] });
     await onSaved();
@@ -319,6 +340,26 @@ function TransformationImageCard({
           </div>
           <AbilityEffectsEditor effects={effects} onChange={setEffects} permanent={false} title="Efeitos ao transformar" description="Efeitos aplicados ao ativar esta transformação." defs={defs} />
           <AbilityEffectsEditor effects={endEffects} onChange={setEndEffects} permanent={false} title="Efeitos ao terminar" description="Efeitos aplicados quando a transformação acaba." defs={defs} allowPeriodicHealing={false} />
+          <div className="space-y-2 rounded-md border border-border p-3">
+            <Label>Habilidades concedidas por esta transformação</Label>
+            <p className="text-xs text-muted-foreground">As habilidades marcadas como condicionais só aparecem enquanto a transformação estiver ativa no combate.</p>
+            {abilityCatalog.map((ability) => {
+              const grant = abilityGrants.find((item) => item.ability_id === ability.id);
+              return <div key={ability.id} className="flex flex-wrap items-center justify-between gap-2">
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={!!grant} onChange={(event) => setAbilityGrants((current) => event.target.checked
+                    ? [...current.filter((item) => item.ability_id !== ability.id), { ability_id: ability.id, only_while_transformed: false }]
+                    : current.filter((item) => item.ability_id !== ability.id))} />
+                  {ability.name}
+                </label>
+                {grant && <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <input type="checkbox" checked={grant.only_while_transformed} onChange={(event) => setAbilityGrants((current) => current.map((item) => item.ability_id === ability.id ? { ...item, only_while_transformed: event.target.checked } : item))} />
+                  Só enquanto transformado
+                </label>}
+              </div>;
+            })}
+            {abilityCatalog.length === 0 && <p className="text-xs text-muted-foreground">Nenhuma habilidade do catálogo disponível.</p>}
+          </div>
           <Button type="button" onClick={() => void savePersonalTransformation()}>Salvar transformação exclusiva</Button>
         </div>
       )}
