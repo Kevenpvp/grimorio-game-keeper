@@ -7,10 +7,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { traitMods, useDefs, useRaces, useVirtues, type AttributeDef, type Character, type Trait } from "@/lib/sheets";
 import { parseAbilityEffects, useAbilities, type AbilityEffectDefinition } from "@/lib/abilities";
 
-export function ModsList({ race, defs, abilities = [], startingEffects = [] }: {
+export function ModsList({ race, defs, abilities = [], transformations = [], startingEffects = [] }: {
   race: Trait;
   defs: AttributeDef[];
   abilities?: { id: string; name: string }[];
+  transformations?: { id: string; name: string }[];
   startingEffects?: AbilityEffectDefinition[];
 }) {
   const mods = traitMods(race);
@@ -45,6 +46,11 @@ export function ModsList({ race, defs, abilities = [], startingEffects = [] }: {
           Habilidade inicial: {ability.name}
         </span>
       ))}
+      {transformations.map((transformation) => (
+        <span key={transformation.id} className="rounded bg-violet-500/10 px-2 py-0.5 text-violet-300">
+          Transformação inicial: {transformation.name}
+        </span>
+      ))}
       {startingEffects.map((effect, index) => {
         // Vulnerabilidade de Dano é uma condição negativa para quem a recebe,
         // mesmo que a configuração interna do gatilho tenha polarity="buff"
@@ -56,7 +62,7 @@ export function ModsList({ race, defs, abilities = [], startingEffects = [] }: {
           </span>
         );
       })}
-      {!entries.length && body === 0 && sanity === 0 && !race.bonus_points && !race.physical_bonus_points && !abilities.length && !startingEffects.length && (
+      {!entries.length && body === 0 && sanity === 0 && !race.bonus_points && !race.physical_bonus_points && !abilities.length && !transformations.length && !startingEffects.length && (
         <span className="text-muted-foreground">Sem modificadores</span>
       )}
     </div>
@@ -70,6 +76,31 @@ export function RacePicker({ character, isMaster }: { character: Character; isMa
   const { data: virtues } = useVirtues();
   const { data: defs } = useDefs();
   const { data: abilities = [] } = useAbilities();
+  const db = supabase as any;
+  const { data: transformationCatalog = [] } = useQuery<Array<{ id: string; name: string }>>({
+    queryKey: ["transformations", "trait-picker-names"],
+    queryFn: async () => {
+      const { data, error } = await db.from("transformations").select("id,name").order("name");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const { data: raceTransformationRows = [] } = useQuery<Array<{ race_id: string; transformation_id: string }>>({
+    queryKey: ["race-transformations", "all-trait-picker"],
+    queryFn: async () => {
+      const { data, error } = await db.from("race_transformations").select("race_id,transformation_id");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const { data: virtueTransformationRows = [] } = useQuery<Array<{ virtue_id: string; transformation_id: string }>>({
+    queryKey: ["virtue-transformations", "all-trait-picker"],
+    queryFn: async () => {
+      const { data, error } = await db.from("virtue_transformations").select("virtue_id,transformation_id");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
   const { data: raceAbilityRows = [] } = useQuery({
     queryKey: ["race-abilities"],
     queryFn: async () => {
@@ -200,6 +231,7 @@ export function RacePicker({ character, isMaster }: { character: Character; isMa
                     race={race}
                     defs={defs}
                     abilities={abilities.filter((ability) => raceAbilityRows.some((row) => row.race_id === race.id && row.ability_id === ability.id))}
+                    transformations={transformationCatalog.filter((transformation) => raceTransformationRows.some((row) => row.race_id === race.id && row.transformation_id === transformation.id))}
                     startingEffects={parseAbilityEffects(race.starting_effects)}
                   /></div>
                 </article>
@@ -239,6 +271,7 @@ export function RacePicker({ character, isMaster }: { character: Character; isMa
                     race={virtue}
                     defs={defs}
                     abilities={abilities.filter((ability) => virtueAbilityRows.some((row) => row.virtue_id === virtue.id && row.ability_id === ability.id))}
+                    transformations={transformationCatalog.filter((transformation) => virtueTransformationRows.some((row) => row.virtue_id === virtue.id && row.transformation_id === transformation.id))}
                   /></div>
                 </article>
               );
