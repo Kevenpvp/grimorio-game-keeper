@@ -163,7 +163,12 @@ async function buildContext(service: ReturnType<typeof createClient>, event: Que
       .maybeSingle();
     if (raceError) throw raceError;
     const mechanics = asObject(raceRow?.special_mechanics);
-    if (mechanics.duplicate_virtue_effects === true) {
+    const virtueBlacklist = Array.isArray(mechanics.virtue_effect_blacklist)
+      ? mechanics.virtue_effect_blacklist.filter((id): id is string => typeof id === "string")
+      : [];
+    const virtueIsBlacklisted = !!assignment.granted_by_virtue_id
+      && virtueBlacklist.includes(assignment.granted_by_virtue_id);
+    if (mechanics.duplicate_virtue_effects === true && !virtueIsBlacklisted) {
       const configuredMultiplier = Number(mechanics.virtue_effect_multiplier ?? 2);
       racialMultiplier = Number.isFinite(configuredMultiplier)
         ? Math.max(1, Math.min(10, configuredMultiplier))
