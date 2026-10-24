@@ -259,6 +259,7 @@ export function CharacterAbilitiesPanel({
   allowCustomAttributeEdit?: boolean;
 }) {
   const qc = useQueryClient();
+  const { data: me } = useMe();
   const { data: loadout, isLoading } = useCharacterAbilities(characterId);
   const { data: activeEffects = [] } = useCharacterActiveEffects(characterId, showActiveEffects);
   const { data: defs } = useDefs();
@@ -409,7 +410,7 @@ export function CharacterAbilitiesPanel({
   }, [characterId]);
 
   function openAttackDialog(ability: CharacterAbility) {
-    if (!canUse || mode !== "combat" || !battleId || !ability.can_activate || ability.cooldown_remaining > 0 || ability.cooldown_turns <= 0) return;
+    if (!canUse || mode !== "combat" || !battleId || !ability.can_activate || ability.cooldown_remaining > 0 || ability.cooldown_turns < 0) return;
     if ((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle && usedOnceAbilityIds.includes(ability.id)) {
       toast.error("Esta habilidade já foi usada neste combate.");
       return;
@@ -685,6 +686,26 @@ export function CharacterAbilitiesPanel({
                       <Button size="sm" disabled={busyId !== null || attackBusy || ability.cooldown_turns <= 0 || ability.cooldown_remaining > 0 || (Boolean((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle) && mode === "combat" && usedOnceAbilityIds.includes(ability.id))} onClick={() => void activate(ability)}>
                         <Zap className="mr-1 h-3.5 w-3.5" /> {busyId === ability.id ? "Ativando..." : "Ativar"}
                       </Button>
+                      {mode === "combat" && me?.isMaster && ability.cooldown_remaining > 0 && (
+                        <div className="flex flex-wrap items-center gap-1">
+                          <Button size="sm" variant="outline" onClick={async () => {
+                            const raw = prompt("Quantos turnos de cooldown deseja reduzir?", "1");
+                            if (raw === null) return;
+                            const turns = Number(raw);
+                            if (!Number.isInteger(turns) || turns < 0 || turns > 1000) { toast.error("Informe um número inteiro entre 0 e 1000"); return; }
+                            const { error } = await db.rpc("master_adjust_ability_cooldown", { _character_ability_id: ability.id, _turns: turns, _mode: "reduce" });
+                            if (error) { toast.error(error.message); return; }
+                            toast.success("Cooldown ajustado");
+                            await Promise.all([qc.invalidateQueries({ queryKey: ["character-abilities", characterId] }), qc.invalidateQueries({ queryKey: ["character-abilities-battle"] })]);
+                          }}><Minus className="mr-1 h-3.5 w-3.5" /> Reduzir recarga</Button>
+                          <Button size="sm" variant="outline" onClick={async () => {
+                            const { error } = await db.rpc("master_adjust_ability_cooldown", { _character_ability_id: ability.id, _turns: 0, _mode: "clear" });
+                            if (error) { toast.error(error.message); return; }
+                            toast.success("Cooldown zerado");
+                            await Promise.all([qc.invalidateQueries({ queryKey: ["character-abilities", characterId] }), qc.invalidateQueries({ queryKey: ["character-abilities-battle"] })]);
+                          }}><Check className="mr-1 h-3.5 w-3.5" /> Tirar do cooldown</Button>
+                        </div>
+                      )}
                       {mode === "combat" && battleId && abilityCatalog.some((catalogAbility) => catalogAbility.id === ability.ability_id && catalogAbility.attack_enabled) && (
                         <Button size="sm" variant="outline" disabled={busyId !== null || attackBusy || attackDialogAbilityId !== null || ability.cooldown_turns <= 0 || ability.cooldown_remaining > 0 || (Boolean((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle) && usedOnceAbilityIds.includes(ability.id))} onClick={() => openAttackDialog(ability)}>
                           <Swords className="mr-1 h-3.5 w-3.5" /> Atacar
