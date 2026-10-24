@@ -113,6 +113,25 @@ describe("Sedento por Sangue", () => {
     expect(h.effects).toEqual([]);
   });
 
+  it("ativa invencibilidade ao reduzir HP diretamente na ficha, sem esperar turno", async () => {
+    const h = harness();
+    await h.run("habilidade_ativada");
+    h.setHp(6);
+    await h.run("hp_alterado");
+    expect(h.effects).toEqual([{ duracao: 2, tipo: "invincible" }]);
+    await h.run("hp_alterado");
+    expect(h.effects).toHaveLength(1);
+  });
+
+  it("aplica o efeito ao chegar a zero HP por perda periódica sem restaurar vida", async () => {
+    const h = harness({ HpQuePerdePorTurno: 100 });
+    await h.run("habilidade_ativada");
+    h.setTurn(4);
+    await h.run("turno_avançou");
+    expect(h.getHp()).toBe(0);
+    expect(h.effects).toEqual([{ duracao: 2, tipo: "invincible" }]);
+  });
+
   it("mantém a recarga interna após desligar e religar no mesmo combate", async () => {
     const h = harness();
     h.setHp(9);
