@@ -699,12 +699,14 @@ export function CharacterAbilitiesPanel({
                             const { error } = await db.rpc("master_adjust_ability_cooldown", { _character_ability_id: ability.id, _turns: turns, _mode: "reduce" });
                             if (error) { toast.error(error.message); return; }
                             toast.success("Cooldown ajustado");
+                            void dispatchCustomAbilityScriptEvents(battleId);
                             await Promise.all([qc.invalidateQueries({ queryKey: ["character-abilities", characterId] }), qc.invalidateQueries({ queryKey: ["character-abilities-battle"] })]);
                           }}><Minus className="mr-1 h-3.5 w-3.5" /> Reduzir recarga</Button>
                           <Button size="sm" variant="outline" onClick={async () => {
                             const { error } = await db.rpc("master_adjust_ability_cooldown", { _character_ability_id: ability.id, _turns: 0, _mode: "clear" });
                             if (error) { toast.error(error.message); return; }
                             toast.success("Cooldown zerado");
+                            void dispatchCustomAbilityScriptEvents(battleId);
                             await Promise.all([qc.invalidateQueries({ queryKey: ["character-abilities", characterId] }), qc.invalidateQueries({ queryKey: ["character-abilities-battle"] })]);
                           }}><Check className="mr-1 h-3.5 w-3.5" /> Tirar do cooldown</Button>
                         </div>
