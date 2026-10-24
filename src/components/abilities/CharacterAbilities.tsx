@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { dispatchCustomAbilityScriptEvents } from "@/lib/ability-script-runtime";
-import { useDefs, useMe, useRaces, useClasses } from "@/lib/sheets";
+import { useDefs, useMe, useRaces, useClasses, useVirtues } from "@/lib/sheets";
 import { parseAbilityEffects, parseAbilityAttackDamage, parseAbilityAttackEffectGroups, parseAbilityDotEffects, useAbilities, useCharacterAbilities, useCharacterActiveEffects, useDamageTypes, type Ability, type AbilityEffectDefinition, type CharacterAbility, type AbilityDotEffect } from "@/lib/abilities";
 import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
 import type { Json } from "@/integrations/supabase/types";
@@ -283,7 +283,8 @@ export function CharacterAbilitiesPanel({
     return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
   };
   const multiplierForAbility = (ability: CharacterAbility | undefined) => {
-    const abilityTraitId = ability?.granted_by_virtue_id;
+    const linkedVirtueId = (ability as (CharacterAbility & { linked_by_virtue_id?: string | null }) | undefined)?.linked_by_virtue_id;
+    const abilityTraitId = linkedVirtueId ?? ability?.granted_by_virtue_id;
     if (!abilityTraitId) return 1;
     const raceMechanics = mechanicsOf(selectedRace);
     const classMechanics = mechanicsOf(selectedClass);
@@ -1010,11 +1011,23 @@ export function CharacterAbilitiesManager({ characterId, personalOnly = false }:
   const qc = useQueryClient();
   const { data: allAbilities = [], isLoading: catalogLoading } = useAbilities();
   const { data: assigned = [], isLoading: assignedLoading } = useCharacterAbilities(characterId);
+  const { data: races = [] } = useRaces();
+  const { data: classes = [] } = useClasses();
+  const { data: virtues = [] } = useVirtues();
+  const { data: selectedTraitIds = { race_id: null, virtue_id: null, class_id: null } } = useQuery<{ race_id: string | null; virtue_id: string | null; class_id: string | null }>({
+    queryKey: ["character-ability-linkable-traits", characterId],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).from("characters").select("race_id,virtue_id,class_id").eq("id", characterId).single();
+      if (error) throw error;
+      return data;
+    },
+  });
   const { data: defs } = useDefs();
   const [expanded, setExpanded] = useState(true);
   const [customName, setCustomName] = useState("");
   const [customDescription, setCustomDescription] = useState("");
   const [creatingCustom, setCreatingCustom] = useState(false);
+  const [customTraitLink, setCustomTraitLink] = useState<"none" | "race" | "virtue" | "class">("none");
   const db = supabase as any;
   const assignedIds = new Set(assigned.map((ability) => ability.ability_id).filter(Boolean));
   const managedAssigned = personalOnly
@@ -1058,6 +1071,9 @@ export function CharacterAbilitiesManager({ characterId, personalOnly = false }:
     const { error } = await db.from("character_abilities").insert({
       character_id: characterId,
       ability_id: null,
+      linked_by_race_id: customTraitLink === "race" ? selectedTraitIds.race_id : null,
+      linked_by_virtue_id: customTraitLink === "virtue" ? selectedTraitIds.virtue_id : null,
+      linked_by_class_id: customTraitLink === "class" ? selectedTraitIds.class_id : null,
       name: cleanName,
       description: customDescription.trim() || null,
       can_activate: true,
@@ -1076,7 +1092,8 @@ export function CharacterAbilitiesManager({ characterId, personalOnly = false }:
     if (error) { toast.error(error.message); return; }
     setCustomName("");
     setCustomDescription("");
-    toast.success("Habilidade exclusiva criada nesta ficha");
+    setCustomTraitLink("none");
+    toast.success(customTraitLink === "none" ? "Habilidade exclusiva criada nesta ficha" : "Habilidade exclusiva vinculada à característica da ficha");
     await Promise.all([
       qc.invalidateQueries({ queryKey: ["character-abilities", characterId] }),
       qc.invalidateQueries({ queryKey: ["character-abilities-battle"] }),
@@ -1110,6 +1127,16 @@ export function CharacterAbilitiesManager({ characterId, personalOnly = false }:
             <div className="grid gap-2 sm:grid-cols-2">
               <Input value={customName} onChange={(event) => setCustomName(event.target.value)} placeholder="Nome da habilidade" />
               <Input value={customDescription} onChange={(event) => setCustomDescription(event.target.value)} placeholder="Descrição (opcional)" />
+            <label className="block space-y-1 text-xs font-medium sm:col-span-2">
+              Vincular habilidade a uma característica
+              <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={customTraitLink} onChange={(event) => setCustomTraitLink(event.target.value as typeof customTraitLink)}>
+                <option value="none">Sem vínculo — não remover automaticamente</option>
+                {selectedTraitIds.race_id && <option value="race">Raça: {races.find((row) => row.id === selectedTraitIds.race_id)?.name ?? "selecionada"}</option>}
+                {selectedTraitIds.virtue_id && <option value="virtue">Virtude: {virtues.find((row) => row.id === selectedTraitIds.virtue_id)?.name ?? "selecionada"}</option>}
+                {selectedTraitIds.class_id && <option value="class">Classe: {classes.find((row) => row.id === selectedTraitIds.class_id)?.name ?? "selecionada"}</option>}
+              </select>
+              <span className="block text-[11px] text-muted-foreground">Ao trocar ou remover a característica escolhida, esta habilidade exclusiva será removida da ficha.</span>
+            </label>
             </div>
             <Button size="sm" onClick={() => void createCustomAbility()} disabled={creatingCustom}>
               <Plus className="mr-1 h-3.5 w-3.5" /> {creatingCustom ? "Criando..." : "Criar habilidade exclusiva"}
