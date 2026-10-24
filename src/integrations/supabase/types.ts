@@ -20,6 +20,7 @@ export type Database = {
           attack_effect_groups: Json
           attack_enabled: boolean
           can_activate: boolean
+          toggle_mode: boolean
           cooldown_turns: number
           created_at: string
           custom_attributes: Json
@@ -42,6 +43,7 @@ export type Database = {
           attack_effect_groups?: Json
           attack_enabled?: boolean
           can_activate?: boolean
+          toggle_mode?: boolean
           cooldown_turns?: number
           created_at?: string
           custom_attributes?: Json
@@ -64,6 +66,7 @@ export type Database = {
           attack_effect_groups?: Json
           attack_enabled?: boolean
           can_activate?: boolean
+          toggle_mode?: boolean
           cooldown_turns?: number
           created_at?: string
           custom_attributes?: Json
@@ -498,6 +501,10 @@ export type Database = {
         Row: {
           ability_id: string | null
           can_activate: boolean
+          toggle_mode: boolean
+          toggle_active: boolean
+          toggle_effect_group_id: string | null
+          toggle_battle_id: string | null
           character_id: string
           cooldown_remaining: number
           cooldown_turns: number
@@ -527,6 +534,10 @@ export type Database = {
         Insert: {
           ability_id?: string | null
           can_activate?: boolean
+          toggle_mode?: boolean
+          toggle_active?: boolean
+          toggle_effect_group_id?: string | null
+          toggle_battle_id?: string | null
           character_id: string
           cooldown_remaining?: number
           cooldown_turns?: number
@@ -556,6 +567,10 @@ export type Database = {
         Update: {
           ability_id?: string | null
           can_activate?: boolean
+          toggle_mode?: boolean
+          toggle_active?: boolean
+          toggle_effect_group_id?: string | null
+          toggle_battle_id?: string | null
           character_id?: string
           cooldown_remaining?: number
           cooldown_turns?: number
