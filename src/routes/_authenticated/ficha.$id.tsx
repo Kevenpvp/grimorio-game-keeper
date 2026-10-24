@@ -389,6 +389,7 @@ function AttrEditor({ def, characterId, body, sanity, attr, racePts, virtuePts, 
     });
     if (error) { toast.error(error.message); setCur(cur0); setMax(max0); return; }
     onSaved();
+    if (def.key === "hp") void dispatchCustomAbilityScriptEvents();
   }
 
   async function commitBonus(n: number) {
