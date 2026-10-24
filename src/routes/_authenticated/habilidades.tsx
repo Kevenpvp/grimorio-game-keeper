@@ -822,7 +822,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
         onChange={setEffects}
         permanent={false}
         title="Efeitos ao ativar"
-        description="Aplicados ao alvo escolhido quando a habilidade for ativada."
+        description={toggleMode ? "Enquanto estiver ligada no combate, os efeitos permanecerão ativos sem perder turnos. Desligar remove os efeitos desta ativação." : "Aplicados ao alvo escolhido quando a habilidade for ativada."}
         defs={defs}
       />}
       {canActivate && <AbilityEffectsEditor
@@ -830,7 +830,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
         onChange={setEndEffects}
         permanent={false}
         title="Efeitos quando a habilidade acaba"
-        description="Aplicados ao destino configurado quando todos os efeitos desta ativação terminarem."
+        description={toggleMode ? "São aplicados quando a habilidade sustentada for desligada e seus efeitos ativos forem removidos." : "Aplicados ao destino configurado quando todos os efeitos desta ativação terminarem."}
         defs={defs}
         allowPeriodicHealing={false}
       />}
