@@ -187,7 +187,12 @@ function useLiveBattles(isMaster: boolean, userId: string | undefined) {
         refreshBattles();
         if (isMaster) void dispatchCustomAbilityScriptEvents();
       })
-      .on("postgres_changes", { event: "*", schema: "public", table: "character_attributes" }, refreshBattles)
+      .on("postgres_changes", { event: "*", schema: "public", table: "character_attributes" }, () => {
+        refreshBattles();
+        // The HP-change trigger can queue Sedento por Sangue script events when
+        // HP is edited directly, not only by damage/turn actions.
+        if (isMaster) void dispatchCustomAbilityScriptEvents();
+      })
       .on("postgres_changes", { event: "*", schema: "public", table: "characters" }, refreshBattles)
       .on("postgres_changes", { event: "*", schema: "public", table: "character_abilities" }, () => {
         scheduleCombatRefresh(qc, ["character-abilities"], ["character-abilities-battle"]);
