@@ -135,6 +135,7 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
       qc.invalidateQueries({ queryKey: ["transformations"] }),
       qc.invalidateQueries({ queryKey: ["character-transformations", character.id] }),
       qc.invalidateQueries({ queryKey: ["battle-character-transformations"] }),
+      qc.invalidateQueries({ queryKey: ["transformations", "character-transformation-images", character.id] }),
     ]);
   }
   const busy = loadingCatalog || loadingRaces || loadingVirtues || loadingClasses || loadingStates;
@@ -396,6 +397,7 @@ function TransformationImageCard({
       qc.invalidateQueries({ queryKey: ["transformation-abilities", transformation.id] }),
       qc.invalidateQueries({ queryKey: ["transformation-abilities", savedTransformationId] }),
       qc.invalidateQueries({ queryKey: ["transformations"] }),
+      qc.invalidateQueries({ queryKey: ["transformations", "character-transformation-images", characterId] }),
     ]);
     toast.success(isPersonal ? "Transformação salva" : "Transformação personalizada para esta ficha salva");
     await onSaved();
