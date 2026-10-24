@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Tables } from "@/integrations/supabase/types";
 import { supabase } from "@/integrations/supabase/client";
 
-export type AbilityEffectType = "status" | "regeneration" | "mana_regeneration" | "mana_used" | "no_regen_hp" | "no_regen_mana" | "magic_prohibition" | "stun" | "damage_dealt" | "damage_reduction" | "damage_received" | "damage_vulnerability" | "no_mana" | "healing" | "invincible" | "healing_blocked" | "magic_healing_reversal" | "mental_control_immunity" | "mental_control_chance" | "mental_control_resistance" | "dot_immunity" | "invisibility";
+export type AbilityEffectType = "status" | "regeneration" | "mana_regeneration" | "mana_used" | "no_regen_hp" | "no_regen_mana" | "magic_prohibition" | "stun" | "damage_dealt" | "damage_reduction" | "damage_received" | "damage_vulnerability" | "no_mana" | "healing" | "invincible" | "healing_blocked" | "magic_healing_reversal" | "mental_control_immunity" | "mental_control_chance" | "mental_control_resistance" | "dot_immunity" | "dot_resistance" | "invisibility";
 export type DamageScope = "any" | "physical" | "magical";
 export type DamageReductionScope = "physical" | "magical";
 export type DamageReceivedScope = "any" | "physical" | "magical" | "race";
@@ -19,6 +19,11 @@ export type AbilityEffectDefinition = {
   remove_on_attack?: boolean;
   dot_immunity_scope?: "all" | "physical" | "magical" | "specific";
   dot_immunity_template_ids?: string[];
+  dot_resistance_scope?: "all" | "physical" | "magical" | "specific";
+  dot_resistance_template_ids?: string[];
+  dot_resistance_mode?: "damage" | "duration";
+  dot_resistance_value_mode?: "fixed" | "percent";
+  dot_resistance_amount?: number;
   /** Instant restoration or a healing buff that ticks on each combat turn advance. */
   healing_timing?: "instant" | "per_turn";
   healing_hp_enabled?: boolean;
@@ -211,7 +216,7 @@ export type CharacterAbility = Omit<CharacterAbilityRow, "effects" | "passive_ef
 
 export function parseAbilityEffects(value: unknown, nested = false): AbilityEffectDefinition[] {
   if (!Array.isArray(value)) return [];
-  const validTypes: AbilityEffectType[] = ["status", "regeneration", "mana_regeneration", "mana_used", "no_regen_hp", "no_regen_mana", "magic_prohibition", "stun", "damage_dealt", "damage_reduction", "damage_received", "damage_vulnerability", "no_mana", "healing", "invincible", "healing_blocked", "magic_healing_reversal", "mental_control_immunity", "mental_control_chance", "mental_control_resistance", "dot_immunity", "invisibility"];
+  const validTypes: AbilityEffectType[] = ["status", "regeneration", "mana_regeneration", "mana_used", "no_regen_hp", "no_regen_mana", "magic_prohibition", "stun", "damage_dealt", "damage_reduction", "damage_received", "damage_vulnerability", "no_mana", "healing", "invincible", "healing_blocked", "magic_healing_reversal", "mental_control_immunity", "mental_control_chance", "mental_control_resistance", "dot_immunity", "dot_resistance", "invisibility"];
   return value.flatMap((item): AbilityEffectDefinition[] => {
     if (!item || typeof item !== "object") return [];
     const raw = item as Record<string, unknown>;
@@ -219,7 +224,7 @@ export function parseAbilityEffects(value: unknown, nested = false): AbilityEffe
     const effectType = raw.effect_type as AbilityEffectType;
     const polarity = effectType === "no_mana" || effectType === "healing_blocked" || effectType === "magic_prohibition" || effectType === "magic_healing_reversal" || effectType === "damage_received"
       ? "debuff"
-      : effectType === "damage_reduction" || effectType === "invincible" || effectType === "mental_control_immunity" || effectType === "mental_control_chance" || effectType === "mental_control_resistance" || effectType === "dot_immunity" || effectType === "invisibility"
+      : effectType === "damage_reduction" || effectType === "invincible" || effectType === "mental_control_immunity" || effectType === "mental_control_chance" || effectType === "mental_control_resistance" || effectType === "dot_immunity" || effectType === "dot_resistance" || effectType === "invisibility"
         ? "buff"
         : raw.polarity === "debuff" ? "debuff" : "buff";
     const valueMode = raw.value_mode === "percent" ? "percent" : "fixed";
@@ -263,6 +268,13 @@ export function parseAbilityEffects(value: unknown, nested = false): AbilityEffe
         ? [...new Set(raw.damage_received_magic_levels.filter((value): value is DamageMagicLevel => validMagicLevels.includes(value as DamageMagicLevel)))]
         : [],
       damage_received_race_id: typeof raw.damage_received_race_id === "string" ? raw.damage_received_race_id : null,
+      dot_immunity_scope: ["all", "physical", "magical", "specific"].includes(String(raw.dot_immunity_scope)) ? raw.dot_immunity_scope as "all" | "physical" | "magical" | "specific" : "all",
+      dot_immunity_template_ids: Array.isArray(raw.dot_immunity_template_ids) ? raw.dot_immunity_template_ids.filter((value): value is string => typeof value === "string") : [],
+      dot_resistance_scope: ["all", "physical", "magical", "specific"].includes(String(raw.dot_resistance_scope)) ? raw.dot_resistance_scope as "all" | "physical" | "magical" | "specific" : "all",
+      dot_resistance_template_ids: Array.isArray(raw.dot_resistance_template_ids) ? [...new Set(raw.dot_resistance_template_ids.filter((value): value is string => typeof value === "string"))] : [],
+      dot_resistance_mode: raw.dot_resistance_mode === "duration" ? "duration" : "damage",
+      dot_resistance_value_mode: raw.dot_resistance_value_mode === "percent" ? "percent" : "fixed",
+      dot_resistance_amount: Math.max(0, Math.min(1000000, Number.isFinite(Number(raw.dot_resistance_amount)) ? Number(raw.dot_resistance_amount) : 10)),
       damage_vulnerability_scope: raw.damage_vulnerability_scope === "physical" || raw.damage_vulnerability_scope === "magical"
         ? raw.damage_vulnerability_scope : "any",
       damage_vulnerability_physical_type_ids: Array.isArray(raw.damage_vulnerability_physical_type_ids)
