@@ -475,12 +475,13 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
   return (
     <section className="panel space-y-4 p-4 sm:p-5">
       {isNew && <p className="text-xs font-semibold text-amber-500">Nova habilidade — salve para confirmar as alterações.</p>}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
-        <div className="min-w-0 flex-1 space-y-1.5">
+      <div className="space-y-4">
+        <div className="space-y-1.5">
           <Label>Nome da habilidade</Label>
-          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome da habilidade" />
+          <Input className="w-full" value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome da habilidade" />
         </div>
-        <label className="flex min-h-10 items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <label className="flex min-h-10 min-w-0 items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
           <input type="checkbox" checked={!canActivate} onChange={(e) => {
             const notActivatable = e.target.checked;
             setCanActivate(!notActivatable);
@@ -494,9 +495,9 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
           Habilidade Mágica
         </label>
         {canActivate && (
-          <label className="flex min-h-10 items-center gap-2 rounded-md border border-gold/40 px-3 py-2 text-sm">
-            <input type="checkbox" checked={toggleMode} onChange={(e) => { setToggleMode(e.target.checked); if (e.target.checked) setAttackEnabled(false); }} />
-            <span><strong>Habilidade sustentada (ligar/desligar)</strong><span className="block text-xs text-muted-foreground">Liga os efeitos ao ativar e mantém até desligar; ao desligar, começa a recarga e dispara efeitos de encerramento. Só funciona no combate e sem ataque/DoTs de ativação.</span></span>
+          <label className="flex min-h-10 min-w-0 items-start gap-3 rounded-md border border-gold/40 px-3 py-2 text-sm sm:col-span-2 xl:col-span-2">
+            <input className="mt-1 shrink-0" type="checkbox" checked={toggleMode} onChange={(e) => { setToggleMode(e.target.checked); if (e.target.checked) setAttackEnabled(false); }} />
+            <span className="min-w-0"><strong className="block">Habilidade sustentada (ligar/desligar)</strong><span className="mt-1 block text-xs text-muted-foreground">Liga os efeitos ao ativar e mantém até desligar; ao desligar, começa a recarga e dispara efeitos de encerramento. Só funciona no combate e sem ataque/DoTs de ativação.</span></span>
           </label>
         )}
         {canActivate && (
@@ -505,6 +506,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
             Só pode ser usada no próprio personagem
           </label>
         )}
+        </div>
       </div>
       <section className="space-y-3 rounded-md border border-violet-500/30 bg-violet-500/5 p-3">
         <div>
