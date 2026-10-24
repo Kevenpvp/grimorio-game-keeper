@@ -1,5 +1,6 @@
 export type AbilityScriptEventType =
   | "turno_avançou"
+  | "hp_alterado"
   | "habilidade_ativada"
   | "efeito_aplicado_no_caster"
   | "efeito_removido_no_caster"
