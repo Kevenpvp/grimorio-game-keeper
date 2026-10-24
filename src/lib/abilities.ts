@@ -39,6 +39,8 @@ export type AbilityEffectDefinition = {
   healing_debuff_name_blacklist?: string[];
   healing_reduce_debuff_turns_fixed?: number;
   healing_reduce_debuff_turns_percent?: number;
+  /** Reduces the numeric magnitude of every active debuff while the granted relief lasts. */
+  healing_relieve_debuff_percent?: number;
   /** Metadata reserved for future race interactions with healing magic. */
   healing_damage_type_id?: string | null;
   healing_magic_level?: DamageMagicLevel | null;
@@ -316,6 +318,7 @@ export function parseAbilityEffects(value: unknown, nested = false): AbilityEffe
         : [],
       healing_reduce_debuff_turns_fixed: Math.max(0, Math.floor(Number.isFinite(Number(raw.healing_reduce_debuff_turns_fixed)) ? Number(raw.healing_reduce_debuff_turns_fixed) : 0)),
       healing_reduce_debuff_turns_percent: Math.max(0, Math.min(100, Number.isFinite(Number(raw.healing_reduce_debuff_turns_percent)) ? Number(raw.healing_reduce_debuff_turns_percent) : 0)),
+      healing_relieve_debuff_percent: Math.max(0, Math.min(100, Number.isFinite(Number(raw.healing_relieve_debuff_percent)) ? Number(raw.healing_relieve_debuff_percent) : 0)),
       healing_damage_type_id: typeof raw.healing_damage_type_id === "string" ? raw.healing_damage_type_id : null,
       healing_magic_level: validMagicLevels.includes(raw.healing_magic_level as DamageMagicLevel)
         ? raw.healing_magic_level as DamageMagicLevel : null,
