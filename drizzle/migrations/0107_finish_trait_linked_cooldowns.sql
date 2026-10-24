@@ -46,8 +46,6 @@ BEGIN
     _new := $new$IF NOT FOUND THEN RAISE EXCEPTION 'Transformação não encontrada'; END IF;
 
    _cooldown_virtue_id := CASE
-
-   _cooldown_virtue_id := CASE
      WHEN _transformation.linked_by_virtue_id = _character.virtue_id THEN _transformation.linked_by_virtue_id
      ELSE (
        SELECT vt.virtue_id
@@ -91,6 +89,10 @@ BEGIN
    END IF;
 $new$;
 
+    IF position(_old IN _definition) = 0 THEN
+      RAISE EXCEPTION 'Não foi possível encontrar o ponto de inserção na ativação da transformação';
+    END IF;
+    _definition := replace(_definition, _old, _new);
     IF position('virtue_cooldown_reduction_percent' IN _definition) = 0
        OR position('_effective_cooldown' IN _definition) = 0 THEN
       RAISE EXCEPTION 'Não foi possível inserir a mecânica de cooldown e duplicação na ativação da transformação';
@@ -159,6 +161,10 @@ $new$;
      END IF;
    END IF;
 $endnew$;
+    IF position(_old IN _definition) = 0 THEN
+      RAISE EXCEPTION 'Não foi possível encontrar o ponto de inserção nos efeitos de encerramento da transformação';
+    END IF;
+    _definition := replace(_definition, _old, _new);
     IF position('scale_racial_virtue_effect_json(COALESCE(_end_effects' IN _definition) = 0 THEN
       RAISE EXCEPTION 'Não foi possível inserir a mecânica de duplicação nos efeitos de encerramento da transformação';
     END IF;
