@@ -248,16 +248,15 @@ export function AbilityEffectsEditor({
                     polarity: type === "magic_prohibition" || type === "no_mana" || type === "healing_blocked" || type === "magic_healing_reversal" || type === "damage_received"
                       ? "debuff"
                       : type === "damage_reduction" || type === "invincible" || type === "mental_control_immunity" || type === "mental_control_chance" || type === "mental_control_resistance" || type === "dot_immunity" || type === "dot_resistance" || type === "invisibility" ? "buff" : effect.polarity,
-                    value_mode: type === "mental_control_chance" || type === "mental_control_resistance" ? "percent" : effect.value_mode,
-                    amount: type === "mental_control_chance" || type === "mental_control_resistance" ? (effect.amount || 50) : effect.amount,
+                    value_mode: type === "dot_resistance" ? (effect.dot_resistance_value_mode ?? "percent") : type === "mental_control_chance" || type === "mental_control_resistance" ? "percent" : effect.value_mode,
+                    amount: type === "dot_resistance" ? (effect.dot_resistance_amount ?? 25) : type === "mental_control_chance" || type === "mental_control_resistance" ? (effect.amount || 50) : effect.amount,
                     dot_immunity_scope: type === "dot_immunity" ? (effect.dot_immunity_scope || "all") : effect.dot_immunity_scope,
                     dot_immunity_template_ids: type === "dot_immunity" ? (effect.dot_immunity_template_ids || []) : effect.dot_immunity_template_ids,
                     dot_resistance_scope: type === "dot_resistance" ? (effect.dot_resistance_scope ?? "all") : effect.dot_resistance_scope,
                     dot_resistance_template_ids: type === "dot_resistance" ? (effect.dot_resistance_template_ids ?? []) : effect.dot_resistance_template_ids,
                     dot_resistance_mode: type === "dot_resistance" ? (effect.dot_resistance_mode ?? "damage") : effect.dot_resistance_mode,
                     dot_resistance_value_mode: type === "dot_resistance" ? (effect.dot_resistance_value_mode ?? "percent") : effect.dot_resistance_value_mode,
-                    amount: type === "dot_resistance" ? (effect.dot_resistance_amount ?? 25) : type === "mental_control_chance" || type === "mental_control_resistance" ? (effect.amount || 50) : effect.amount,
-                    value_mode: type === "dot_resistance" ? (effect.dot_resistance_value_mode ?? "percent") : type === "mental_control_chance" || type === "mental_control_resistance" ? "percent" : effect.value_mode,
+
                     damage_reduction_scope: type === "damage_reduction" ? "physical" : effect.damage_reduction_scope,
                     damage_reduction_type_id: null,
                     damage_reduction_magic_level: null,
