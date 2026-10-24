@@ -1,6 +1,6 @@
 -- Add Alívio de Debuff: a temporary percentage modifier that reduces the magnitude
 -- of numeric debuffs while it is active without changing those debuffs' duration.
-DO $
+DO $checks$
 DECLARE
   _definition text;
 BEGIN
@@ -43,7 +43,7 @@ BEGIN
     ALTER TABLE public.battle_effects DROP CONSTRAINT battle_effects_effect_type_check;
     EXECUTE format('ALTER TABLE public.battle_effects ADD CONSTRAINT battle_effects_effect_type_check %s', _definition);
   END IF;
-END $$;
+END $checks$;
 
 CREATE OR REPLACE FUNCTION public.capture_debuff_relief_base_amount()
 RETURNS trigger
