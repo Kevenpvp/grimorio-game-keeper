@@ -9,12 +9,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
 import { effectSummary } from "@/components/abilities/CharacterAbilities";
 import { parseAbilityEffects, useAbilities, useDamageTypes, type AbilityEffectDefinition } from "@/lib/abilities";
-import { useDefs, useRaces } from "@/lib/sheets";
+import { useDefs, useRaces, useClasses, useVirtues } from "@/lib/sheets";
 import type { Json } from "@/integrations/supabase/types";
 import { supabase } from "@/integrations/supabase/client";
 import { usePhotoUrl, type Character } from "@/lib/sheets";
 
-type Transformation = { id: string; name: string; description: string | null; duration_turns: number; cooldown_turns: number; mana_cost: number; modifiers: Json; effects: Json; end_effects: Json; owner_character_id?: string | null; source_transformation_id?: string | null };
+type Transformation = { id: string; name: string; description: string | null; duration_turns: number; cooldown_turns: number; mana_cost: number; modifiers: Json; effects: Json; end_effects: Json; owner_character_id?: string | null; source_transformation_id?: string | null; linked_by_race_id?: string | null; linked_by_virtue_id?: string | null; linked_by_class_id?: string | null };
 type CharacterTransformationState = { transformation_id: string; image_path: string | null; active: boolean; cooldown_remaining: number };
 
 export function CharacterTransformationImages({ character, isMaster = false }: { character: Character; isMaster?: boolean }) {
@@ -22,6 +22,7 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
   const qc = useQueryClient();
   const [newTransformationName, setNewTransformationName] = useState("");
   const [creatingTransformation, setCreatingTransformation] = useState(false);
+  const [newTransformationTrait, setNewTransformationTrait] = useState<"none" | "race" | "virtue" | "class">("none");
 
   useEffect(() => {
     const channel = supabase
@@ -44,6 +45,8 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
   const { data: defs = [] } = useDefs();
   const { data: damageTypes = [] } = useDamageTypes();
   const { data: races = [] } = useRaces();
+  const { data: classes = [] } = useClasses();
+  const { data: virtues = [] } = useVirtues();
   const { data: catalog = [], isLoading: loadingCatalog } = useQuery<Transformation[]>({
     queryKey: ["transformations", "character-transformation-images", character.id],
     queryFn: async () => {
@@ -94,6 +97,9 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
     setCreatingTransformation(true);
     const { data, error } = await db.from("transformations").insert({
       owner_character_id: character.id,
+      linked_by_race_id: newTransformationTrait === "race" ? character.race_id : null,
+      linked_by_virtue_id: newTransformationTrait === "virtue" ? character.virtue_id : null,
+      linked_by_class_id: newTransformationTrait === "class" ? character.class_id : null,
       name,
       description: "",
       duration_turns: 3,
@@ -114,7 +120,8 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
       return;
     }
     setNewTransformationName("");
-    toast.success("Transformação exclusiva criada nesta ficha");
+    setNewTransformationTrait("none");
+    toast.success(newTransformationTrait === "none" ? "Transformação exclusiva criada nesta ficha" : "Transformação exclusiva vinculada à característica da ficha");
     await Promise.all([
       qc.invalidateQueries({ queryKey: ["transformations"] }),
       qc.invalidateQueries({ queryKey: ["character-transformations", character.id] }),
@@ -135,11 +142,20 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
           : "Aqui aparecem as transformações concedidas pela sua raça ou virtude, as transformações exclusivas da sua ficha e o estado de cada uma."}
       </p>
       {isMaster && (
-        <div className="flex flex-col gap-2 rounded-md border border-gold/30 p-3 sm:flex-row">
-          <Input value={newTransformationName} onChange={(event) => setNewTransformationName(event.target.value)} placeholder="Nome da transformação exclusiva" />
-          <Button type="button" onClick={() => void createPersonalTransformation()} disabled={creatingTransformation || !newTransformationName.trim()}>
-            <Sparkles className="mr-1 h-4 w-4" /> {creatingTransformation ? "Criando..." : "Criar transformação"}
-          </Button>
+        <div className="space-y-2 rounded-md border border-gold/30 p-3">
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(200px,0.65fr)_auto]">
+            <Input value={newTransformationName} onChange={(event) => setNewTransformationName(event.target.value)} placeholder="Nome da transformação exclusiva" />
+            <select className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={newTransformationTrait} onChange={(event) => setNewTransformationTrait(event.target.value as typeof newTransformationTrait)}>
+              <option value="none">Sem vínculo automático</option>
+              {character.race_id && <option value="race">Raça: {races.find((row) => row.id === character.race_id)?.name ?? "atual"}</option>}
+              {character.virtue_id && <option value="virtue">Virtude: {virtues.find((row) => row.id === character.virtue_id)?.name ?? "atual"}</option>}
+              {character.class_id && <option value="class">Classe: {classes.find((row) => row.id === character.class_id)?.name ?? "atual"}</option>}
+            </select>
+            <Button type="button" onClick={() => void createPersonalTransformation()} disabled={creatingTransformation || !newTransformationName.trim()}>
+              <Sparkles className="mr-1 h-4 w-4" /> {creatingTransformation ? "Criando..." : "Criar transformação"}
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">Se vincular a uma raça, virtude ou classe, a transformação será removida automaticamente quando o personagem deixar de ter essa característica.</p>
         </div>
       )}
       {(statesError || raceLinksError || virtueLinksError) && (
@@ -184,6 +200,12 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
             <TransformationImageCard
               key={transformation.id}
               characterId={character.id}
+              raceId={character.race_id}
+              virtueId={character.virtue_id}
+              classId={character.class_id}
+              raceName={races.find((row) => row.id === character.race_id)?.name ?? "Raça atual"}
+              virtueName={virtues.find((row) => row.id === character.virtue_id)?.name ?? "Virtude atual"}
+              className={classes.find((row) => row.id === character.class_id)?.name ?? "Classe atual"}
               transformation={transformation}
               state={states.find((entry) => entry.transformation_id === transformation.id)}
               isMaster={isMaster}
@@ -209,9 +231,15 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
 }
 
 function TransformationImageCard({
-  characterId, transformation, state, onSaved, isMaster, isPersonal, grantedByRace, grantedByVirtue, hasCharacterState, defs, damageTypes, races,
+  characterId, raceId, virtueId, classId, raceName, virtueName, className, transformation, state, onSaved, isMaster, isPersonal, grantedByRace, grantedByVirtue, hasCharacterState, defs, damageTypes, races,
 }: {
   characterId: string;
+  raceId: string | null;
+  virtueId: string | null;
+  classId: string | null;
+  raceName: string;
+  virtueName: string;
+  className: string;
   transformation: Transformation;
   state?: CharacterTransformationState;
   isMaster: boolean;
@@ -233,6 +261,7 @@ function TransformationImageCard({
   const [duration, setDuration] = useState(String(transformation.duration_turns ?? 3));
   const [cooldown, setCooldown] = useState(String(transformation.cooldown_turns));
   const [manaCost, setManaCost] = useState(String(transformation.mana_cost));
+  const [personalTraitLink, setPersonalTraitLink] = useState<"none" | "race" | "virtue" | "class">(() => transformation.linked_by_race_id ? "race" : transformation.linked_by_virtue_id ? "virtue" : transformation.linked_by_class_id ? "class" : "none");
   const [modifiers, setModifiers] = useState<Record<string, number>>(() => {
     const raw = transformation.modifiers;
     return raw && typeof raw === "object" && !Array.isArray(raw) ? Object.fromEntries(Object.entries(raw).map(([key, value]) => [key, Number(value) || 0])) : {};
@@ -254,6 +283,7 @@ function TransformationImageCard({
     setName(transformation.name); setDescription(transformation.description ?? "");
     setDuration(String(transformation.duration_turns ?? 3)); setCooldown(String(transformation.cooldown_turns));
     setManaCost(String(transformation.mana_cost));
+    setPersonalTraitLink(transformation.linked_by_race_id ? "race" : transformation.linked_by_virtue_id ? "virtue" : transformation.linked_by_class_id ? "class" : "none");
     const raw = transformation.modifiers;
     setModifiers(raw && typeof raw === "object" && !Array.isArray(raw) ? Object.fromEntries(Object.entries(raw).map(([key, value]) => [key, Number(value) || 0])) : {});
     setEffects(parseAbilityEffects(transformation.effects)); setEndEffects(parseAbilityEffects(transformation.end_effects));
@@ -297,6 +327,9 @@ function TransformationImageCard({
       modifiers: cleanModifiers,
       effects: effects.map((effect) => ({ ...effect, duration: Math.max(1, effect.duration) })) as unknown as Json,
       end_effects: endEffects.map((effect) => ({ ...effect, duration: Math.max(1, effect.duration) })) as unknown as Json,
+      linked_by_race_id: personalTraitLink === "race" ? raceId : null,
+      linked_by_virtue_id: personalTraitLink === "virtue" ? virtueId : null,
+      linked_by_class_id: personalTraitLink === "class" ? classId : null,
       updated_at: new Date().toISOString(),
     };
 
@@ -476,6 +509,15 @@ function TransformationImageCard({
             <div className="space-y-1"><Label>Cooldown (turnos)</Label><Input type="number" min={1} max={1000} value={cooldown} onChange={(event) => setCooldown(event.target.value)} /></div>
             <div className="space-y-1"><Label>Custo de Mana</Label><Input type="number" min={0} max={1000000} value={manaCost} onChange={(event) => setManaCost(event.target.value)} /></div>
             <div className="space-y-1 sm:col-span-2"><Label>Descrição</Label><Textarea rows={2} value={description} onChange={(event) => setDescription(event.target.value)} /></div>
+            {isMaster && <label className="block space-y-1 text-xs font-medium sm:col-span-2">Vincular transformação à característica
+              <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={personalTraitLink} onChange={(event) => setPersonalTraitLink(event.target.value as typeof personalTraitLink)}>
+                <option value="none">Sem vínculo automático</option>
+                {raceId && <option value="race">Raça: {raceName}</option>}
+                {virtueId && <option value="virtue">Virtude: {virtueName}</option>}
+                {classId && <option value="class">Classe: {className}</option>}
+              </select>
+              <span className="block text-[11px] text-muted-foreground">A transformação será removida quando a característica escolhida for removida da ficha.</span>
+            </label>}
           </div>
           <div className="space-y-2 rounded-md border border-border p-3">
             <Label>Modificadores de atributos</Label>
