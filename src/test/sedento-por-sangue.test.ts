@@ -82,7 +82,7 @@ describe("Sedento por Sangue", () => {
   });
 
   it("aplica 2 turnos de invencibilidade abaixo de 10% e respeita cooldown 10", async () => {
-    const h = harness();
+    const h = harness({ TurnoPraComeçarAPerderHp: 100 });
     await h.run("habilidade_ativada");
     h.setTurn(2);
     h.setHp(10);
