@@ -54,7 +54,7 @@ async function tryInvincibility(context: AbilityScriptContext, api: AbilityScrip
 
   const hp = await api.consultarRecurso({ personagem: "caster", recurso: "hp" });
   const threshold = config(context, "HpAbaixoParaAtivar", 10, 100);
-  if (hp.maximo <= 0 || hp.atual <= 0 || hp.atual > hp.maximo * threshold / 100) return;
+  if (hp.maximo <= 0 || hp.atual > hp.maximo * threshold / 100) return;
 
   const duration = Math.max(1, config(context, "DuraçaoDeInvencibilidade", 2, 1000));
   const cooldown = config(context, "CooldowndaInvencibilidade", 10, 10000);
