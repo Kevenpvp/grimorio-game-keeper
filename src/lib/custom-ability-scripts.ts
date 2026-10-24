@@ -20,6 +20,7 @@ export const CUSTOM_ABILITY_SCRIPTS = [
   { key: "example", label: "Exemplo — registrar eventos (não altera o combate)" },
   { key: "demonio_interno", label: "Demônio Interno — acumula dano recebido e reflete no próximo ataque" },
   { key: "coracao_corrompido", label: "Coração Corrompido — usa ForçaBonus enquanto estiver em cooldown e houver superaquecimento" },
+  { key: "sedento_por_sangue", label: "Sedento por Sangue — consome HP após turnos e concede invencibilidade com cooldown interno" },
 ] as const;
 
 export type CustomAbilityScriptKey = (typeof CUSTOM_ABILITY_SCRIPTS)[number]["key"];
