@@ -324,7 +324,7 @@ function ClassEditor({ classTrait, defs, isNew, onSaved }: { classTrait: ClassTr
             "status", "regeneration", "mana_regeneration", "mana_used",
             "no_regen_hp", "no_regen_mana", "magic_prohibition", "stun",
             "damage_dealt", "no_mana", "damage_reduction", "damage_received", "damage_vulnerability", "invincible", "healing_blocked", "magic_healing_reversal",
-            "mental_control_immunity", "mental_control_chance", "mental_control_resistance", "dot_immunity", "invisibility",
+            "mental_control_immunity", "mental_control_chance", "mental_control_resistance", "dot_immunity", "dot_resistance", "invisibility",
           ] as AbilityEffectType[]}
           allowPermanentMagicProhibition
         />
