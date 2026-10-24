@@ -1213,6 +1213,7 @@ export function CharacterAbilitiesManager({ characterId, personalOnly = false }:
 
 function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; defs: NonNullable<ReturnType<typeof useDefs>["data"]> }) {
   const qc = useQueryClient();
+  const { data: availableCatalogAbilities = [] } = useAbilities();
   const [name, setName] = useState(ability.name);
   const [description, setDescription] = useState(ability.description ?? "");
   const [canActivate, setCanActivate] = useState(ability.can_activate);
@@ -1249,6 +1250,11 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
     if (!name.trim()) { toast.error("Informe o nome"); return; }
     if (ability.toggle_active) { toast.error("Desative esta habilidade antes de alterar sua configuração."); return; }
     if (toggleMode && !canActivate) { toast.error("Habilidade sustentada precisa ser ativável."); return; }
+    const catalogDefinition = availableCatalogAbilities.find((row) => row.id === ability.ability_id);
+    if (toggleMode && catalogDefinition && (catalogDefinition.attack_enabled || parseAbilityDotEffects(catalogDefinition.dot_effects).length > 0)) {
+      toast.error("Este modelo possui ataque ou DoTs de ativação. Remova-os do modelo antes de usar o modo sustentado.");
+      return;
+    }
     if (!Number.isFinite(cost) || cost < 0) { toast.error("Custo de Mana inválido"); return; }
     if (canActivate && (!Number.isFinite(cooldownTurns) || cooldownTurns < 0)) { toast.error("O cooldown precisa ser 0 ou maior"); return; }
     const canTriggerEndEffects = effects.some((effect) =>
@@ -1390,7 +1396,7 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
         onChange={setEffects}
         permanent={false}
         title="Efeitos ao ativar"
-        description="Aplicados ao alvo escolhido quando esta habilidade for ativada."
+        description={toggleMode ? "Permanecem aplicados enquanto a habilidade estiver ligada no combate. São removidos quando o mestre a desliga." : "Aplicados ao alvo escolhido quando esta habilidade for ativada."}
         defs={defs}
       />}
       {canActivate && <AbilityEffectsEditor
@@ -1398,7 +1404,7 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
         onChange={setEndEffects}
         permanent={false}
         title="Efeitos quando a habilidade acaba"
-        description="Aplicados ao destino escolhido quando todos os efeitos desta ativação terminarem."
+        description={toggleMode ? "São aplicados quando a habilidade sustentada é desligada e os efeitos ativos terminam." : "Aplicados ao destino escolhido quando todos os efeitos desta ativação terminarem."}
         defs={defs}
         allowPeriodicHealing={false}
       />}
