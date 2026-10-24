@@ -40,7 +40,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.sync_coracao_corrompido_strength_effect_internal(_character_id uuid, _bonus_strength numeric DEFAULT NULL::numeric)
@@ -152,7 +152,7 @@ BEGIN
     END IF;
   END LOOP;
 END;
-$function$
+$function$;
 
 
 -- Servers should multiply every virtue except Corpo by default.
