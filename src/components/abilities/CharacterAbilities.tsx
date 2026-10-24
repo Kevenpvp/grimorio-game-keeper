@@ -563,7 +563,7 @@ export function CharacterAbilitiesPanel({
   }
 
   async function activate(ability: CharacterAbility) {
-    if (!canUse || mode !== "combat" || !ability.can_activate || ability.cooldown_turns <= 0 || ability.cooldown_remaining > 0 || busyId) return;
+    if (!canUse || mode !== "combat" || !ability.can_activate || ability.cooldown_turns < 0 || ability.cooldown_remaining > 0 || busyId) return;
     if ((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle && mode === "combat" && usedOnceAbilityIds.includes(ability.id)) {
       toast.error("Esta habilidade já foi usada neste combate.");
       return;
@@ -683,7 +683,7 @@ export function CharacterAbilitiesPanel({
                   </div>
                   {mode === "combat" && canUse && ability.can_activate && (
                     <>
-                      <Button size="sm" disabled={busyId !== null || attackBusy || ability.cooldown_turns <= 0 || ability.cooldown_remaining > 0 || (Boolean((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle) && mode === "combat" && usedOnceAbilityIds.includes(ability.id))} onClick={() => void activate(ability)}>
+                      <Button size="sm" disabled={busyId !== null || attackBusy || ability.cooldown_turns < 0 || ability.cooldown_remaining > 0 || (Boolean((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle) && mode === "combat" && usedOnceAbilityIds.includes(ability.id))} onClick={() => void activate(ability)}>
                         <Zap className="mr-1 h-3.5 w-3.5" /> {busyId === ability.id ? "Ativando..." : "Ativar"}
                       </Button>
                       {mode === "combat" && me?.isMaster && ability.cooldown_remaining > 0 && (
@@ -707,7 +707,7 @@ export function CharacterAbilitiesPanel({
                         </div>
                       )}
                       {mode === "combat" && battleId && abilityCatalog.some((catalogAbility) => catalogAbility.id === ability.ability_id && catalogAbility.attack_enabled) && (
-                        <Button size="sm" variant="outline" disabled={busyId !== null || attackBusy || attackDialogAbilityId !== null || ability.cooldown_turns <= 0 || ability.cooldown_remaining > 0 || (Boolean((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle) && usedOnceAbilityIds.includes(ability.id))} onClick={() => openAttackDialog(ability)}>
+                        <Button size="sm" variant="outline" disabled={busyId !== null || attackBusy || attackDialogAbilityId !== null || ability.cooldown_turns < 0 || ability.cooldown_remaining > 0 || (Boolean((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle) && usedOnceAbilityIds.includes(ability.id))} onClick={() => openAttackDialog(ability)}>
                           <Swords className="mr-1 h-3.5 w-3.5" /> Atacar
                         </Button>
                       )}
@@ -1275,7 +1275,7 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
           <input type="checkbox" checked={!canActivate} onChange={(e) => {
             const notActivatable = e.target.checked;
             setCanActivate(!notActivatable);
-            setCooldown(notActivatable ? "0" : (Number(cooldown) > 0 ? cooldown : "1"));
+            setCooldown(notActivatable ? "0" : (Number(cooldown) >= 0 ? cooldown : "0"));
             if (notActivatable) setManaCost("0");
           }} />
           Habilidade não ativável nesta ficha
@@ -1298,7 +1298,7 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
         )}
         {canActivate && <div className="space-y-1"><Label>Custo base de Mana</Label><Input type="number" min="0" value={manaCost} onChange={(e) => setManaCost(e.target.value)} /></div>}
         {!canActivate && <p className="text-xs text-muted-foreground">Não ativável: não gasta Mana nem possui cooldown; seus efeitos passivos continuam funcionando.</p>}
-        {canActivate && <div className="space-y-1"><Label>Cooldown máximo (turnos)</Label><Input type="number" min="1" value={cooldown} onChange={(e) => setCooldown(e.target.value)} /></div>}
+        {canActivate && <div className="space-y-1"><Label>Cooldown máximo (turnos)</Label><Input type="number" min="0" value={cooldown} onChange={(e) => setCooldown(e.target.value)} /></div>}
         <div className="space-y-1 sm:col-span-2"><Label>Descrição para este jogador</Label><Input value={description} onChange={(e) => setDescription(e.target.value)} /></div>
       </div>
       {canActivate && <AbilityEffectsEditor
