@@ -45,6 +45,8 @@ export interface AbilityScriptContext {
     idNaFicha: string | null;
     nome: string;
     scriptKey: string;
+    /** Whether this ability is currently sustained in this battle. */
+    ativa: boolean;
   };
   caster: ScriptCharacter;
   /** Target selected during activation or opposite side of a damage event. */
@@ -63,7 +65,7 @@ export interface AbilityScriptContext {
 
 export interface ApplyScriptEffectInput {
   nome: string;
-  tipo: "status" | "regeneration" | "no_regen_hp" | "no_regen_mana" | "stun" | "mana_used" | "magic_prohibition" | "damage_dealt" | "no_mana" | "damage_reduction" | "healing";
+  tipo: "status" | "regeneration" | "no_regen_hp" | "no_regen_mana" | "stun" | "mana_used" | "magic_prohibition" | "damage_dealt" | "no_mana" | "damage_reduction" | "healing" | "invincible";
   duracao: number;
   atributo?: string | null;
   polaridade?: "buff" | "debuff";
