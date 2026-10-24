@@ -141,6 +141,12 @@ const sedentoPorSangue: AbilityScript = {
     await tryInvincibility(context, api);
   },
 
+  async "hp_alterado"(context, api) {
+    // Detecta qualquer alteração de HP enquanto a habilidade estiver ligada,
+    // inclusive ajustes manuais na ficha, dano, regeneração e custo de scripts.
+    await tryInvincibility(context, api);
+  },
+
   async "recebeu_dano"(context, api) {
     // Não espera o próximo turno se um ataque ou DoT colocou o personagem
     // em 10% ou menos de HP.
