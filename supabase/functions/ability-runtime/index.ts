@@ -125,9 +125,9 @@ async function loadCharacter(service: ReturnType<typeof createClient>, id: strin
 
 async function buildContext(service: ReturnType<typeof createClient>, event: QueuedAbilityEvent): Promise<AbilityScriptContext> {
   if (!event.character_id) throw new Error("O personagem dono da habilidade não existe mais.");
-  const [assignmentResult, abilityResult, caster, target, battleResult] = await Promise.all([
+  const [assignmentResult, abilityResult, caster, target, battleResult, participantResult] = await Promise.all([
     event.character_ability_id
-      ? service.from("character_abilities").select("id,ability_id,name,character_id,custom_state,custom_attributes,granted_by_virtue_id,linked_by_virtue_id").eq("id", event.character_ability_id).maybeSingle()
+      ? service.from("character_abilities").select("id,ability_id,name,character_id,custom_state,custom_attributes,granted_by_virtue_id,linked_by_virtue_id,toggle_active,toggle_battle_id").eq("id", event.character_ability_id).maybeSingle()
       : Promise.resolve({ data: null, error: null }),
     event.ability_id
       ? service.from("abilities").select("id,name,custom_script_key,custom_attributes").eq("id", event.ability_id).maybeSingle()
@@ -137,18 +137,22 @@ async function buildContext(service: ReturnType<typeof createClient>, event: Que
     event.battle_id
       ? service.from("battles").select("id,name,turn_count,active").eq("id", event.battle_id).maybeSingle()
       : Promise.resolve({ data: null, error: null }),
+    event.battle_id
+      ? service.from("battle_participants").select("turn_count").eq("battle_id", event.battle_id).eq("character_id", event.character_id).maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
   ]);
   if (assignmentResult.error) throw assignmentResult.error;
   if (abilityResult.error) throw abilityResult.error;
   if (battleResult.error) throw battleResult.error;
+  if (participantResult.error) throw participantResult.error;
   if (!caster) throw new Error("O personagem dono da habilidade não existe mais.");
 
   const payload = asObject(event.payload);
   const rawEffect = asObject(payload.effect);
   const battle = battleResult.data as { id: string; name: string; turn_count: number; active: boolean } | null;
-  const assignment = assignmentResult.data as { id: string; ability_id: string; name: string; custom_state?: unknown; custom_attributes?: unknown; granted_by_virtue_id?: string | null; linked_by_virtue_id?: string | null } | null;
+  const assignment = assignmentResult.data as { id: string; ability_id: string; name: string; custom_state?: unknown; custom_attributes?: unknown; granted_by_virtue_id?: string | null; linked_by_virtue_id?: string | null; toggle_active?: boolean; toggle_battle_id?: string | null } | null;
   const ability = abilityResult.data as { id: string; name: string; custom_script_key: string | null; custom_attributes?: unknown } | null;
-  const individualTurn = Number(payload.turn_count);
+  const individualTurn = Number(payload.turn_count ?? participantResult.data?.turn_count);
   const rawState = asObject(assignment?.custom_state);
   // Prefer this character's configuration. Null means "use the catalogue defaults".
   const selectedAttributes = Array.isArray(assignment?.custom_attributes)
@@ -182,11 +186,21 @@ async function buildContext(service: ReturnType<typeof createClient>, event: Que
   for (const rawAttribute of selectedAttributes) {
     const attribute = asObject(rawAttribute);
     if (typeof attribute.key !== "string" || !attribute.key.trim()) continue;
+    let resolved: number | string | boolean | undefined;
     if (attribute.type === "number" && Number.isFinite(Number(attribute.value))) {
       // Only numeric attributes explicitly eligible for race/class scaling are multiplied.
-      customAttributes[attribute.key] = Number(attribute.value) * (attribute.scale_with_race === false || attribute.malefico === true ? 1 : racialMultiplier);
-    } else if (attribute.type === "boolean") customAttributes[attribute.key] = attribute.value === true;
-    else if (attribute.type === "string" && typeof attribute.value === "string") customAttributes[attribute.key] = attribute.value;
+      resolved = Number(attribute.value) * (attribute.scale_with_race === false || attribute.malefico === true ? 1 : racialMultiplier);
+    } else if (attribute.type === "boolean") resolved = attribute.value === true;
+    else if (attribute.type === "string" && typeof attribute.value === "string") resolved = attribute.value;
+    if (resolved !== undefined) {
+      customAttributes[attribute.key] = resolved;
+      // Older custom attributes use generic keys (atributo_1...), while the
+      // GM edits them by their displayed names. Support both without changing IDs.
+      if (typeof attribute.name === "string" && attribute.name.trim() &&
+          !Object.prototype.hasOwnProperty.call(customAttributes, attribute.name.trim())) {
+        customAttributes[attribute.name.trim()] = resolved;
+      }
+    }
   }
   const rawDamage = asObject(payload.dano);
   const damage = Object.keys(rawDamage).length ? rawDamage as unknown as AbilityScriptContext["dano"] : null;
@@ -199,6 +213,7 @@ async function buildContext(service: ReturnType<typeof createClient>, event: Que
       idNaFicha: event.character_ability_id ?? assignment?.id ?? null,
       nome: assignment?.name ?? ability?.name ?? event.script_key,
       scriptKey: event.script_key,
+      ativa: assignment?.toggle_active === true && assignment.toggle_battle_id === event.battle_id && battle?.active === true,
     },
     caster: { id: caster.id, nome: caster.name, nomeJogador: caster.player_name ?? null },
     alvo: target ? { id: target.id, nome: target.name, nomeJogador: target.player_name ?? null } : null,
@@ -435,15 +450,16 @@ function makeApi(
       const forcedDebuff = type === "magic_prohibition" || type === "no_mana";
       const healing = type === "healing";
       const reduction = type === "damage_reduction";
+      const invincible = type === "invincible";
       const effectRow = {
         battle_id: context.batalha?.id ?? null,
         character_id: character.id,
         name: String(definition.nome).trim().slice(0, 160) || "Efeito customizado",
         effect_type: type,
         attribute_key: ["status", "regeneration"].includes(type) ? definition.atributo ?? null : null,
-        polarity: forcedDebuff ? "debuff" : reduction || healing ? "buff" : definition.polaridade ?? "buff",
-        value_mode: healing ? "fixed" : definition.modoValor ?? "fixed",
-        amount: healing ? 0 : amount,
+        polarity: forcedDebuff ? "debuff" : reduction || healing || invincible ? "buff" : definition.polaridade ?? "buff",
+        value_mode: healing || invincible ? "fixed" : definition.modoValor ?? "fixed",
+        amount: healing || invincible ? 0 : amount,
         duration,
         duration_scope: "individual",
         damage_scope: definition.escopoDano ?? "any",
