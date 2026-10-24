@@ -358,10 +358,27 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
       !effect.healing_sanity_enabled &&
       !effect.healing_remove_debuffs &&
       !(effect.healing_reduce_debuff_turns_fixed && effect.healing_reduce_debuff_turns_fixed > 0) &&
-      !(effect.healing_reduce_debuff_turns_percent && effect.healing_reduce_debuff_turns_percent > 0)
+      !(effect.healing_reduce_debuff_turns_percent && effect.healing_reduce_debuff_turns_percent > 0) &&
+      !(effect.healing_relieve_debuff_percent && effect.healing_relieve_debuff_percent > 0)
     );
     if (hasInvalidHealing) {
       toast.error("Configure pelo menos uma ação em cada efeito de cura.");
+      return;
+    }
+    const hasInvalidDotResistance = allConfiguredEffects.some((effect) =>
+      effect.effect_type === "dot_resistance" && (
+        !["all", "physical", "magical", "specific"].includes(effect.dot_resistance_scope ?? "all") ||
+        !["damage", "duration"].includes(effect.dot_resistance_mode ?? "damage") ||
+        !["fixed", "percent"].includes(effect.dot_resistance_value_mode ?? "percent") ||
+        !Number.isFinite(Number(effect.dot_resistance_amount ?? effect.amount)) ||
+        Number(effect.dot_resistance_amount ?? effect.amount) < 0 ||
+        ((effect.dot_resistance_value_mode ?? "percent") === "percent" && Number(effect.dot_resistance_amount ?? effect.amount) > 100) ||
+        ((effect.dot_resistance_value_mode ?? "percent") === "fixed" && Number(effect.dot_resistance_amount ?? effect.amount) > 1000000) ||
+        ((effect.dot_resistance_scope ?? "all") === "specific" && !(effect.dot_resistance_template_ids ?? []).length)
+      )
+    );
+    if (hasInvalidDotResistance) {
+      toast.error("Revise a Resistência a DoTs: selecione os DoTs e configure um valor entre 0 e o limite permitido.");
       return;
     }
     if (allConfiguredEffects.some((effect) => !effect.name.trim() || (
