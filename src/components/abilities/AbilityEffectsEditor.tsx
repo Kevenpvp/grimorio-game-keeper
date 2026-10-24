@@ -27,6 +27,7 @@ const effectTypeLabels: Record<AbilityEffectType, string> = {
   mental_control_chance: "Potência de Controle Mental",
   mental_control_resistance: "Resistência a Controle Mental",
   dot_immunity: "Imunidade a DoTs",
+  dot_resistance: "Resistência a DoTs",
   invisibility: "Invisibilidade (visual)",
 };
 
@@ -96,6 +97,11 @@ export function AbilityEffectsEditor({
       remove_on_attack: false,
       dot_immunity_scope: "all",
       dot_immunity_template_ids: [],
+      dot_resistance_scope: "all",
+      dot_resistance_template_ids: [],
+      dot_resistance_mode: "damage",
+      dot_resistance_value_mode: "percent",
+      dot_resistance_amount: 25,
       damage_scope: "any",
       damage_reduction_scope: "physical",
       damage_reduction_type_id: null,
@@ -168,6 +174,7 @@ export function AbilityEffectsEditor({
         const isHealing = effect.effect_type === "healing";
         const isMagicHealingReversal = effect.effect_type === "magic_healing_reversal";
         const isDotImmunity = effect.effect_type === "dot_immunity";
+        const isDotResistance = effect.effect_type === "dot_resistance";
         const isMentalControlModifier = effect.effect_type === "mental_control_chance" || effect.effect_type === "mental_control_resistance";
         const selectedReductionTypeIds = effect.damage_reduction_type_ids ?? (effect.damage_reduction_type_id ? [effect.damage_reduction_type_id] : []);
         const selectedReductionMagicLevels = effect.damage_reduction_magic_levels ?? (effect.damage_reduction_magic_level ? [effect.damage_reduction_magic_level] : []);
@@ -240,11 +247,17 @@ export function AbilityEffectsEditor({
                       : effect.damage_vulnerability_effects,
                     polarity: type === "magic_prohibition" || type === "no_mana" || type === "healing_blocked" || type === "magic_healing_reversal" || type === "damage_received"
                       ? "debuff"
-                      : type === "damage_reduction" || type === "invincible" || type === "mental_control_immunity" || type === "mental_control_chance" || type === "mental_control_resistance" || type === "dot_immunity" || type === "invisibility" ? "buff" : effect.polarity,
+                      : type === "damage_reduction" || type === "invincible" || type === "mental_control_immunity" || type === "mental_control_chance" || type === "mental_control_resistance" || type === "dot_immunity" || type === "dot_resistance" || type === "invisibility" ? "buff" : effect.polarity,
                     value_mode: type === "mental_control_chance" || type === "mental_control_resistance" ? "percent" : effect.value_mode,
                     amount: type === "mental_control_chance" || type === "mental_control_resistance" ? (effect.amount || 50) : effect.amount,
                     dot_immunity_scope: type === "dot_immunity" ? (effect.dot_immunity_scope || "all") : effect.dot_immunity_scope,
                     dot_immunity_template_ids: type === "dot_immunity" ? (effect.dot_immunity_template_ids || []) : effect.dot_immunity_template_ids,
+                    dot_resistance_scope: type === "dot_resistance" ? (effect.dot_resistance_scope ?? "all") : effect.dot_resistance_scope,
+                    dot_resistance_template_ids: type === "dot_resistance" ? (effect.dot_resistance_template_ids ?? []) : effect.dot_resistance_template_ids,
+                    dot_resistance_mode: type === "dot_resistance" ? (effect.dot_resistance_mode ?? "damage") : effect.dot_resistance_mode,
+                    dot_resistance_value_mode: type === "dot_resistance" ? (effect.dot_resistance_value_mode ?? "percent") : effect.dot_resistance_value_mode,
+                    amount: type === "dot_resistance" ? (effect.dot_resistance_amount ?? 25) : type === "mental_control_chance" || type === "mental_control_resistance" ? (effect.amount || 50) : effect.amount,
+                    value_mode: type === "dot_resistance" ? (effect.dot_resistance_value_mode ?? "percent") : type === "mental_control_chance" || type === "mental_control_resistance" ? "percent" : effect.value_mode,
                     damage_reduction_scope: type === "damage_reduction" ? "physical" : effect.damage_reduction_scope,
                     damage_reduction_type_id: null,
                     damage_reduction_magic_level: null,
@@ -948,6 +961,67 @@ export function AbilityEffectsEditor({
                       </div>
                     ) : <p className="text-xs text-muted-foreground">Nenhum modelo de DoT cadastrado.</p>
                   )}
+                </fieldset>
+              )}
+              {isDotResistance && (
+                <fieldset className="space-y-3 rounded-md border border-border p-3 sm:col-span-2">
+                  <legend className="text-xs font-semibold">Resistência a DoTs</legend>
+                  <div className="space-y-1">
+                    <Label>Quais DoTs são afetados?</Label>
+                    {([
+                      ["all", "Todos os DoTs"],
+                      ["physical", "Todos os DoTs físicos (todas as variações)"],
+                      ["magical", "Todos os DoTs mágicos (todos os tipos e graus)"],
+                      ["specific", "Selecionar DoTs específicos"],
+                    ] as const).map(([scope, label]) => (
+                      <label key={scope} className="flex items-center gap-2 text-sm">
+                        <input type="radio" name={effectEditorId + "-dot-resistance-scope-" + index}
+                          checked={(effect.dot_resistance_scope ?? "all") === scope}
+                          onChange={() => patch(index, { dot_resistance_scope: scope })} />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
+                  {(effect.dot_resistance_scope ?? "all") === "specific" && (
+                    dotTemplates.length ? (
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {dotTemplates.map((dot) => (
+                          <label key={dot.id} className="flex items-start gap-2 rounded-md border border-border px-2 py-2 text-xs">
+                            <input type="checkbox" className="mt-0.5"
+                              checked={(effect.dot_resistance_template_ids ?? []).includes(dot.id)}
+                              onChange={(event) => patch(index, { dot_resistance_template_ids: event.target.checked
+                                ? Array.from(new Set([...(effect.dot_resistance_template_ids ?? []), dot.id]))
+                                : (effect.dot_resistance_template_ids ?? []).filter((id) => id !== dot.id) })} />
+                            <span><span className="block font-medium">{dot.name}</span><span className="text-muted-foreground">{dot.damage_kind === "physical" ? "Físico" : "Mágico"}</span></span>
+                          </label>
+                        ))}
+                      </div>
+                    ) : <p className="text-xs text-muted-foreground">Nenhum modelo de DoT cadastrado.</p>
+                  )}
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="space-y-1 text-xs font-medium">Reduzir
+                      <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                        value={effect.dot_resistance_mode ?? "damage"}
+                        onChange={(event) => patch(index, { dot_resistance_mode: event.target.value as "damage" | "duration" })}>
+                        <option value="damage">Dano por turno</option>
+                        <option value="duration">Duração do DoT (turnos)</option>
+                      </select>
+                    </label>
+                    <label className="space-y-1 text-xs font-medium">Modo de redução
+                      <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                        value={effect.dot_resistance_value_mode ?? "percent"}
+                        onChange={(event) => { const valueMode = event.target.value as "fixed" | "percent"; patch(index, { dot_resistance_value_mode: valueMode, value_mode: valueMode }); }}>
+                        <option value="fixed">Valor fixo</option>
+                        <option value="percent">Porcentagem (%)</option>
+                      </select>
+                    </label>
+                    <label className="space-y-1 text-xs font-medium sm:col-span-2">Valor da resistência
+                      <Input type="number" min="0" max={effect.dot_resistance_value_mode === "percent" ? 100 : 1000000} step="any"
+                        value={effect.dot_resistance_amount ?? effect.amount ?? 25}
+                        onChange={(event) => { const amount = Math.max(0, Math.min((effect.dot_resistance_value_mode ?? "percent") === "percent" ? 100 : 1000000, Number(event.target.value) || 0)); patch(index, { dot_resistance_amount: amount, amount, value_mode: effect.dot_resistance_value_mode ?? "percent" }); }} />
+                    </label>
+                  </div>
+                  <p className="text-xs text-muted-foreground">A resistência é aplicada quando o DoT entra na ficha. Redução de dano atua em cada dano por turno; redução de duração diminui a quantidade de turnos do DoT.</p>
                 </fieldset>
               )}
               {isMentalControlModifier && (
