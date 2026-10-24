@@ -566,7 +566,7 @@ export function CharacterAbilitiesPanel({
   }
 
   async function activate(ability: CharacterAbility) {
-    if (!canUse || mode !== "combat" || !ability.can_activate || ability.cooldown_turns < 0 || ability.cooldown_remaining > 0 || busyId) return;
+    if (!canUse || mode !== "combat" || !ability.can_activate || ability.cooldown_turns < 0 || ability.cooldown_remaining > 0 || busyId || ability.toggle_active) return;
     if ((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle && mode === "combat" && usedOnceAbilityIds.includes(ability.id)) {
       toast.error("Esta habilidade já foi usada neste combate.");
       return;
@@ -600,6 +600,25 @@ export function CharacterAbilitiesPanel({
     setExtraManaCosts((current) => ({ ...current, [ability.id]: "0" }));
     toast.success(`${ability.name} ativada!${typeof spentMana === "number" && spentMana > 0 ? ` Mana gasta: ${spentMana}.` : ""}`);
     void dispatchCustomAbilityScriptEvents(mode === "combat" ? battleId : null);
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ["character-abilities", characterId] }),
+      qc.invalidateQueries({ queryKey: ["character-abilities-battle"] }),
+      qc.invalidateQueries({ queryKey: ["battle-effects"] }),
+      qc.invalidateQueries({ queryKey: ["character-active-effects"] }),
+      qc.invalidateQueries({ queryKey: ["battles"] }),
+      qc.invalidateQueries({ queryKey: ["character", characterId] }),
+      qc.invalidateQueries({ queryKey: ["battle-character-public-states"] }),
+    ]);
+  }
+
+  async function deactivate(ability: CharacterAbility) {
+    if (!canUse || mode !== "combat" || !battleId || !ability.toggle_mode || !ability.toggle_active || busyId) return;
+    setBusyId(ability.id);
+    const { error } = await db.rpc("turn_off_character_ability", { _character_ability_id: ability.id, _battle_id: battleId });
+    setBusyId(null);
+    if (error) { toast.error(error.message); return; }
+    toast.success(`${ability.name} desativada. Seus efeitos foram encerrados.`);
+    void dispatchCustomAbilityScriptEvents(battleId);
     await Promise.all([
       qc.invalidateQueries({ queryKey: ["character-abilities", characterId] }),
       qc.invalidateQueries({ queryKey: ["character-abilities-battle"] }),
@@ -668,6 +687,7 @@ export function CharacterAbilitiesPanel({
                         {ability.is_magical ? "Habilidade Mágica" : "Não mágica"}
                       </span>
                       {ability.can_activate && ability.self_target_only && <span className="rounded bg-muted px-2 py-1">Só em si mesmo</span>}
+                      {ability.toggle_mode && <span className={`rounded px-2 py-1 ${ability.toggle_active ? "bg-emerald-500/15 text-emerald-500" : "bg-muted text-muted-foreground"}`}>Sustentada: {ability.toggle_active ? "Ligada" : "Desligada"}</span>}
                       {Boolean((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle) && (
                         <span className={`rounded px-2 py-1 ${mode === "combat" && usedOnceAbilityIds.includes(ability.id) ? "bg-muted text-muted-foreground" : "bg-amber-500/10 text-amber-400"}`}>
                           {mode === "combat" && usedOnceAbilityIds.includes(ability.id) ? "Já usada neste combate" : "1 uso por combate"}
@@ -677,7 +697,7 @@ export function CharacterAbilitiesPanel({
                         <span className="rounded bg-gold/10 px-2 py-1 text-gold"><Sparkles className="mr-1 inline h-3 w-3" /> Não ativável</span>
                       ) : (
                         <span className={`rounded px-2 py-1 ${ability.cooldown_remaining > 0 ? "bg-muted text-muted-foreground" : "bg-emerald-500/10 text-emerald-500"}`}>
-                          <Clock3 className="mr-1 inline h-3 w-3" /> {ability.cooldown_remaining > 0 ? `Cooldown: ${ability.cooldown_remaining} turno(s)` : "Pronta para usar"}
+                          <Clock3 className="mr-1 inline h-3 w-3" /> {ability.toggle_active ? "Em uso" : ability.cooldown_remaining > 0 ? `Cooldown: ${ability.cooldown_remaining} turno(s)` : "Pronta para usar"}
                         </span>
                       )}
                       {ability.can_activate && ability.mana_cost > 0 && <span className="rounded bg-muted px-2 py-1">Custo base: {ability.mana_cost} Mana</span>}
@@ -686,9 +706,15 @@ export function CharacterAbilitiesPanel({
                   </div>
                   {mode === "combat" && canUse && ability.can_activate && (
                     <>
-                      <Button size="sm" disabled={busyId !== null || attackBusy || ability.cooldown_turns < 0 || ability.cooldown_remaining > 0 || (Boolean((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle) && mode === "combat" && usedOnceAbilityIds.includes(ability.id))} onClick={() => void activate(ability)}>
-                        <Zap className="mr-1 h-3.5 w-3.5" /> {busyId === ability.id ? "Ativando..." : "Ativar"}
-                      </Button>
+                      {ability.toggle_mode && ability.toggle_active ? (
+                        <Button size="sm" variant="destructive" disabled={busyId !== null || attackBusy || !battleId} onClick={() => void deactivate(ability)}>
+                          <Zap className="mr-1 h-3.5 w-3.5" /> {busyId === ability.id ? "Desativando..." : "Desativar"}
+                        </Button>
+                      ) : (
+                        <Button size="sm" disabled={busyId !== null || attackBusy || ability.cooldown_turns < 0 || ability.cooldown_remaining > 0 || (Boolean((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle) && mode === "combat" && usedOnceAbilityIds.includes(ability.id))} onClick={() => void activate(ability)}>
+                          <Zap className="mr-1 h-3.5 w-3.5" /> {busyId === ability.id ? "Ativando..." : ability.toggle_mode ? "Ligar" : "Ativar"}
+                        </Button>
+                      )}
                       {mode === "combat" && me?.isMaster && ability.cooldown_remaining > 0 && (
                         <div className="flex flex-wrap items-center gap-1">
                           <Button size="sm" variant="outline" onClick={async () => {
@@ -711,7 +737,7 @@ export function CharacterAbilitiesPanel({
                           }}><Check className="mr-1 h-3.5 w-3.5" /> Tirar do cooldown</Button>
                         </div>
                       )}
-                      {mode === "combat" && battleId && abilityCatalog.some((catalogAbility) => catalogAbility.id === ability.ability_id && catalogAbility.attack_enabled) && (
+                      {mode === "combat" && battleId && !ability.toggle_mode && abilityCatalog.some((catalogAbility) => catalogAbility.id === ability.ability_id && catalogAbility.attack_enabled) && (
                         <Button size="sm" variant="outline" disabled={busyId !== null || attackBusy || attackDialogAbilityId !== null || ability.cooldown_turns < 0 || ability.cooldown_remaining > 0 || (Boolean((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle) && usedOnceAbilityIds.includes(ability.id))} onClick={() => openAttackDialog(ability)}>
                           <Swords className="mr-1 h-3.5 w-3.5" /> Atacar
                         </Button>
@@ -1066,6 +1092,7 @@ export function CharacterAbilitiesManager({ characterId, personalOnly = false }:
       self_target_only: ability.self_target_only,
       is_magical: ability.is_magical,
       is_passive: !ability.can_activate,
+      toggle_mode: ability.toggle_mode,
       cooldown_turns: ability.can_activate ? ability.cooldown_turns : 0,
       cooldown_remaining: 0,
       mana_cost: ability.can_activate ? ability.mana_cost : 0,
@@ -1189,6 +1216,7 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
   const [name, setName] = useState(ability.name);
   const [description, setDescription] = useState(ability.description ?? "");
   const [canActivate, setCanActivate] = useState(ability.can_activate);
+  const [toggleMode, setToggleMode] = useState(ability.toggle_mode);
   const [oncePerBattle, setOncePerBattle] = useState(Boolean((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle));
   const [isMagical, setIsMagical] = useState(ability.is_magical);
   const [selfTargetOnly, setSelfTargetOnly] = useState(ability.self_target_only);
@@ -1204,6 +1232,7 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
     setName(ability.name);
     setDescription(ability.description ?? "");
     setCanActivate(ability.can_activate);
+    setToggleMode(ability.toggle_mode);
     setOncePerBattle(Boolean((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle));
     setIsMagical(ability.is_magical);
     setSelfTargetOnly(ability.self_target_only);
@@ -1218,6 +1247,8 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
     const cooldownTurns = canActivate ? Math.floor(Number(cooldown)) : 0;
     const cost = Math.floor(Number(manaCost));
     if (!name.trim()) { toast.error("Informe o nome"); return; }
+    if (ability.toggle_active) { toast.error("Desative esta habilidade antes de alterar sua configuração."); return; }
+    if (toggleMode && !canActivate) { toast.error("Habilidade sustentada precisa ser ativável."); return; }
     if (!Number.isFinite(cost) || cost < 0) { toast.error("Custo de Mana inválido"); return; }
     if (canActivate && (!Number.isFinite(cooldownTurns) || cooldownTurns < 0)) { toast.error("O cooldown precisa ser 0 ou maior"); return; }
     const canTriggerEndEffects = effects.some((effect) =>
@@ -1249,6 +1280,7 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
       once_per_battle: canActivate && oncePerBattle,
       description: description.trim() || null,
       can_activate: canActivate,
+      toggle_mode: canActivate && toggleMode,
       is_magical: isMagical,
       self_target_only: canActivate && selfTargetOnly,
       is_passive: !canActivate,
@@ -1330,6 +1362,12 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
           <input type="checkbox" checked={isMagical} onChange={(e) => setIsMagical(e.target.checked)} />
           Habilidade Mágica
         </label>
+        {canActivate && (
+          <label className="flex min-h-10 items-center gap-2 rounded-md border border-gold/40 px-3 py-2 text-sm sm:col-span-2">
+            <input type="checkbox" checked={toggleMode} onChange={(e) => setToggleMode(e.target.checked)} disabled={ability.toggle_active} />
+            <span>Habilidade sustentada (ligar/desligar)<span className="block text-xs text-muted-foreground">Os efeitos ao ativar continuam funcionando até o mestre desativar. A recarga começa ao desligar.</span></span>
+          </label>
+        )}
         {canActivate && (
           <label className="flex min-h-10 items-center gap-2 rounded-md border border-border px-3 py-2 text-sm sm:col-span-2">
             <input type="checkbox" checked={selfTargetOnly} onChange={(e) => setSelfTargetOnly(e.target.checked)} />
