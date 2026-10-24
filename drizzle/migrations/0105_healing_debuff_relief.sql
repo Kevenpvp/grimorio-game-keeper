@@ -259,7 +259,7 @@ BEGIN
   SELECT pg_get_functiondef('public.apply_ability_healing(uuid,uuid,jsonb,boolean,boolean)'::regprocedure)
   INTO _definition;
 
-  IF right(_definition, length(E'END;\n$function$')) <> E'END;\n$function$' THEN
+  IF right(_definition, length(E'END;\n$function$\n')) <> E'END;\n$function$\n' THEN
     RAISE EXCEPTION 'Final de apply_ability_healing não está no formato esperado';
   END IF;
 
@@ -299,8 +299,8 @@ BEGIN
   END IF;
 $snippet$;
 
-  _definition := left(_definition, length(_definition) - length(E'END;\n$function$'))
-    || _new || E'\nEND;\n$function$';
+  _definition := left(_definition, length(_definition) - length(E'END;\n$function$\n'))
+    || _new || E'\nEND;\n$function$\n';
   EXECUTE _definition;
 
   -- Make a healing configuration with only Alívio de Debuff a valid activation action.
