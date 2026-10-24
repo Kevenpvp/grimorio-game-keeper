@@ -87,7 +87,7 @@ function RaceEditor({ race, defs, isNew, onSaved }: { race: Race; defs: Attribut
   const [physicalBonus, setPhysicalBonus] = useState(race.physical_bonus_points);
   const existingMechanics = ((race as unknown as { special_mechanics?: Record<string, unknown> }).special_mechanics ?? {});
   const [duplicateVirtueEffects, setDuplicateVirtueEffects] = useState(existingMechanics.duplicate_virtue_effects === true);
-  const [virtueCooldownReductionPercent, setVirtueCooldownReductionPercent] = useState(Math.max(0, Math.min(100, Number(existingMechanics.virtue_cooldown_reduction_percent ?? 0)));
+  const [virtueCooldownReductionPercent, setVirtueCooldownReductionPercent] = useState(Math.max(0, Math.min(100, Number(existingMechanics.virtue_cooldown_reduction_percent ?? 0))));
   const [virtueEffectMultiplier, setVirtueEffectMultiplier] = useState(Number(existingMechanics.virtue_effect_multiplier ?? 2));
   const [virtueEffectBlacklist, setVirtueEffectBlacklist] = useState<string[]>(
     Array.isArray(existingMechanics.virtue_effect_blacklist)
