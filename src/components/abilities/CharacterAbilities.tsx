@@ -8,11 +8,90 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { dispatchCustomAbilityScriptEvents } from "@/lib/ability-script-runtime";
+import { sedentoInvincibilityCooldown } from "@/lib/sedento-invincibility";
 import { useDefs, useMe, useRaces, useClasses, useVirtues } from "@/lib/sheets";
 import { parseAbilityEffects, parseAbilityAttackDamage, parseAbilityAttackEffectGroups, parseAbilityDotEffects, useAbilities, useCharacterAbilities, useCharacterActiveEffects, useDamageTypes, type Ability, type AbilityEffectDefinition, type CharacterAbility, type AbilityDotEffect } from "@/lib/abilities";
 import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
 import type { Json } from "@/integrations/supabase/types";
 import { parseCustomAbilityAttributes, type CustomAbilityAttribute } from "@/lib/custom-ability-scripts";
+
+/** Visible on the character sheet and in combat; only uses persistent script
+ * state and the character's individual turn, never the ability's toggle cooldown.
+ */
+function SedentoInvincibilityInfo({
+  ability, mode, battleId, individualTurn,
+}: {
+  ability: CharacterAbility;
+  mode: "sheet" | "combat";
+  battleId?: string;
+  individualTurn?: number;
+}) {
+  const state = ability.custom_state && typeof ability.custom_state === "object"
+    && !Array.isArray(ability.custom_state)
+    ? ability.custom_state as Record<string, unknown>
+    : {};
+  const stateBattleId = typeof state.sedento_battle_id === "string"
+    ? state.sedento_battle_id : null;
+  const currentBattleId = mode === "combat" ? battleId ?? null : stateBattleId;
+  const { data: sheetTurn, isPending: sheetTurnPending } = useQuery<number | null>({
+    queryKey: ["sedento-invincibility-turn", ability.character_id, currentBattleId],
+    enabled: mode === "sheet" && !!currentBattleId,
+    queryFn: async () => {
+      const [battle, participant] = await Promise.all([
+        supabase.from("battles").select("active").eq("id", currentBattleId!).maybeSingle(),
+        supabase.from("battle_participants").select("turn_count")
+          .eq("battle_id", currentBattleId!).eq("character_id", ability.character_id).maybeSingle(),
+      ]);
+      if (battle.error) throw battle.error;
+      if (participant.error) throw participant.error;
+      if (!battle.data?.active || !participant.data) return null;
+      return participant.data.turn_count ?? 0;
+    },
+    refetchInterval: mode === "sheet" ? 5000 : false,
+  });
+  const currentTurn = mode === "combat" ? individualTurn ?? null : sheetTurn ?? null;
+  const cooldown = sedentoInvincibilityCooldown(state, currentBattleId, currentTurn);
+  const hasTurn = cooldown.initialized && cooldown.remaining !== null;
+  const isReady = hasTurn && cooldown.remaining === 0;
+
+  return (
+    <div className="mt-3 space-y-1.5 rounded-md border border-red-500/30 bg-red-500/5 p-3 text-xs">
+      <div className="flex flex-wrap items-center gap-2 font-semibold">
+        <HeartPulse className="h-4 w-4 text-red-400" />
+        <span>Invencibilidade · Sedento por Sangue</span>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={`rounded px-2 py-1 font-semibold ${isReady ? "bg-emerald-500/15 text-emerald-400" : "bg-muted text-foreground"}`}>
+          {hasTurn
+            ? isReady
+              ? "Recarga interna: pronta (0 turnos)"
+              : `Recarga interna: faltam ${cooldown.remaining} turno(s)`
+            : mode === "sheet" && currentBattleId && sheetTurnPending
+              ? "Consultando turnos do combate..."
+              : "Recarga interna: sem contador neste combate"}
+        </span>
+        <span className="rounded bg-muted px-2 py-1 text-muted-foreground">
+          Habilidade {ability.toggle_active ? "ligada" : "desligada"}
+        </span>
+      </div>
+      {hasTurn ? (
+        <p className="text-muted-foreground">
+          Turno individual atual: {cooldown.currentTurn} · Invencibilidade disponível novamente no turno {cooldown.readyAt}.
+        </p>
+      ) : (
+        <p className="text-muted-foreground">
+          {mode === "sheet" && sheetTurn === null
+            ? "Sem combate ativo para acompanhar o contador. Ele é calculado pelos turnos individuais."
+            : "O contador aparece assim que a habilidade é ativada e o script registra o início do combate."}
+        </p>
+      )}
+      <p className="text-muted-foreground">
+        Estar pronta não ativa o efeito sozinho: a habilidade precisa estar ligada e o HP deve atingir o limite configurado.
+        Esta recarga é independente do cooldown para ligar/desligar.
+      </p>
+    </div>
+  );
+}
 
 type TargetOption = { id: string; name: string };
 
@@ -246,13 +325,14 @@ export function effectSummary(effect: AbilityEffectDefinition, defs: NonNullable
 }
 
 export function CharacterAbilitiesPanel({
-  characterId, characterName, mode, canUse, battleId, targets = [], getAttributeValue, showActiveEffects = true, allowCustomAttributeEdit = false,
+  characterId, characterName, mode, canUse, battleId, individualTurn, targets = [], getAttributeValue, showActiveEffects = true, allowCustomAttributeEdit = false,
 }: {
   characterId: string;
   characterName: string;
   mode: "sheet" | "combat";
   canUse: boolean;
   battleId?: string;
+  individualTurn?: number;
   targets?: TargetOption[];
   getAttributeValue?: (characterId: string, attributeKey: string) => number;
   /** Hide the active runtime effects list when viewing another character in combat. */
@@ -745,6 +825,16 @@ export function CharacterAbilitiesPanel({
                     </>
                   )}
                 </div>
+                {abilityCatalog.some((catalogAbility) =>
+                  catalogAbility.id === ability.ability_id && catalogAbility.custom_script_key === "sedento_por_sangue"
+                ) && (showActiveEffects || me?.isMaster || mode === "sheet") && (
+                  <SedentoInvincibilityInfo
+                    ability={ability}
+                    mode={mode}
+                    battleId={battleId}
+                    individualTurn={individualTurn}
+                  />
+                )}
                 {mode === "combat" && battleId && (
                   <BattleAbilityOverrideEditor ability={ability} battleId={battleId} defs={defs ?? []} />
                 )}
