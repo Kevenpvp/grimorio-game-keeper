@@ -299,8 +299,8 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
     const mana = Math.floor(Number(manaCost));
     if (!name.trim()) { toast.error("Informe o nome da habilidade"); return; }
     if (!Number.isFinite(mana) || mana < 0) { toast.error("O custo de Mana não pode ser negativo"); return; }
-    if (canActivate && (!Number.isFinite(cool) || cool < 1)) {
-      toast.error("Uma habilidade ativável precisa ter cooldown de pelo menos 1 turno. Marque como não ativável se não puder ser usada.");
+    if (canActivate && (!Number.isFinite(cool) || cool < 0)) {
+      toast.error("Uma habilidade ativável precisa ter cooldown de 0 ou mais turnos. Marque como não ativável se não puder ser usada.");
       return;
     }
     const effectiveAttackEnabled = canActivate && !selfTargetOnly && attackEnabled;
