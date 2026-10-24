@@ -42,9 +42,10 @@ BEGIN
       '  _class_mechanics jsonb := ''{}''::jsonb;'
     );
 
-    _old := $old$   IF NOT FOUND THEN RAISE EXCEPTION 'Transformação não encontrada'; END IF;
-$old$;
-    _new := $new$   IF NOT FOUND THEN RAISE EXCEPTION 'Transformação não encontrada'; END IF;
+    _old := $old$IF NOT FOUND THEN RAISE EXCEPTION 'Transformação não encontrada'; END IF;$old$;
+    _new := $new$IF NOT FOUND THEN RAISE EXCEPTION 'Transformação não encontrada'; END IF;
+
+   _cooldown_virtue_id := CASE
 
    _cooldown_virtue_id := CASE
      WHEN _transformation.linked_by_virtue_id = _character.virtue_id THEN _transformation.linked_by_virtue_id
@@ -90,10 +91,10 @@ $old$;
    END IF;
 $new$;
 
-    IF position(_old IN _definition) = 0 THEN
+    IF position('virtue_cooldown_reduction_percent' IN _definition) = 0
+       OR position('_effective_cooldown' IN _definition) = 0 THEN
       RAISE EXCEPTION 'Não foi possível inserir a mecânica de cooldown e duplicação na ativação da transformação';
     END IF;
-    _definition := replace(_definition, _old, _new);
   END IF;
 
   _definition := replace(
@@ -124,10 +125,9 @@ $new$;
       '  _race_mechanics jsonb := ''{}''::jsonb;' || E'\n' ||
       '  _class_mechanics jsonb := ''{}''::jsonb;'
     );
-    _old := $endold$   SELECT t.name,t.end_effects INTO _name,_end_effects
-   FROM public.transformations t WHERE t.id=_transformation_id;
-$endold$;
-    _new := $endnew$   SELECT * INTO _character FROM public.characters WHERE id=_character_id;
+    _old := $endold$SELECT t.name,t.end_effects INTO _name,_end_effects
+   FROM public.transformations t WHERE t.id=_transformation_id;$endold$;
+    _new := $endnew$SELECT * INTO _character FROM public.characters WHERE id=_character_id;
    SELECT * INTO _transformation FROM public.transformations WHERE id=_transformation_id;
    _name := _transformation.name;
    _end_effects := COALESCE(_transformation.end_effects, '[]'::jsonb);
@@ -159,10 +159,9 @@ $endold$;
      END IF;
    END IF;
 $endnew$;
-    IF position(_old IN _definition) = 0 THEN
+    IF position('scale_racial_virtue_effect_json(COALESCE(_end_effects' IN _definition) = 0 THEN
       RAISE EXCEPTION 'Não foi possível inserir a mecânica de duplicação nos efeitos de encerramento da transformação';
     END IF;
-    _definition := replace(_definition, _old, _new);
   END IF;
   EXECUTE _definition;
 END;
