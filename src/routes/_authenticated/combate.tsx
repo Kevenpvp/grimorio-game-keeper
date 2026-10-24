@@ -846,6 +846,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                   })}
                   <CharacterAbilitiesPanel characterId={f.id} characterName={f.name} mode="combat"
                     canUse={isMaster && battle.active} showActiveEffects={isOwnFighter} battleId={battle.id}
+                    individualTurn={f.participant_turn_count ?? 0}
                     targets={fighters.map((target) => ({ id: target.id, name: target.name }))}
                     getAttributeValue={(characterId, attributeKey) => {
                       const target = fighters.find((fighter) => fighter.id === characterId);
