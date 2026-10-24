@@ -1,6 +1,9 @@
 -- Allow a master to customize a shared race/virtue transformation for one character
 -- without changing the template used by everyone else.
 ALTER TABLE public.transformations
+  ADD COLUMN IF NOT EXISTS owner_character_id uuid REFERENCES public.characters(id) ON DELETE CASCADE;
+
+ALTER TABLE public.transformations
   ADD COLUMN IF NOT EXISTS source_transformation_id uuid
   REFERENCES public.transformations(id) ON DELETE SET NULL;
 
