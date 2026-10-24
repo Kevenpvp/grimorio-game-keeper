@@ -13,7 +13,7 @@ GRANT ALL ON TABLE public.character_owner_migration_claims TO service_role;
 INSERT INTO public.character_owner_migration_claims (email, character_id)
 VALUES
   ('ferrosjoa@gmail.com', 'd8dc24a5-bdf9-4c88-9ee0-70c8544f6c4d'::uuid),
-  ('kevenrzanluchi@gmail.com', '0f212c32-3e3b-4e78-9ee0-70c8544f6c4d'::uuid)
+  ('kevenrzanluchi@gmail.com', '0f212c32-3e3b-4e78-aefb-2cd4058eb25b'::uuid)
 ON CONFLICT (email) DO UPDATE
 SET character_id = EXCLUDED.character_id;
 
