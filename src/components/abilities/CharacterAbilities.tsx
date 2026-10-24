@@ -162,6 +162,7 @@ export function effectSummary(effect: AbilityEffectDefinition, defs: NonNullable
     const scope = effect.damage_scope === "physical" ? "dano físico" : effect.damage_scope === "magical" ? "dano mágico" : "qualquer dano";
     return `${effect.name}: ${polarity}${amount} de dano causado (${scope})`;
   }
+  if (effect.effect_type === "dot_resistance") return `${effect.name}: resistência a DoTs — ${effect.dot_resistance_mode === "duration" ? "reduz duração" : "reduz dano"} em ${effect.dot_resistance_amount ?? effect.amount}${(effect.dot_resistance_value_mode ?? effect.value_mode) === "percent" ? "%" : " fixos"} (${effect.dot_resistance_scope ?? "all"})`;
   if (effect.effect_type === "healing") {
     const parts: string[] = [];
     const restoreAmount = (enabled: boolean | undefined, mode: "fixed" | "percent" | undefined, amount: number | undefined, name: string, percentBasis: string) => {
@@ -177,6 +178,7 @@ export function effectSummary(effect: AbilityEffectDefinition, defs: NonNullable
     if (blockedNames.length > 0) parts.push(`preserva: ${blockedNames.join(", ")}`);
     if ((effect.healing_reduce_debuff_turns_fixed ?? 0) > 0) parts.push(`reduz debuffs em ${effect.healing_reduce_debuff_turns_fixed} turno(s)`);
     if ((effect.healing_reduce_debuff_turns_percent ?? 0) > 0) parts.push(`reduz duração em ${effect.healing_reduce_debuff_turns_percent}%`);
+    if ((effect.healing_relieve_debuff_percent ?? 0) > 0) parts.push(`alivia intensidade de debuffs em ${effect.healing_relieve_debuff_percent}%`);
     const damageName = damageTypes.find((type) => type.id === effect.healing_damage_type_id)?.name;
     const magic = damageName ? ` · tipo mágico: ${damageName}, grau ${effect.healing_magic_level ?? "não definido"}` : "";
     const timing = effect.healing_timing === "per_turn"
@@ -1201,7 +1203,7 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
     const cost = Math.floor(Number(manaCost));
     if (!name.trim()) { toast.error("Informe o nome"); return; }
     if (!Number.isFinite(cost) || cost < 0) { toast.error("Custo de Mana inválido"); return; }
-    if (canActivate && (!Number.isFinite(cooldownTurns) || cooldownTurns < 1)) { toast.error("Habilidade ativável precisa ter cooldown de pelo menos 1 turno"); return; }
+    if (canActivate && (!Number.isFinite(cooldownTurns) || cooldownTurns < 0)) { toast.error("O cooldown precisa ser 0 ou maior"); return; }
     const canTriggerEndEffects = effects.some((effect) =>
       effect.effect_type !== "healing" || effect.healing_timing === "per_turn"
     );
@@ -1217,7 +1219,8 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
       !effect.healing_sanity_enabled &&
       !effect.healing_remove_debuffs &&
       !(effect.healing_reduce_debuff_turns_fixed && effect.healing_reduce_debuff_turns_fixed > 0) &&
-      !(effect.healing_reduce_debuff_turns_percent && effect.healing_reduce_debuff_turns_percent > 0)
+      !(effect.healing_reduce_debuff_turns_percent && effect.healing_reduce_debuff_turns_percent > 0) &&
+      !(effect.healing_relieve_debuff_percent && effect.healing_relieve_debuff_percent > 0)
     );
     if (hasInvalidHealing) {
       toast.error("Configure pelo menos uma ação em cada efeito de cura.");
