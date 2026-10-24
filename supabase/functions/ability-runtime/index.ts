@@ -127,7 +127,7 @@ async function buildContext(service: ReturnType<typeof createClient>, event: Que
   if (!event.character_id) throw new Error("O personagem dono da habilidade não existe mais.");
   const [assignmentResult, abilityResult, caster, target, battleResult] = await Promise.all([
     event.character_ability_id
-      ? service.from("character_abilities").select("id,ability_id,name,character_id,custom_state,custom_attributes,granted_by_virtue_id").eq("id", event.character_ability_id).maybeSingle()
+      ? service.from("character_abilities").select("id,ability_id,name,character_id,custom_state,custom_attributes,granted_by_virtue_id,linked_by_virtue_id").eq("id", event.character_ability_id).maybeSingle()
       : Promise.resolve({ data: null, error: null }),
     event.ability_id
       ? service.from("abilities").select("id,name,custom_script_key,custom_attributes").eq("id", event.ability_id).maybeSingle()
@@ -146,7 +146,7 @@ async function buildContext(service: ReturnType<typeof createClient>, event: Que
   const payload = asObject(event.payload);
   const rawEffect = asObject(payload.effect);
   const battle = battleResult.data as { id: string; name: string; turn_count: number; active: boolean } | null;
-  const assignment = assignmentResult.data as { id: string; ability_id: string; name: string; custom_state?: unknown; custom_attributes?: unknown; granted_by_virtue_id?: string | null } | null;
+  const assignment = assignmentResult.data as { id: string; ability_id: string; name: string; custom_state?: unknown; custom_attributes?: unknown; granted_by_virtue_id?: string | null; linked_by_virtue_id?: string | null } | null;
   const ability = abilityResult.data as { id: string; name: string; custom_script_key: string | null; custom_attributes?: unknown } | null;
   const individualTurn = Number(payload.turn_count);
   const rawState = asObject(assignment?.custom_state);
@@ -155,7 +155,8 @@ async function buildContext(service: ReturnType<typeof createClient>, event: Que
     ? assignment.custom_attributes
     : Array.isArray(ability?.custom_attributes) ? ability.custom_attributes : [];
   let racialMultiplier = 1;
-  if (assignment?.granted_by_virtue_id) {
+  const assignmentVirtueId = assignment?.granted_by_virtue_id ?? assignment?.linked_by_virtue_id;
+  if (assignmentVirtueId) {
     const [raceResult, classResult] = await Promise.all([
       caster.race_id
         ? service.from("races").select("special_mechanics").eq("id", caster.race_id).maybeSingle()
@@ -171,7 +172,7 @@ async function buildContext(service: ReturnType<typeof createClient>, event: Que
       const blacklist = Array.isArray(mechanics.virtue_effect_blacklist)
         ? mechanics.virtue_effect_blacklist.filter((id): id is string => typeof id === "string")
         : [];
-      if (mechanics.duplicate_virtue_effects !== true || blacklist.includes(assignment.granted_by_virtue_id!)) return 1;
+      if (mechanics.duplicate_virtue_effects !== true || blacklist.includes(assignmentVirtueId!)) return 1;
       const configuredMultiplier = Number(mechanics.virtue_effect_multiplier ?? 2);
       return Number.isFinite(configuredMultiplier) ? Math.max(1, Math.min(10, configuredMultiplier)) : 2;
     };
@@ -183,7 +184,7 @@ async function buildContext(service: ReturnType<typeof createClient>, event: Que
     if (typeof attribute.key !== "string" || !attribute.key.trim()) continue;
     if (attribute.type === "number" && Number.isFinite(Number(attribute.value))) {
       // Only numeric attributes explicitly eligible for race/class scaling are multiplied.
-      customAttributes[attribute.key] = Number(attribute.value) * (attribute.scale_with_race === false ? 1 : racialMultiplier);
+      customAttributes[attribute.key] = Number(attribute.value) * (attribute.scale_with_race === false || attribute.malefico === true ? 1 : racialMultiplier);
     } else if (attribute.type === "boolean") customAttributes[attribute.key] = attribute.value === true;
     else if (attribute.type === "string" && typeof attribute.value === "string") customAttributes[attribute.key] = attribute.value;
   }
