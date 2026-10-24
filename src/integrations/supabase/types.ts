@@ -515,6 +515,9 @@ export type Database = {
           id: string
           is_magical: boolean
           is_passive: boolean
+          linked_by_class_id: string | null
+          linked_by_race_id: string | null
+          linked_by_virtue_id: string | null
           mana_cost: number
           name: string
           once_per_battle: boolean
@@ -541,6 +544,9 @@ export type Database = {
           id?: string
           is_magical?: boolean
           is_passive?: boolean
+          linked_by_class_id?: string | null
+          linked_by_race_id?: string | null
+          linked_by_virtue_id?: string | null
           mana_cost?: number
           name: string
           once_per_battle?: boolean
@@ -567,6 +573,9 @@ export type Database = {
           id?: string
           is_magical?: boolean
           is_passive?: boolean
+          linked_by_class_id?: string | null
+          linked_by_race_id?: string | null
+          linked_by_virtue_id?: string | null
           mana_cost?: number
           name?: string
           once_per_battle?: boolean
@@ -612,6 +621,27 @@ export type Database = {
           {
             foreignKeyName: "character_abilities_granted_by_virtue_id_fkey"
             columns: ["granted_by_virtue_id"]
+            isOneToOne: false
+            referencedRelation: "virtues"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "character_abilities_linked_by_class_id_fkey"
+            columns: ["linked_by_class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "character_abilities_linked_by_race_id_fkey"
+            columns: ["linked_by_race_id"]
+            isOneToOne: false
+            referencedRelation: "races"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "character_abilities_linked_by_virtue_id_fkey"
+            columns: ["linked_by_virtue_id"]
             isOneToOne: false
             referencedRelation: "virtues"
             referencedColumns: ["id"]
@@ -701,6 +731,32 @@ export type Database = {
             foreignKeyName: "character_attributes_character_id_fkey"
             columns: ["character_id"]
             isOneToOne: false
+            referencedRelation: "characters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      character_owner_migration_claims: {
+        Row: {
+          character_id: string
+          created_at: string
+          email: string
+        }
+        Insert: {
+          character_id: string
+          created_at?: string
+          email: string
+        }
+        Update: {
+          character_id?: string
+          created_at?: string
+          email?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "character_owner_migration_claims_character_id_fkey"
+            columns: ["character_id"]
+            isOneToOne: true
             referencedRelation: "characters"
             referencedColumns: ["id"]
           },
@@ -1246,6 +1302,9 @@ export type Database = {
           effects: Json
           end_effects: Json
           id: string
+          linked_by_class_id: string | null
+          linked_by_race_id: string | null
+          linked_by_virtue_id: string | null
           mana_cost: number
           modifiers: Json
           name: string
@@ -1261,6 +1320,9 @@ export type Database = {
           effects?: Json
           end_effects?: Json
           id?: string
+          linked_by_class_id?: string | null
+          linked_by_race_id?: string | null
+          linked_by_virtue_id?: string | null
           mana_cost?: number
           modifiers?: Json
           name: string
@@ -1276,6 +1338,9 @@ export type Database = {
           effects?: Json
           end_effects?: Json
           id?: string
+          linked_by_class_id?: string | null
+          linked_by_race_id?: string | null
+          linked_by_virtue_id?: string | null
           mana_cost?: number
           modifiers?: Json
           name?: string
@@ -1284,6 +1349,27 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "transformations_linked_by_class_id_fkey"
+            columns: ["linked_by_class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transformations_linked_by_race_id_fkey"
+            columns: ["linked_by_race_id"]
+            isOneToOne: false
+            referencedRelation: "races"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transformations_linked_by_virtue_id_fkey"
+            columns: ["linked_by_virtue_id"]
+            isOneToOne: false
+            referencedRelation: "virtues"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "transformations_owner_character_id_fkey"
             columns: ["owner_character_id"]
@@ -1662,6 +1748,10 @@ export type Database = {
         Args: { _allocations: Json; _character_id: string; _source: string }
         Returns: undefined
       }
+      master_adjust_ability_cooldown: {
+        Args: { _character_ability_id: string; _mode?: string; _turns: number }
+        Returns: number
+      }
       merge_character_ability_custom_state: {
         Args: { _character_ability_id: string; _patch: Json }
         Returns: Json
@@ -1677,6 +1767,10 @@ export type Database = {
           _target_character_id?: string
         }
         Returns: string
+      }
+      recalculate_character_debuff_relief: {
+        Args: { _character_id: string }
+        Returns: undefined
       }
       refresh_character_mana_for_no_mana: {
         Args: { _character_id: string }
