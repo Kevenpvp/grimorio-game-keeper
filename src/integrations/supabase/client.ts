@@ -6,8 +6,8 @@ import { brokeredPreviewStorage } from './previewAuthStorage';
 // This app is connected to the user's Supabase project directly. Keep these
 // values independent of Lovable preview environment variables, which may still
 // refer to a removed Lovable-managed backend.
-const SUPABASE_URL = 'https://nmwaqurkuifqmgpjwxsh.supabase.co';
-const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_6Gc4-NRKpqNwOueCqR6d5Q_W8qX_u7Z';
+const SUPABASE_URL = 'https://ndmfzuwajcntvfjqpkws.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_6bIkNywzaV6q_czlg35sXQ_Fk7nHBQD';
 
 function isNewSupabaseApiKey(value: string): boolean {
   return value.startsWith('sb_publishable_') || value.startsWith('sb_secret_');
