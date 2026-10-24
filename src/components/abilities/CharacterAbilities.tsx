@@ -35,7 +35,7 @@ function numericStateValue(state: unknown, key: string): number {
 
 function effectiveCustomAbilityAttributes(value: unknown, multiplier: number): CustomAbilityAttribute[] {
   return parseCustomAbilityAttributes(value).map((attribute) =>
-    attribute.type === "number" && attribute.scale_with_race !== false
+    attribute.type === "number" && attribute.scale_with_race !== false && attribute.malefico !== true
       ? { ...attribute, value: Number(attribute.value) * multiplier }
       : attribute
   );
@@ -123,7 +123,7 @@ function CharacterAbilityCustomAttributesEditor({
                   disabled={saving}
                   aria-label={attribute.name}
                 />
-                {ability.granted_by_virtue_id && multiplier > 1 && attribute.scale_with_race !== false && (
+                {ability.granted_by_virtue_id && multiplier > 1 && attribute.scale_with_race !== false && attribute.malefico !== true && (
                   <div className="text-[11px] text-muted-foreground">
                     Valor efetivo: {Number(attribute.value) * multiplier} ({attribute.value} × {multiplier})
                   </div>
