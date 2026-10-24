@@ -9,8 +9,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { classMods, useDefs, useMe, useClasses, useVirtues, type AttributeDef, type ClassTrait } from "@/lib/sheets";
-import { parseAbilityEffects, useAbilities, type AbilityEffectDefinition, type AbilityEffectType } from "@/lib/abilities";
+import { parseAbilityEffects, useAbilities, type AbilityEffectDefinition } from "@/lib/abilities";
 import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
+import { TRAIT_STARTING_EFFECT_TYPES } from "@/lib/trait-starting-effect-types";
 import { TransformationGrantPicker } from "@/components/transformations/TransformationGrantPicker";
 import type { Json } from "@/integrations/supabase/types";
 
@@ -320,12 +321,7 @@ function ClassEditor({ classTrait, defs, isNew, onSaved }: { classTrait: ClassTr
           allowHealing={false}
           allowPeriodicHealing={false}
           permanentNote="Efeito permanente enquanto o personagem mantiver esta classe."
-          allowedTypes={[
-            "status", "regeneration", "mana_regeneration", "mana_used",
-            "no_regen_hp", "no_regen_mana", "magic_prohibition", "stun",
-            "damage_dealt", "no_mana", "damage_reduction", "damage_received", "damage_vulnerability", "invincible", "healing_blocked", "magic_healing_reversal",
-            "mental_control_immunity", "mental_control_chance", "mental_control_resistance", "dot_immunity", "dot_resistance", "invisibility",
-          ] as AbilityEffectType[]}
+          allowedTypes={TRAIT_STARTING_EFFECT_TYPES}
           allowPermanentMagicProhibition
         />
       </div>
