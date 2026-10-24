@@ -73,6 +73,15 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
       return data ?? [];
     },
   });
+  const { data: classLinks = [], isLoading: loadingClasses, error: classLinksError } = useQuery<Array<{ transformation_id: string }>>({
+    queryKey: ["class-transformations", character.class_id],
+    enabled: !!character.class_id,
+    queryFn: async () => {
+      const { data, error } = await db.from("class_transformations").select("transformation_id").eq("class_id", character.class_id);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
   const { data: states = [], isLoading: loadingStates, error: statesError } = useQuery<CharacterTransformationState[]>({
     queryKey: ["character-transformations", character.id],
     queryFn: async () => {
@@ -83,7 +92,7 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
   });
 
   // Include trait grants, personal transformations, and any transformation state already attached to this character.
-  const availableIds = new Set([...raceLinks, ...virtueLinks, ...states].map((link) => link.transformation_id));
+  const availableIds = new Set([...raceLinks, ...virtueLinks, ...classLinks, ...states].map((link) => link.transformation_id));
   const overriddenTransformationIds = new Set(catalog
     .filter((transformation) => transformation.owner_character_id === character.id && transformation.source_transformation_id)
     .map((transformation) => transformation.source_transformation_id as string));
@@ -128,7 +137,7 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
       qc.invalidateQueries({ queryKey: ["battle-character-transformations"] }),
     ]);
   }
-  const busy = loadingCatalog || loadingRaces || loadingVirtues || loadingStates;
+  const busy = loadingCatalog || loadingRaces || loadingVirtues || loadingClasses || loadingStates;
 
   return (
     <section className="panel space-y-4 p-4">
@@ -158,9 +167,9 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
           <p className="text-xs text-muted-foreground">Se vincular a uma raça, virtude ou classe, a transformação será removida automaticamente quando o personagem deixar de ter essa característica.</p>
         </div>
       )}
-      {(statesError || raceLinksError || virtueLinksError) && (
+      {(statesError || raceLinksError || virtueLinksError || classLinksError) && (
         <p className="text-sm text-destructive">
-          Não foi possível carregar todas as transformações: {String(statesError?.message ?? raceLinksError?.message ?? virtueLinksError?.message ?? "erro desconhecido")}
+          Não foi possível carregar todas as transformações: {String(statesError?.message ?? raceLinksError?.message ?? virtueLinksError?.message ?? classLinksError?.message ?? "erro desconhecido")}
         </p>
       )}
       {!isMaster && !busy && available.length > 0 && (
@@ -171,12 +180,14 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
               const state = states.find((entry) => entry.transformation_id === transformation.id);
               const fromRace = raceLinks.some((link) => link.transformation_id === transformation.id || link.transformation_id === transformation.source_transformation_id);
               const fromVirtue = virtueLinks.some((link) => link.transformation_id === transformation.id || link.transformation_id === transformation.source_transformation_id);
+              const fromClass = classLinks.some((link) => link.transformation_id === transformation.id || link.transformation_id === transformation.source_transformation_id);
               return (
                 <div key={transformation.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border px-3 py-2">
                   <span className="font-medium">{transformation.name}</span>
                   <div className="flex flex-wrap gap-1.5">
                     {fromRace && <span className="rounded bg-gold/10 px-2 py-0.5 text-[11px] text-gold">Raça</span>}
                     {fromVirtue && <span className="rounded bg-gold/10 px-2 py-0.5 text-[11px] text-gold">Virtude</span>}
+                    {fromClass && <span className="rounded bg-gold/10 px-2 py-0.5 text-[11px] text-gold">Classe</span>}
                     {transformation.owner_character_id === character.id && <span className="rounded bg-violet-500/10 px-2 py-0.5 text-[11px] text-violet-300">Exclusiva</span>}
                     {state?.active && <span className="rounded bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-500">Ativa</span>}
                   </div>
@@ -212,6 +223,7 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
               isPersonal={transformation.owner_character_id === character.id}
               grantedByRace={raceLinks.some((link) => link.transformation_id === transformation.id || link.transformation_id === transformation.source_transformation_id)}
               grantedByVirtue={virtueLinks.some((link) => link.transformation_id === transformation.id || link.transformation_id === transformation.source_transformation_id)}
+              grantedByClass={classLinks.some((link) => link.transformation_id === transformation.id || link.transformation_id === transformation.source_transformation_id)}
               hasCharacterState={states.some((entry) => entry.transformation_id === transformation.id)}
               defs={defs}
               damageTypes={damageTypes}
@@ -231,7 +243,7 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
 }
 
 function TransformationImageCard({
-  characterId, raceId, virtueId, classId, raceName, virtueName, className, transformation, state, onSaved, isMaster, isPersonal, grantedByRace, grantedByVirtue, hasCharacterState, defs, damageTypes, races,
+  characterId, raceId, virtueId, classId, raceName, virtueName, className, transformation, state, onSaved, isMaster, isPersonal, grantedByRace, grantedByVirtue, grantedByClass, hasCharacterState, defs, damageTypes, races,
 }: {
   characterId: string;
   raceId: string | null;
@@ -246,6 +258,7 @@ function TransformationImageCard({
   isPersonal: boolean;
   grantedByRace: boolean;
   grantedByVirtue: boolean;
+  grantedByClass: boolean;
   hasCharacterState: boolean;
   defs: NonNullable<ReturnType<typeof useDefs>["data"]>;
   damageTypes: NonNullable<ReturnType<typeof useDamageTypes>["data"]>;
@@ -422,8 +435,9 @@ function TransformationImageCard({
           <div className="mt-1 flex flex-wrap gap-1.5">
             {grantedByRace && <span className="rounded bg-gold/10 px-2 py-0.5 text-[11px] text-gold">Transformação inicial da raça</span>}
             {grantedByVirtue && <span className="rounded bg-gold/10 px-2 py-0.5 text-[11px] text-gold">Transformação da virtude</span>}
+            {grantedByClass && <span className="rounded bg-gold/10 px-2 py-0.5 text-[11px] text-gold">Transformação da classe</span>}
             {isPersonal && <span className="rounded bg-violet-500/10 px-2 py-0.5 text-[11px] text-violet-300">Exclusiva do personagem</span>}
-            {!grantedByRace && !grantedByVirtue && !isPersonal && hasCharacterState && <span className="rounded bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">Vinculada à ficha</span>}
+            {!grantedByRace && !grantedByVirtue && !grantedByClass && !isPersonal && hasCharacterState && <span className="rounded bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">Vinculada à ficha</span>}
           </div>
           {state?.active && <p className="mt-1 text-xs font-semibold text-emerald-500">Transformação ativa · {state.cooldown_remaining} turno(s)</p>}
           {transformation.description && <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">{transformation.description}</p>}
