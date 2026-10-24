@@ -1,8 +1,6 @@
 -- Add Alívio de Debuff: a temporary percentage modifier that reduces the magnitude
 -- of numeric debuffs while it is active without changing those debuffs' duration.
-BEGIN;
-
-DO $$
+DO $
 DECLARE
   _definition text;
 BEGIN
@@ -259,7 +257,8 @@ BEGIN
   SELECT pg_get_functiondef('public.apply_ability_healing(uuid,uuid,jsonb,boolean,boolean)'::regprocedure)
   INTO _definition;
 
-  IF right(_definition, length(E'END;\n$function$\n')) <> E'END;\n$function$\n' THEN
+  IF position('healing_relieve_debuff_percent' IN _definition) = 0 THEN
+    IF right(_definition, length(E'END;\n$function$\n')) <> E'END;\n$function$\n' THEN
     RAISE EXCEPTION 'Final de apply_ability_healing não está no formato esperado';
   END IF;
 
@@ -302,6 +301,7 @@ $snippet$;
   _definition := left(_definition, length(_definition) - length(E'END;\n$function$\n'))
     || _new || E'\nEND;\n$function$\n';
   EXECUTE _definition;
+  END IF;
 
   -- Make a healing configuration with only Alívio de Debuff a valid activation action.
   FOREACH _old IN ARRAY ARRAY[
@@ -312,17 +312,19 @@ $snippet$;
     SELECT pg_get_functiondef(to_regprocedure(_old)) INTO _definition;
     IF _definition IS NULL THEN RAISE EXCEPTION 'Função de ativação não encontrada: %', _old; END IF;
 
-    _new := $old$or coalesce(nullif(_effect->>'healing_reduce_debuff_turns_percent','')::numeric, 0) > 0 then$old$;
-    IF position(_new IN _definition) = 0 THEN
-      RAISE EXCEPTION 'Condição de cura não encontrada em %', _old;
-    END IF;
-    _definition := replace(
-      _definition,
-      _new,
-      $replacement$or coalesce(nullif(_effect->>'healing_reduce_debuff_turns_percent','')::numeric, 0) > 0
+    IF position('healing_relieve_debuff_percent' IN _definition) = 0 THEN
+      _new := $old$or coalesce(nullif(_effect->>'healing_reduce_debuff_turns_percent','')::numeric, 0) > 0 then$old$;
+      IF position(_new IN _definition) = 0 THEN
+        RAISE EXCEPTION 'Condição de cura não encontrada em %', _old;
+      END IF;
+      _definition := replace(
+        _definition,
+        _new,
+        $replacement$or coalesce(nullif(_effect->>'healing_reduce_debuff_turns_percent','')::numeric, 0) > 0
             or coalesce(nullif(_effect->>'healing_relieve_debuff_percent','')::numeric, 0) > 0 then$replacement$
-    );
-    EXECUTE _definition;
+      );
+      EXECUTE _definition;
+    END IF;
   END LOOP;
 END $$;
 
@@ -330,4 +332,3 @@ COMMENT ON FUNCTION public.recalculate_character_debuff_relief(uuid)
 IS 'Recalculates numeric debuff magnitude while Alívio de Debuff effects are active, restoring original values when relief ends.';
 
 NOTIFY pgrst, 'reload schema';
-COMMIT;
