@@ -1235,6 +1235,10 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
            setDotResistanceTemplateIds([]);
            setDotResistanceMode("damage");
            setDotResistanceValueMode("percent");
+           setDotResistanceScope("all");
+           setDotResistanceTemplateIds([]);
+           setDotResistanceMode("damage");
+           setDotResistanceValueMode("percent");
         }}><Plus className="mr-1 h-3 w-3" /> Aplicar efeito</Button>
         </div>
       </details>
