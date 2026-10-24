@@ -1551,14 +1551,6 @@ export type Database = {
         }
         Returns: number
       }
-      apply_mind_control_effects: {
-        Args: {
-          _battle_id: string
-          _controller_character_id: string
-          _target_selections: Json
-        }
-        Returns: number
-      }
       calculate_character_resource_max: {
         Args: {
           _attribute_key: string
@@ -1578,16 +1570,8 @@ export type Database = {
         Args: { _character_id: string }
         Returns: boolean
       }
-      character_is_immune_to_dot: {
-        Args: { _battle_id: string; _dot: Json; _target_character_id: string }
-        Returns: boolean
-      }
       choose_character_class: {
-        Args: {
-          _character_id: string
-          _class_id: string
-          _custom_modifiers?: Json
-        }
+        Args: { _character_id: string; _class_id: string }
         Returns: undefined
       }
       choose_character_race: {
@@ -1762,14 +1746,6 @@ export type Database = {
       }
       sync_race_ability_assignments: {
         Args: { _race_id: string }
-        Returns: undefined
-      }
-      sync_transformation_ability_grants_for_character: {
-        Args: {
-          _active: boolean
-          _character_id: string
-          _transformation_id: string
-        }
         Returns: undefined
       }
       sync_virtue_ability_assignments: {
