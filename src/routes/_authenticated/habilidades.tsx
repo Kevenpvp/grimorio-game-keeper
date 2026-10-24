@@ -257,6 +257,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
   const [customScriptKey, setCustomScriptKey] = useState(ability.custom_script_key ?? "");
   const [customAttributes, setCustomAttributes] = useState<CustomAbilityAttribute[]>(() => parseCustomAbilityAttributes(ability.custom_attributes));
   const [canActivate, setCanActivate] = useState(ability.can_activate);
+  const [toggleMode, setToggleMode] = useState(ability.toggle_mode);
   const [isMagical, setIsMagical] = useState(ability.is_magical);
   const [attackEnabled, setAttackEnabled] = useState(ability.attack_enabled);
   const [attackDamage, setAttackDamage] = useState<AbilityAttackDamageConfig>(() => parseAbilityAttackDamage(ability.attack_damage));
@@ -280,6 +281,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
     setCustomScriptKey(ability.custom_script_key ?? "");
     setCustomAttributes(parseCustomAbilityAttributes(ability.custom_attributes));
     setCanActivate(ability.can_activate);
+    setToggleMode(ability.toggle_mode);
     setIsMagical(ability.is_magical);
     setAttackEnabled(ability.attack_enabled);
     setAttackDamage(parseAbilityAttackDamage(ability.attack_damage));
@@ -303,7 +305,11 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
       toast.error("Uma habilidade ativável precisa ter cooldown de 0 ou mais turnos. Marque como não ativável se não puder ser usada.");
       return;
     }
-    const effectiveAttackEnabled = canActivate && !selfTargetOnly && attackEnabled;
+    const effectiveAttackEnabled = canActivate && !selfTargetOnly && !toggleMode && attackEnabled;
+    if (toggleMode && (!canActivate || (dotEffects.length > 0))) {
+      toast.error("Habilidade sustentada deve ser ativável e não pode ter DoTs de ativação. Use efeitos ao ativar para seus buffs e debuffs.");
+      return;
+    }
     const needsPhysicalAttackType = attackDamage.damage_kind === "physical" || attackDamage.damage_kind === "hybrid";
     const needsMagicalAttackType = attackDamage.damage_kind === "magical" || attackDamage.damage_kind === "hybrid";
     const selectedPhysicalAttackTypeId = physicalDamageTypes.find((type) => type.id === attackDamage.physical_damage_type_id)?.id
@@ -396,6 +402,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
       custom_script_key: customScriptKey || null,
       custom_attributes: customAttributes as unknown as Json,
       can_activate: canActivate,
+      toggle_mode: canActivate && toggleMode,
       is_magical: isMagical,
       attack_enabled: effectiveAttackEnabled,
       attack_damage: {
@@ -487,6 +494,12 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
           Habilidade Mágica
         </label>
         {canActivate && (
+          <label className="flex min-h-10 items-center gap-2 rounded-md border border-gold/40 px-3 py-2 text-sm">
+            <input type="checkbox" checked={toggleMode} onChange={(e) => { setToggleMode(e.target.checked); if (e.target.checked) setAttackEnabled(false); }} />
+            <span><strong>Habilidade sustentada (ligar/desligar)</strong><span className="block text-xs text-muted-foreground">Liga os efeitos ao ativar e mantém até desligar; ao desligar, começa a recarga e dispara efeitos de encerramento. Só funciona no combate e sem ataque/DoTs de ativação.</span></span>
+          </label>
+        )}
+        {canActivate && (
           <label className="flex min-h-10 items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
             <input type="checkbox" checked={selfTargetOnly} onChange={(e) => setSelfTargetOnly(e.target.checked)} />
             Só pode ser usada no próprio personagem
@@ -503,7 +516,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
             type="checkbox"
             className="mt-1"
             checked={attackEnabled}
-            disabled={!canActivate || selfTargetOnly}
+            disabled={!canActivate || selfTargetOnly || toggleMode}
             onChange={(event) => setAttackEnabled(event.target.checked)}
           />
           <span>
@@ -511,8 +524,8 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
             <span className="mt-1 block text-xs text-muted-foreground">O botão Ativar continua existindo separadamente. Ataques com esta habilidade consomem o custo de Mana/cooldown uma vez, mesmo que todos os alvos esquivem.</span>
           </span>
         </label>
-        {(!canActivate || selfTargetOnly) && <p className="text-xs text-amber-500">Para habilitar Atacar, a habilidade precisa ser ativável e não pode estar limitada ao próprio personagem.</p>}
-        {attackEnabled && canActivate && !selfTargetOnly && (
+        {(!canActivate || selfTargetOnly || toggleMode) && <p className="text-xs text-amber-500">Para habilitar Atacar, a habilidade precisa ser ativável e não pode estar limitada ao próprio personagem.</p>}
+        {attackEnabled && canActivate && !selfTargetOnly && !toggleMode && (
           <div className="space-y-3 border-t border-border/70 pt-3">
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="space-y-1 text-xs font-medium">
