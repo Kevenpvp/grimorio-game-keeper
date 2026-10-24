@@ -128,7 +128,7 @@ $new$;
       '  _class_mechanics jsonb := ''{}''::jsonb;'
     );
     _old := $endold$SELECT t.name,t.end_effects INTO _name,_end_effects
-   FROM public.transformations t WHERE t.id=_transformation_id;$endold$;
+  FROM public.transformations t WHERE t.id=_transformation_id;$endold$;
     _new := $endnew$SELECT * INTO _character FROM public.characters WHERE id=_character_id;
    SELECT * INTO _transformation FROM public.transformations WHERE id=_transformation_id;
    _name := _transformation.name;
