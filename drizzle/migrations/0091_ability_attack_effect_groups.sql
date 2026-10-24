@@ -9,7 +9,7 @@ ALTER TABLE public.abilities ADD CONSTRAINT abilities_attack_effect_groups_array
 -- Replace the 5-argument attack RPC with the checked 6-argument version. Each
 -- selected category is validated against the ability catalog and then tagged
 -- with one specific confirmed target before entering the established effect engine.
-DROP FUNCTION public.activate_character_ability_attack(uuid,uuid,uuid,integer,uuid[]);
+DROP FUNCTION IF EXISTS public.activate_character_ability_attack(uuid,uuid,uuid,integer,uuid[]);
 CREATE OR REPLACE FUNCTION public.activate_character_ability_attack(_character_ability_id uuid, _target_character_id uuid, _battle_id uuid DEFAULT NULL::uuid, _extra_mana_cost integer DEFAULT 0, _hit_target_ids uuid[] DEFAULT NULL::uuid[], _hit_effect_groups jsonb DEFAULT NULL::jsonb)
  RETURNS integer
  LANGUAGE plpgsql
