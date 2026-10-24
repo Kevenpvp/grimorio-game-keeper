@@ -7,6 +7,8 @@ export interface CustomAbilityAttribute {
   value: number | string | boolean;
   /** Whether a numeric value is affected by a race multiplier when the ability comes from a virtue. */
   scale_with_race?: boolean;
+  /** Harmful numeric attribute: excluded from virtue/race/class multipliers. */
+  malefico?: boolean;
 }
 
 export const DEMONIO_INTERNO_DEFAULT_ATTRIBUTES: CustomAbilityAttribute[] = [
@@ -34,7 +36,7 @@ export function parseCustomAbilityAttributes(value: unknown): CustomAbilityAttri
     if (type === "number") {
       const numeric = Number(raw.value);
       if (!Number.isFinite(numeric)) return [];
-      return [{ key, name, type, value: numeric, scale_with_race: raw.scale_with_race !== false }];
+      return [{ key, name, type, value: numeric, scale_with_race: raw.scale_with_race !== false, malefico: raw.malefico === true }];
     }
     if (type === "boolean") return [{ key, name, type, value: raw.value === true }];
     return [{ key, name, type, value: typeof raw.value === "string" ? raw.value : String(raw.value ?? "") }];
