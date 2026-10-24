@@ -16,6 +16,7 @@ import {
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
+import { dispatchCustomAbilityScriptEvents } from "@/lib/ability-script-runtime";
 import {
   clampPct, computeValue, conditionAdjustedValue, physicalAttributePoints, useCharacter, useCharacterLive, useCharacterTraitMods, useDefs, useMe,
   type AttributeDef, type Character, type CharacterAttr,
