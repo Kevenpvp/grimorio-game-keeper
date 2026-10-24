@@ -460,7 +460,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
           <input type="checkbox" checked={!canActivate} onChange={(e) => {
             const notActivatable = e.target.checked;
             setCanActivate(!notActivatable);
-            setCooldown(notActivatable ? "0" : (Number(cooldown) > 0 ? cooldown : "1"));
+            setCooldown(notActivatable ? "0" : (Number(cooldown) >= 0 ? cooldown : "0"));
             if (notActivatable) setManaCost("0");
           }} />
           Habilidade não ativável
@@ -750,6 +750,18 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
                   </span>
                 </label>
               )}
+              {attribute.type === "number" && (
+                <label className="mt-2 flex cursor-pointer items-start gap-2 text-xs text-muted-foreground">
+                  <input type="checkbox" className="mt-0.5" checked={attribute.malefico === true}
+                    onChange={(event) => setCustomAttributes((current) => current.map((item, itemIndex) =>
+                      itemIndex === index ? { ...item, malefico: event.target.checked, scale_with_race: event.target.checked ? false : item.scale_with_race } : item
+                    ))} />
+                  <span>
+                    Maléfico
+                    <span className="mt-0.5 block text-[11px]">Atributo negativo: a mecânica de duplicar efeitos da virtude ignora este valor.</span>
+                  </span>
+                </label>
+              )}
             </div>
             <Button type="button" variant="ghost" size="icon" aria-label={`Remover atributo ${attribute.name || index + 1}`} onClick={() => setCustomAttributes((current) => current.filter((_, itemIndex) => itemIndex !== index))}>
               <Trash2 className="h-4 w-4" />
@@ -758,7 +770,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
         ))}
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
-        {canActivate && <div className="space-y-1.5"><Label>Cooldown (turnos)</Label><Input type="number" min="1" value={cooldown} onChange={(e) => setCooldown(e.target.value)} /></div>}
+        {canActivate && <div className="space-y-1.5"><Label>Cooldown (turnos)</Label><Input type="number" min="0" value={cooldown} onChange={(e) => setCooldown(e.target.value)} /></div>}
         {canActivate && <div className="space-y-1.5">
           <Label>Custo de Mana (0 = não gasta)</Label>
           <Input type="number" min="0" value={manaCost} onChange={(e) => setManaCost(e.target.value)} />
