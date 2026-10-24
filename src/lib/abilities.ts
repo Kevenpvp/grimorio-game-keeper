@@ -273,7 +273,7 @@ export function parseAbilityEffects(value: unknown, nested = false): AbilityEffe
       dot_resistance_scope: ["all", "physical", "magical", "specific"].includes(String(raw.dot_resistance_scope)) ? raw.dot_resistance_scope as "all" | "physical" | "magical" | "specific" : "all",
       dot_resistance_template_ids: Array.isArray(raw.dot_resistance_template_ids) ? [...new Set(raw.dot_resistance_template_ids.filter((value): value is string => typeof value === "string"))] : [],
       dot_resistance_mode: raw.dot_resistance_mode === "duration" ? "duration" : "damage",
-      dot_resistance_value_mode: raw.dot_resistance_value_mode === "percent" ? "percent" : "fixed",
+      dot_resistance_value_mode: raw.dot_resistance_value_mode === "fixed" ? "fixed" : "percent",
       dot_resistance_amount: Math.max(0, Math.min(1000000, Number.isFinite(Number(raw.dot_resistance_amount)) ? Number(raw.dot_resistance_amount) : 25)),
       damage_vulnerability_scope: raw.damage_vulnerability_scope === "physical" || raw.damage_vulnerability_scope === "magical"
         ? raw.damage_vulnerability_scope : "any",
