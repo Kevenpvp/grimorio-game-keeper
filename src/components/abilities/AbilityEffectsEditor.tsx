@@ -134,6 +134,7 @@ export function AbilityEffectsEditor({
       healing_debuff_name_blacklist: [],
       healing_reduce_debuff_turns_fixed: 0,
       healing_reduce_debuff_turns_percent: 0,
+      healing_relieve_debuff_percent: 0,
       healing_damage_type_id: damageTypes[0]?.id ?? null,
       healing_magic_level: "baixa",
       magic_healing_type_ids: [],
@@ -818,6 +819,15 @@ export function AbilityEffectsEditor({
                   </div>
 
                   <div className="space-y-2 rounded-md border border-border p-3">
+                    <label className="block space-y-1 text-xs font-medium">
+                      Alívio de Debuff — reduzir intensidade (%)
+                      <Input type="number" min="0" max="100" step="1"
+                        value={effect.healing_relieve_debuff_percent ?? 0}
+                        onChange={(e) => patch(index, { healing_relieve_debuff_percent: Math.max(0, Math.min(100, Number(e.target.value) || 0)) })} />
+                      <span className="text-[11px] text-muted-foreground">
+                        Reduz o valor numérico de qualquer debuff enquanto o alívio durar, sem alterar sua duração e sem remover o efeito. Ex.: um debuff de −50% aliviado em 25% passa a −37,5%. Também funciona em debuffs permanentes; quando o alívio termina, a intensidade original volta.
+                      </span>
+                    </label>
                     <label className="flex items-center gap-2 text-sm font-medium">
                       <input type="checkbox" checked={effect.healing_remove_debuffs ?? false}
                         onChange={(e) => patch(index, { healing_remove_debuffs: e.target.checked })} />
