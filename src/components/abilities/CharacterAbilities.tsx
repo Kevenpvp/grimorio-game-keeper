@@ -1033,6 +1033,20 @@ export function CharacterAbilitiesManager({ characterId, personalOnly = false }:
   const [creatingCustom, setCreatingCustom] = useState(false);
   const [customTraitLink, setCustomTraitLink] = useState<"none" | "race" | "virtue" | "class">("none");
   const db = supabase as any;
+  useEffect(() => {
+    const channel = supabase
+      .channel(`character-ability-trait-links-${characterId}`)
+      .on("postgres_changes", {
+        event: "UPDATE",
+        schema: "public",
+        table: "characters",
+        filter: `id=eq.${characterId}`,
+      }, () => {
+        void qc.invalidateQueries({ queryKey: ["character-ability-linkable-traits", characterId] });
+      })
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [characterId, qc]);
   const assignedIds = new Set(assigned.map((ability) => ability.ability_id).filter(Boolean));
   const managedAssigned = personalOnly
     ? assigned.filter((ability) => {
