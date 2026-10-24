@@ -88,6 +88,7 @@ function ClassEditor({ classTrait, defs, isNew, onSaved }: { classTrait: ClassTr
   const [physicalBonus, setPhysicalBonus] = useState(classTrait.physical_bonus_points);
   const existingMechanics = ((classTrait as unknown as { special_mechanics?: Record<string, unknown> }).special_mechanics ?? {});
   const [duplicateVirtueEffects, setDuplicateVirtueEffects] = useState(existingMechanics.duplicate_virtue_effects === true);
+  const [virtueCooldownReductionPercent, setVirtueCooldownReductionPercent] = useState(Math.max(0, Math.min(100, Number(existingMechanics.virtue_cooldown_reduction_percent ?? 0)));
   const [virtueEffectMultiplier, setVirtueEffectMultiplier] = useState(Number(existingMechanics.virtue_effect_multiplier ?? 2));
   const [virtueEffectBlacklist, setVirtueEffectBlacklist] = useState<string[]>(
     Array.isArray(existingMechanics.virtue_effect_blacklist)
@@ -135,6 +136,7 @@ function ClassEditor({ classTrait, defs, isNew, onSaved }: { classTrait: ClassTr
       modifiers: clean,
       special_mechanics: {
         duplicate_virtue_effects: duplicateVirtueEffects,
+        virtue_cooldown_reduction_percent: Math.max(0, Math.min(100, Number(virtueCooldownReductionPercent) || 0)),
         virtue_effect_multiplier: Math.max(1, Math.min(10, Number(virtueEffectMultiplier) || 2)),
         virtue_effect_blacklist: virtueEffectBlacklist,
       } as unknown as Json,
@@ -220,6 +222,11 @@ function ClassEditor({ classTrait, defs, isNew, onSaved }: { classTrait: ClassTr
           <input type="checkbox" className="mt-1" checked={duplicateVirtueEffects} onChange={(event) => setDuplicateVirtueEffects(event.target.checked)} />
           <span><span className="font-medium">Duplicar efeitos da virtude</span><span className="mt-1 block text-xs text-muted-foreground">Multiplica valores numéricos dos efeitos das habilidades concedidas pela virtude (incluindo passivas), sem duplicar duração, recarga, custo de Mana ou efeitos binários como Invencível.</span></span>
         </label>
+        <div className="max-w-xs space-y-1">
+          <Label>Reduzir recarga das habilidades da virtude (%)</Label>
+          <Input type="number" min={0} max={100} value={virtueCooldownReductionPercent} onChange={(event) => setVirtueCooldownReductionPercent(Math.max(0, Math.min(100, Number(event.target.value) || 0)))} />
+          <p className="text-xs text-muted-foreground">Afeta as habilidades concedidas por virtudes: 25% transforma 8 turnos em 6. Não altera habilidades próprias da ficha.</p>
+        </div>
         {duplicateVirtueEffects && <>
           <div className="max-w-xs space-y-1">
             <Label>Multiplicador dos efeitos</Label>
