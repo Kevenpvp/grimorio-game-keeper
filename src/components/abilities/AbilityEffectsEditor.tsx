@@ -2,6 +2,7 @@ import { useId } from "react";
 import { Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useRaces, type AttributeDef } from "@/lib/sheets";
 import { useDamageTypes, useDotTemplates, type AbilityEffectDefinition, type AbilityEffectType, type DamageScope, type DamageReductionScope, type DamageReceivedScope, type DamageMagicLevel } from "@/lib/abilities";
 
