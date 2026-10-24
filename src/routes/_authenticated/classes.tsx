@@ -235,7 +235,7 @@ function ClassEditor({ classTrait, defs, isNew, onSaved }: { classTrait: ClassTr
           </div>
           <div className="space-y-2 border-t border-border/70 pt-3">
             <div>
-              <Label>Virtudes excluídas do multiplicador</Label>
+              <Label>Virtudes excluídas do multiplicador e da redução de recarga</Label>
               <p className="mt-1 text-xs text-muted-foreground">As virtudes marcadas continuam funcionando normalmente, mas seus efeitos e atributos personalizados não são multiplicados por esta classe. Você pode marcar mais de uma.</p>
             </div>
             {virtuesLoading ? (
