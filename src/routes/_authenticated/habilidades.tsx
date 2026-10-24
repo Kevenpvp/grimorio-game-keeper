@@ -739,7 +739,8 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
                   <input
                     type="checkbox"
                     className="mt-0.5"
-                    checked={attribute.scale_with_race !== false}
+                    checked={attribute.scale_with_race !== false && attribute.malefico !== true}
+                    disabled={attribute.malefico === true}
                     onChange={(event) => setCustomAttributes((current) => current.map((item, itemIndex) =>
                       itemIndex === index ? { ...item, scale_with_race: event.target.checked } : item
                     ))}
@@ -754,7 +755,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
                 <label className="mt-2 flex cursor-pointer items-start gap-2 text-xs text-muted-foreground">
                   <input type="checkbox" className="mt-0.5" checked={attribute.malefico === true}
                     onChange={(event) => setCustomAttributes((current) => current.map((item, itemIndex) =>
-                      itemIndex === index ? { ...item, malefico: event.target.checked, scale_with_race: event.target.checked ? false : item.scale_with_race } : item
+                      itemIndex === index ? { ...item, malefico: event.target.checked, scale_with_race: event.target.checked ? false : item.malefico === true ? true : item.scale_with_race } : item
                     ))} />
                   <span>
                     Maléfico
