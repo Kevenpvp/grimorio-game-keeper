@@ -1163,7 +1163,6 @@ export function CharacterAbilitiesPanel({
                                   : "Sem atributo de origem"} + {attackConfig.fixed_damage} fixos; ajuste {extra >= 0 ? "+" : ""}{extra} fixo, {percent >= 0 ? "+" : ""}{percent}%; antes de defesa/mitigação
                               </div>
                             </div>
-                            </div>
                           </>
                         )}
                         {attackResults[target.id] && <p className={`text-xs ${attackResults[target.id].startsWith("Erro") ? "text-destructive" : "text-emerald-500"}`}>{attackResults[target.id]}</p>}
