@@ -393,10 +393,28 @@ function AttrEditor({ def, characterId, body, sanity, attr, racePts, virtuePts, 
   useEffect(() => { setCur(cur0); setMax(max0); setBonus(bonus0); }, [cur0, max0, bonus0]);
 
   async function save(c: number, m: number) {
-    const { error } = await supabase.from("character_attributes").upsert({
-      character_id: characterId, attribute_key: def.key, current_value: c, max_value: m,
-    });
-    if (error) { toast.error(error.message); setCur(cur0); setMax(max0); return; }
+    // This attribute already exists. An UPSERT fires validate_attribute() as
+    // BEFORE INSERT before the conflict is resolved: HP 124 with a stored base
+    // maximum of 117 is wrongly rejected even when race bonuses raise the
+    // effective total to 124. UPDATE validates against the actual character.
+    const changes: { current_value?: number; max_value?: number } = {};
+    if (c !== cur0) changes.current_value = c;
+    if (m !== max0) changes.max_value = m;
+    if (!Object.keys(changes).length) return;
+
+    const { data, error } = await supabase.from("character_attributes")
+      .update(changes)
+      .eq("character_id", characterId)
+      .eq("attribute_key", def.key)
+      .select("character_id")
+      .maybeSingle();
+
+    if (error || !data) {
+      toast.error(error?.message ?? "Atributo não encontrado na ficha");
+      setCur(cur0);
+      setMax(max0);
+      return;
+    }
     onSaved();
     if (def.key === "hp") void dispatchCustomAbilityScriptEvents();
   }
@@ -405,10 +423,18 @@ function AttrEditor({ def, characterId, body, sanity, attr, racePts, virtuePts, 
     const b = Math.round(Number.isFinite(n) ? n : 0);
     setBonus(b);
     if (b === bonus0) return;
-    const { error } = await supabase.from("character_attributes").upsert({
-      character_id: characterId, attribute_key: def.key, bonus: b,
-    });
-    if (error) { toast.error(error.message); setBonus(bonus0); return; }
+    // Likewise, never insert an incomplete row just to edit an existing bonus.
+    const { data, error } = await supabase.from("character_attributes")
+      .update({ bonus: b })
+      .eq("character_id", characterId)
+      .eq("attribute_key", def.key)
+      .select("character_id")
+      .maybeSingle();
+    if (error || !data) {
+      toast.error(error?.message ?? "Atributo não encontrado na ficha");
+      setBonus(bonus0);
+      return;
+    }
     onSaved();
   }
 
