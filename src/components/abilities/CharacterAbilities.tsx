@@ -14,8 +14,9 @@ import { DefenseIgnoreInputs } from "@/components/abilities/DefenseIgnoreInputs"
 import { attackDiceModifier } from "@/lib/combat-dice";
 import { sedentoInvincibilityCooldown } from "@/lib/sedento-invincibility";
 import { useDefs, useMe, useRaces, useClasses, useVirtues } from "@/lib/sheets";
-import { parseAbilityEffects, parseAbilityAttackDamage, parseAbilityAttackEffectGroups, parseAbilityDotEffects, useAbilities, useCharacterAbilities, useCharacterActiveEffects, useDamageTypes, type Ability, type AbilityEffectDefinition, type CharacterAbility, type AbilityDotEffect } from "@/lib/abilities";
+import { parseAbilityEffects, parseAbilityAttackDamage, parseAbilityAttackEffectGroups, parseAbilityDotEffects, useAbilities, useCharacterAbilities, useCharacterActiveEffects, useDamageTypes, type Ability, type AbilityEffectDefinition, type CharacterAbility, type AbilityDotEffect, type AbilityAttackDamageConfig, type AbilityAttackEffectGroup } from "@/lib/abilities";
 import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
+import { SheetAbilityAttackEditor } from "@/components/abilities/SheetAbilityAttackEditor";
 import type { Json } from "@/integrations/supabase/types";
 import { parseCustomAbilityAttributes, type CustomAbilityAttribute } from "@/lib/custom-ability-scripts";
 
@@ -470,9 +471,14 @@ export function CharacterAbilitiesPanel({
   const eligibleAttackTargets = targets.filter((target) => target.id !== characterId);
   const attackAbility = loadout?.find((ability) => ability.id === attackDialogAbilityId);
   const attackCatalogEntry = abilityCatalog.find((catalogAbility) => catalogAbility.id === attackAbility?.ability_id);
-  const attackConfig = attackCatalogEntry?.attack_enabled ? parseAbilityAttackDamage(attackCatalogEntry.attack_damage) : null;
-  const attackEffectGroups = attackCatalogEntry?.attack_enabled ? parseAbilityAttackEffectGroups(attackCatalogEntry.attack_effect_groups) : [];
-  const guaranteedAttackDots = attackCatalogEntry?.attack_enabled ? parseAbilityDotEffects(attackCatalogEntry.dot_effects) : [];
+  // Catalog abilities keep their shared model; exclusive sheet abilities use
+  // the attack settings stored directly on character_abilities.
+  const attackDefinition = attackAbility?.ability_id
+    ? attackCatalogEntry
+    : attackAbility;
+  const attackConfig = attackDefinition?.attack_enabled ? parseAbilityAttackDamage(attackDefinition.attack_damage) : null;
+  const attackEffectGroups = attackDefinition?.attack_enabled ? parseAbilityAttackEffectGroups(attackDefinition.attack_effect_groups) : [];
+  const guaranteedAttackDots = attackDefinition?.attack_enabled ? parseAbilityDotEffects(attackDefinition.dot_effects) : [];
   const currentAttackTargets = eligibleAttackTargets.filter((target) => attackTargetIds.includes(target.id));
   const statValue = (id: string, key: string) => Math.max(0, Number(getAttributeValue?.(id, key) ?? 0) || 0);
   const attackBaseDamage = attackConfig
@@ -539,7 +545,7 @@ export function CharacterAbilitiesPanel({
   }
 
   async function resolveAbilityAttack() {
-    if (!attackAbility || !attackCatalogEntry || !attackConfig || !battleId || attackBusy) return;
+    if (!attackAbility || !attackDefinition?.attack_enabled || !attackConfig || !battleId || attackBusy) return;
     if (attackTargetIds.length === 0) {
       toast.error("Selecione pelo menos um alvo para este ataque.");
       return;
@@ -566,7 +572,7 @@ export function CharacterAbilitiesPanel({
       toast.error("Por alvo: ajuste fixo inteiro entre -1.000.000 e +1.000.000; percentual entre -100% e +1000%.");
       return;
     }
-    const guaranteedDots = parseAbilityDotEffects(attackCatalogEntry.dot_effects);
+    const guaranteedDots = parseAbilityDotEffects(attackDefinition.dot_effects);
     const allAttackDots = [
       ...guaranteedDots,
       ...attackEffectGroups.flatMap((group) => group.dots),
@@ -728,7 +734,7 @@ export function CharacterAbilitiesPanel({
       return;
     }
     const catalogEntry = abilityCatalog.find((candidate) => candidate.id === ability.ability_id);
-    const guaranteedDots = parseAbilityDotEffects(catalogEntry?.dot_effects);
+    const guaranteedDots = parseAbilityDotEffects(ability.ability_id ? catalogEntry?.dot_effects : ability.dot_effects);
     const actualTargetId = ability.self_target_only ? characterId : (targetId || characterId);
     if (guaranteedDots.length > 0 && (mode !== "combat" || !battleId)) {
       toast.error("DoTs de habilidades só podem ser aplicados durante um combate ativo.");
@@ -893,7 +899,11 @@ export function CharacterAbilitiesPanel({
                           }}><Check className="mr-1 h-3.5 w-3.5" /> Tirar do cooldown</Button>
                         </div>
                       )}
-                      {mode === "combat" && battleId && !ability.toggle_mode && abilityCatalog.some((catalogAbility) => catalogAbility.id === ability.ability_id && catalogAbility.attack_enabled) && (
+                      {mode === "combat" && battleId && !ability.toggle_mode && (
+                        ability.ability_id
+                          ? abilityCatalog.some((catalogAbility) => catalogAbility.id === ability.ability_id && catalogAbility.attack_enabled)
+                          : ability.attack_enabled
+                      ) && (
                         <Button size="sm" variant="outline" disabled={busyId !== null || attackBusy || attackDialogAbilityId !== null || ability.cooldown_turns < 0 || ability.cooldown_remaining > 0 || (Boolean((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle) && usedOnceAbilityIds.includes(ability.id))} onClick={() => openAttackDialog(ability)}>
                           <Swords className="mr-1 h-3.5 w-3.5" /> Atacar
                         </Button>
@@ -1427,6 +1437,11 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
   const [effects, setEffects] = useState<AbilityEffectDefinition[]>(ability.effects);
   const [passiveEffects, setPassiveEffects] = useState<AbilityEffectDefinition[]>(ability.passive_effects);
   const [endEffects, setEndEffects] = useState<AbilityEffectDefinition[]>(ability.end_effects);
+  const [attackEnabled, setAttackEnabled] = useState(Boolean(ability.attack_enabled));
+  const [attackDamage, setAttackDamage] = useState<AbilityAttackDamageConfig>(() => parseAbilityAttackDamage(ability.attack_damage));
+  const [attackEffectGroups, setAttackEffectGroups] = useState<AbilityAttackEffectGroup[]>(() => parseAbilityAttackEffectGroups(ability.attack_effect_groups));
+  const [dotEffects, setDotEffects] = useState<AbilityDotEffect[]>(() => parseAbilityDotEffects(ability.dot_effects));
+  const { data: damageTypes = [] } = useDamageTypes();
   const [busy, setBusy] = useState(false);
   const [expanded, setExpanded] = useState(true);
 
@@ -1443,6 +1458,10 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
     setEffects(parseAbilityEffects(ability.effects));
     setPassiveEffects(parseAbilityEffects(ability.passive_effects));
     setEndEffects(parseAbilityEffects(ability.end_effects));
+    setAttackEnabled(Boolean(ability.attack_enabled));
+    setAttackDamage(parseAbilityAttackDamage(ability.attack_damage));
+    setAttackEffectGroups(parseAbilityAttackEffectGroups(ability.attack_effect_groups));
+    setDotEffects(parseAbilityDotEffects(ability.dot_effects));
   }, [ability]);
 
   async function save() {
@@ -1452,9 +1471,24 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
     if (ability.toggle_active) { toast.error("Desative esta habilidade antes de alterar sua configuração."); return; }
     if (toggleMode && !canActivate) { toast.error("Habilidade sustentada precisa ser ativável."); return; }
     const catalogDefinition = availableCatalogAbilities.find((row) => row.id === ability.ability_id);
-    if (toggleMode && catalogDefinition && (catalogDefinition.attack_enabled || parseAbilityDotEffects(catalogDefinition.dot_effects).length > 0)) {
+    if (toggleMode && (
+      (catalogDefinition && (catalogDefinition.attack_enabled || parseAbilityDotEffects(catalogDefinition.dot_effects).length > 0))
+      || (!ability.ability_id && (attackEnabled || dotEffects.length > 0))
+    )) {
       toast.error("Este modelo possui ataque ou DoTs de ativação. Remova-os do modelo antes de usar o modo sustentado.");
       return;
+    }
+    if (!ability.ability_id && attackEnabled && canActivate && !selfTargetOnly && !toggleMode) {
+      const wantsPhysical = attackDamage.damage_kind === "physical" || attackDamage.damage_kind === "hybrid";
+      const wantsMagical = attackDamage.damage_kind === "magical" || attackDamage.damage_kind === "hybrid";
+      if (wantsPhysical && !damageTypes.some((type) => type.category === "physical" && type.id === attackDamage.physical_damage_type_id)) {
+        toast.error("Selecione um tipo de dano físico válido para o ataque.");
+        return;
+      }
+      if (wantsMagical && !damageTypes.some((type) => type.category === "magical" && type.id === attackDamage.damage_type_id)) {
+        toast.error("Selecione um tipo de dano mágico válido para o ataque.");
+        return;
+      }
     }
     if (!Number.isFinite(cost) || cost < 0) { toast.error("Custo de Mana inválido"); return; }
     if (canActivate && (!Number.isFinite(cooldownTurns) || cooldownTurns < 0)) { toast.error("O cooldown precisa ser 0 ou maior"); return; }
@@ -1497,6 +1531,19 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
       effects: effects.map((effect) => ({ ...effect, duration: Math.max(1, effect.duration) })) as unknown as Json,
       passive_effects: passiveEffects.map((effect) => ({ ...effect, duration: 1 })) as unknown as Json,
       end_effects: endEffects.map((effect) => ({ ...effect, duration: Math.max(1, effect.duration) })) as unknown as Json,
+      ...(!ability.ability_id ? {
+        attack_enabled: canActivate && !selfTargetOnly && !toggleMode && attackEnabled,
+        attack_damage: attackDamage,
+        attack_effect_groups: attackEffectGroups
+          .filter((group) => group.name.trim() && (
+            group.effects.length > 0 || group.dots.length > 0 || !!defenseIgnoreText(group.defense_ignore)
+          )).map((group) => ({
+            ...group,
+            name: group.name.trim(),
+            effects: group.effects.map((effect) => ({ ...effect, duration: Math.max(1, effect.duration) })),
+          })),
+        dot_effects: dotEffects,
+      } : {}),
     }).eq("id", ability.id);
     setBusy(false);
     if (error) { toast.error(error.message); return; }
@@ -1592,6 +1639,22 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
         {canActivate && <div className="space-y-1"><Label>Cooldown máximo (turnos)</Label><Input type="number" min="0" value={cooldown} onChange={(e) => setCooldown(e.target.value)} /></div>}
         <div className="space-y-1 sm:col-span-2"><Label>Descrição para este jogador</Label><Input value={description} onChange={(e) => setDescription(e.target.value)} /></div>
       </div>
+      {ability.ability_id === null && (
+        <SheetAbilityAttackEditor
+          defs={defs}
+          canActivate={canActivate}
+          toggleMode={toggleMode}
+          selfTargetOnly={selfTargetOnly}
+          attackEnabled={attackEnabled}
+          setAttackEnabled={setAttackEnabled}
+          attackDamage={attackDamage}
+          setAttackDamage={setAttackDamage}
+          attackEffectGroups={attackEffectGroups}
+          setAttackEffectGroups={setAttackEffectGroups}
+          dotEffects={dotEffects}
+          setDotEffects={setDotEffects}
+        />
+      )}
       {canActivate && <AbilityEffectsEditor
         effects={effects}
         onChange={setEffects}
