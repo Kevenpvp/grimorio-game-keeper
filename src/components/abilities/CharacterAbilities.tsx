@@ -690,28 +690,70 @@ export function CharacterAbilitiesPanel({
     }
   }
 
-  async function finishAbilityAttack() {
+  async function finishAbilityAttack(chargeIfUnused = true) {
     if (attackBusy || !attackDialogAbilityId) return;
     const completedAbilityId = attackDialogAbilityId;
-    if (attackStarted && battleId) {
-      setAttackBusy(true);
-      try {
-        const { error } = await db.rpc("finish_character_ability_attack", {
+    // The X/Escape can cancel an attack that has not been used yet; only the
+    // explicit "Finalizar Ataque" consumes the ability on a complete miss.
+    if (!chargeIfUnused && !attackStarted) {
+      setAttackDialogAbilityId(null);
+      setAttackResults({});
+      return;
+    }
+    if (!battleId || !attackAbility || !attackDefinition?.attack_enabled) {
+      toast.error("Não foi possível confirmar a habilidade ou a batalha.");
+      return;
+    }
+
+    setAttackBusy(true);
+    try {
+      if (!attackStarted) {
+        const extraMana = Math.max(0, Math.min(1000000,
+          Math.floor(Number(extraManaCosts[completedAbilityId] ?? 0) || 0)));
+        // Empty hit/group/DoT lists mean no target was struck. The regular
+        // activation RPC still consumes Mana, starts cooldown, counts a
+        // once-per-battle use, and fires the activation script exactly once.
+        const { error: activationError } = await db.rpc("activate_character_ability_attack", {
           _character_ability_id: completedAbilityId,
+          _target_character_id: characterId,
           _battle_id: battleId,
+          _extra_mana_cost: extraMana,
+          _hit_target_ids: [],
+          _hit_effect_groups: [],
+          _dot_target_selections: [],
+          _dot_attribute_values: {},
         });
-        if (error) throw error;
-      } catch (error) {
-        toast.error("Não foi possível finalizar a sequência: " + (error instanceof Error ? error.message : String(error)));
-        setAttackBusy(false);
-        return;
+        if (activationError) throw activationError;
+        // If closing the server-side session fails, a retry must not charge
+        // Mana or reset cooldown again.
+        setAttackStarted(true);
+        setExtraManaCosts((current) => ({ ...current, [completedAbilityId]: "0" }));
+        void dispatchCustomAbilityScriptEvents(battleId);
       }
+
+      const { error } = await db.rpc("finish_character_ability_attack", {
+        _character_ability_id: completedAbilityId,
+        _battle_id: battleId,
+      });
+      if (error) throw error;
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["character-abilities", characterId] }),
+        qc.invalidateQueries({ queryKey: ["character-abilities-battle"] }),
+        qc.invalidateQueries({ queryKey: ["battle-ability-uses", battleId, characterId] }),
+        qc.invalidateQueries({ queryKey: ["battles"] }),
+        qc.invalidateQueries({ queryKey: ["battle-effects"] }),
+        qc.invalidateQueries({ queryKey: ["character-active-effects"] }),
+        qc.invalidateQueries({ queryKey: ["character", characterId] }),
+      ]);
+      setAttackDialogAbilityId(null);
+      setAttackStarted(false);
+      setAttackCount(0);
+      setAttackResults({});
+    } catch (error) {
+      toast.error("Não foi possível finalizar o ataque: " + (error instanceof Error ? error.message : String(error)));
+    } finally {
       setAttackBusy(false);
     }
-    setAttackDialogAbilityId(null);
-    setAttackStarted(false);
-    setAttackCount(0);
-    setAttackResults({});
   }
 
   function dispatchAndRefreshAbilityEffects(scriptBattleId?: string | null) {
@@ -1023,7 +1065,7 @@ export function CharacterAbilitiesPanel({
       )}
       
       <Dialog open={attackDialogAbilityId !== null} onOpenChange={(open) => {
-        if (!open) void finishAbilityAttack();
+        if (!open) void finishAbilityAttack(false);
       }}>
         <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
           <DialogHeader>
