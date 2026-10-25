@@ -17,6 +17,7 @@ import { useDefs, useMe, useRaces, useClasses, useVirtues } from "@/lib/sheets";
 import { parseAbilityEffects, parseAbilityAttackDamage, parseAbilityAttackEffectGroups, parseAbilityDotEffects, useAbilities, useCharacterAbilities, useCharacterActiveEffects, useDamageTypes, type Ability, type AbilityEffectDefinition, type CharacterAbility, type AbilityDotEffect, type AbilityAttackDamageConfig, type AbilityAttackEffectGroup } from "@/lib/abilities";
 import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
 import { SheetAbilityAttackEditor } from "@/components/abilities/SheetAbilityAttackEditor";
+import { TemporaryAttackCategoryEditor } from "@/components/abilities/TemporaryAttackCategoryEditor";
 import type { Json } from "@/integrations/supabase/types";
 import { parseCustomAbilityAttributes, type CustomAbilityAttribute } from "@/lib/custom-ability-scripts";
 
@@ -470,6 +471,11 @@ export function CharacterAbilitiesPanel({
   const [attackStarted, setAttackStarted] = useState(false);
   const [attackCount, setAttackCount] = useState(0);
   const [attackResults, setAttackResults] = useState<Record<string, string>>({});
+  const [attackExpandedGroups, setAttackExpandedGroups] = useState<Record<string, boolean>>({});
+  const [attackGroupEdits, setAttackGroupEdits] = useState<Record<string, {
+    effects: AbilityEffectDefinition[];
+    dots: AbilityDotEffect[];
+  }>>({});
   const eligibleAttackTargets = targets.filter((target) => target.id !== characterId);
   const attackAbility = loadout?.find((ability) => ability.id === attackDialogAbilityId);
   const attackCatalogEntry = abilityCatalog.find((catalogAbility) => catalogAbility.id === attackAbility?.ability_id);
@@ -536,6 +542,8 @@ export function CharacterAbilitiesPanel({
     setAttackExtraDamagePercent({});
     setAttackTargetDefenseIgnore({});
     setAttackResults({});
+    setAttackExpandedGroups({});
+    setAttackGroupEdits({});
     setAttackStarted(false);
     setAttackCount(0);
   }
@@ -577,16 +585,25 @@ export function CharacterAbilitiesPanel({
     const guaranteedDots = parseAbilityDotEffects(attackDefinition.dot_effects);
     const allAttackDots = [
       ...guaranteedDots,
-      ...attackEffectGroups.flatMap((group) => group.dots),
+      ...currentAttackTargets.flatMap((target) => attackEffectGroups.flatMap((group) =>
+        attackGroupEdits[`${target.id}:${group.id}`]?.dots ?? group.dots)),
     ];
     const dotAttributeValues = snapshotDotAttributeValues(allAttackDots);
     if (!dotAttributeValues) return;
+    // Only selected attack categories with temporary edits send overrides.
+    const groupOverridesForTarget = (targetId: string) => Object.fromEntries(
+      attackEffectGroups.filter((group) =>
+        (attackEffectHits[targetId] ?? []).includes(group.id) &&
+        attackGroupEdits[`${targetId}:${group.id}`]
+      ).map((group) => [group.id, attackGroupEdits[`${targetId}:${group.id}`]])
+    );
     const dotTargetSelections = currentAttackTargets.map((target) => ({
       target_id: target.id,
       hit: attackHits[target.id] === true,
       group_ids: attackHits[target.id] === true
         ? (attackEffectHits[target.id] ?? []).filter((groupId) => attackEffectGroups.some((group) => group.id === groupId))
         : [],
+      group_overrides: attackHits[target.id] === true ? groupOverridesForTarget(target.id) : {},
     }));
     const extraMana = Math.max(0, Math.min(1000000, Math.floor(Number(extraManaCosts[attackAbility.id] ?? 0) || 0)));
     setAttackBusy(true);
@@ -603,6 +620,7 @@ export function CharacterAbilitiesPanel({
         _hit_effect_groups: hitTargets.map((target) => ({
           target_id: target.id,
           group_ids: (attackEffectHits[target.id] ?? []).filter((groupId) => attackEffectGroups.some((group) => group.id === groupId)),
+          group_overrides: groupOverridesForTarget(target.id),
         })),
         _dot_target_selections: dotTargetSelections,
         _dot_attribute_values: dotAttributeValues,
@@ -672,6 +690,10 @@ export function CharacterAbilitiesPanel({
 
       setAttackResults(results);
       setAttackCount((count) => count + 1);
+      // Another Causar o Ataque starts with the saved defaults; changing them
+      // again requires opening Maximizar for that target/category.
+      setAttackExpandedGroups({});
+      setAttackGroupEdits({});
       toast.success(hitTargets.length
         ? `${attackAbility.name}: golpe aplicado em ${hitTargets.length} alvo(s).${!continuingAttack && typeof spentMana === "number" && spentMana > 0 ? ` Mana gasta: ${spentMana}.` : ""}`
         : `${attackAbility.name}: aplicação sem acertos.${!continuingAttack && typeof spentMana === "number" && spentMana > 0 ? ` Mana gasta: ${spentMana}.` : ""}`);
@@ -751,6 +773,8 @@ export function CharacterAbilitiesPanel({
       setAttackStarted(false);
       setAttackCount(0);
       setAttackResults({});
+      setAttackExpandedGroups({});
+      setAttackGroupEdits({});
     } catch (error) {
       toast.error("Não foi possível finalizar o ataque: " + (error instanceof Error ? error.message : String(error)));
     } finally {
@@ -1177,42 +1201,61 @@ export function CharacterAbilitiesPanel({
                                   <div className="text-sm font-semibold text-gold">Efeitos que acertaram</div>
                                   <p className="mt-1 text-xs text-muted-foreground">Marque cada categoria separadamente. Os efeitos de uma categoria não são aplicados se ela não estiver marcada.</p>
                                 </div>
-                                {attackEffectGroups.map((group) => (
-                                  <label key={group.id} className="flex cursor-pointer items-start gap-2 rounded-md border border-border/70 px-3 py-2 text-sm">
-                                    <input type="checkbox" className="mt-1" disabled={attackBusy}
+                                {attackEffectGroups.map((group) => {
+                                  const editKey = `${target.id}:${group.id}`;
+                                  const edits = attackGroupEdits[editKey];
+                                  const shownEffects = edits?.effects ?? group.effects;
+                                  const shownDots = edits?.dots ?? group.dots;
+                                  const summary = [
+                                    ...shownEffects.map((effect) => effectSummary(effect, defs ?? [], damageTypes, races ?? [])),
+                                    ...(defenseIgnoreText(group.defense_ignore) ? [`Ignorar defesa: ${defenseIgnoreText(group.defense_ignore)}`] : []),
+                                    ...shownDots.map((dot) => {
+                                      const type = dot.damage_kind === "physical"
+                                        ? (damageTypes.find((item) => item.id === dot.physical_damage_type_id)?.name ?? "tipo físico")
+                                        : (damageTypes.find((item) => item.id === dot.damage_type_id)?.name ?? "tipo mágico") + " · " + (dot.magic_level ?? "baixa");
+                                      const amountText = dot.damage_mode === "percent"
+                                        ? (dot.damage_amount + "% do HP máximo por turno")
+                                        : dot.damage_mode === "attribute"
+                                          ? ((dot.attribute_percent + "% de " + (defs?.find((def) => def.key === dot.attribute_key)?.label ?? dot.attribute_key ?? "atributo")) + " + " + dot.fixed_damage + " fixos por turno")
+                                          : (dot.damage_amount + " de dano por turno");
+                                      return `DoT ${dot.name} — ${dot.damage_kind === "physical" ? "físico" : "mágico"} · ${type} · ${amountText} · ${dot.duration} turno(s)`;
+                                    }),
+                                  ].join(" · ") || "Sem efeitos configurados";
+                                  return (
+                                    <TemporaryAttackCategoryEditor
+                                      key={editKey}
+                                      group={group}
+                                      targetName={target.name}
                                       checked={(attackEffectHits[target.id] ?? []).includes(group.id)}
-                                      onChange={(event) => setAttackEffectHits((current) => {
+                                      expanded={attackExpandedGroups[editKey] === true}
+                                      disabled={attackBusy}
+                                      summary={summary}
+                                      effects={shownEffects}
+                                      dots={shownDots}
+                                      defs={defs ?? []}
+                                      damageTypes={damageTypes}
+                                      onCheckedChange={(checked) => setAttackEffectHits((current) => {
                                         const selected = current[target.id] ?? [];
-                                        return {
-                                          ...current,
-                                          [target.id]: event.target.checked
-                                            ? [...new Set([...selected, group.id])]
-                                            : selected.filter((id) => id !== group.id),
-                                        };
-                                      })} />
-                                    <span>
-                                      <span className="block font-medium">{group.name} — {group.chance}% de chance</span>
-                                      <span className="mt-1 block text-xs text-muted-foreground">
-                                        {[
-                                          ...group.effects.map((effect) => effectSummary(effect, defs ?? [], damageTypes, races ?? [])),
-                                          ...(defenseIgnoreText(group.defense_ignore) ? [`Ignorar defesa: ${defenseIgnoreText(group.defense_ignore)}`] : []),
-                                          ...group.dots.map((dot) => {
-                                            const type = dot.damage_kind === "physical"
-                                              ? (damageTypes.find((item) => item.id === dot.physical_damage_type_id)?.name ?? "tipo físico")
-                                              : (damageTypes.find((item) => item.id === dot.damage_type_id)?.name ?? "tipo mágico") + " · " + (dot.magic_level ?? "baixa");
-                                            const amountText = dot.damage_mode === "percent"
-                                              ? (dot.damage_amount + "% do HP máximo por turno")
-                                              : dot.damage_mode === "attribute"
-                                                ? ((dot.attribute_percent + "% de " + (defs?.find((def) => def.key === dot.attribute_key)?.label ?? dot.attribute_key ?? "atributo")) + " + " + dot.fixed_damage + " fixos por turno")
-                                                : (dot.damage_amount + " de dano por turno");
-                                            return `DoT ${dot.name} — ${dot.damage_kind === "physical" ? "físico" : "mágico"} · ${type} · ${amountText} · ${dot.duration} turno(s)`;
-                                          }),
-                                        ].join(" · ") || "Sem efeitos configurados"}
-                                      </span>
-                                      <span className="mt-1 block text-[11px] text-muted-foreground">Marque esta categoria se os efeitos acertaram este alvo.</span>
-                                    </span>
-                                  </label>
-                                ))}
+                                        return { ...current, [target.id]: checked
+                                          ? [...new Set([...selected, group.id])]
+                                          : selected.filter((id) => id !== group.id) };
+                                      })}
+                                      onExpandedChange={() => {
+                                        setAttackExpandedGroups((current) => ({ ...current, [editKey]: !current[editKey] }));
+                                        setAttackGroupEdits((current) => current[editKey] ? current : {
+                                          ...current, [editKey]: { effects: group.effects.map((effect) => ({ ...effect })),
+                                            dots: group.dots.map((dot) => ({ ...dot })) },
+                                        });
+                                      }}
+                                      onEffectsChange={(effects) => setAttackGroupEdits((current) => ({
+                                        ...current, [editKey]: { effects, dots: current[editKey]?.dots ?? group.dots },
+                                      }))}
+                                      onDotsChange={(dots) => setAttackGroupEdits((current) => ({
+                                        ...current, [editKey]: { effects: current[editKey]?.effects ?? group.effects, dots },
+                                      }))}
+                                    />
+                                  );
+                                })}
                               </div>
                             )}
                             <div className="grid gap-2 sm:grid-cols-2">
