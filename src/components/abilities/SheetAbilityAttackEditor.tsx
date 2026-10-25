@@ -30,7 +30,7 @@ function createAbilityDot(physicalTypes: DotDamageTypeOption[], magicalTypes: Do
   };
 }
 
-function AbilityDotEffectsEditor({
+export function AbilityDotEffectsEditor({
   dots, onChange, defs, physicalTypes, magicalTypes, title, description,
 }: {
   dots: AbilityDotEffect[];
