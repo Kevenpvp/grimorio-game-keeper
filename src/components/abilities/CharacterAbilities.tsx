@@ -19,12 +19,13 @@ import { parseCustomAbilityAttributes, type CustomAbilityAttribute } from "@/lib
  * state and the character's individual turn, never the ability's toggle cooldown.
  */
 function SedentoInvincibilityInfo({
-  ability, mode, battleId, individualTurn,
+  ability, mode, battleId, individualTurn, activeEffects,
 }: {
   ability: CharacterAbility;
   mode: "sheet" | "combat";
   battleId?: string;
   individualTurn?: number;
+  activeEffects: Array<{ id: string; effect_type: string; name: string; duration: number; source_character_ability_id: string | null }>;
 }) {
   const state = ability.custom_state && typeof ability.custom_state === "object"
     && !Array.isArray(ability.custom_state)
@@ -53,6 +54,11 @@ function SedentoInvincibilityInfo({
   const cooldown = sedentoInvincibilityCooldown(state, currentBattleId, currentTurn);
   const hasTurn = cooldown.initialized && cooldown.remaining !== null;
   const isReady = hasTurn && cooldown.remaining === 0;
+  const invincibility = activeEffects.find((effect) =>
+    effect.effect_type === "invincible"
+    && effect.source_character_ability_id === ability.id
+    && (mode !== "combat" || !!battleId)
+  );
 
   return (
     <div className="mt-3 space-y-1.5 rounded-md border border-red-500/30 bg-red-500/5 p-3 text-xs">
@@ -74,6 +80,11 @@ function SedentoInvincibilityInfo({
           Habilidade {ability.toggle_active ? "ligada" : "desligada"}
         </span>
       </div>
+      {invincibility && (
+        <p className="font-semibold text-emerald-400">
+          Invencibilidade ATIVA · {invincibility.duration} turno(s) restante(s)
+        </p>
+      )}
       {hasTurn ? (
         <p className="text-muted-foreground">
           Turno individual atual: {cooldown.currentTurn} · Invencibilidade disponível novamente no turno {cooldown.readyAt}.
@@ -645,6 +656,19 @@ export function CharacterAbilitiesPanel({
     }
   }
 
+  function dispatchAndRefreshAbilityEffects(scriptBattleId?: string | null) {
+    void dispatchCustomAbilityScriptEvents(scriptBattleId).then(() => {
+      // An effect such as Sedento's Invencibilidade may be created by the
+      // Edge script *after* the activation RPC returned.
+      void Promise.all([
+        qc.invalidateQueries({ queryKey: ["character-active-effects", characterId] }),
+        qc.invalidateQueries({ queryKey: ["battle-effects"] }),
+        qc.invalidateQueries({ queryKey: ["character-abilities", characterId] }),
+        qc.invalidateQueries({ queryKey: ["battles"] }),
+      ]);
+    });
+  }
+
   async function activate(ability: CharacterAbility) {
     if (!canUse || mode !== "combat" || !ability.can_activate || ability.cooldown_turns < 0 || ability.cooldown_remaining > 0 || busyId || ability.toggle_active) return;
     if ((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle && mode === "combat" && usedOnceAbilityIds.includes(ability.id)) {
@@ -679,7 +703,7 @@ export function CharacterAbilitiesPanel({
     // O custo extra é enviado apenas nesta ativação; o valor salvo na ficha nunca muda.
     setExtraManaCosts((current) => ({ ...current, [ability.id]: "0" }));
     toast.success(`${ability.name} ativada!${typeof spentMana === "number" && spentMana > 0 ? ` Mana gasta: ${spentMana}.` : ""}`);
-    void dispatchCustomAbilityScriptEvents(mode === "combat" ? battleId : null);
+    dispatchAndRefreshAbilityEffects(mode === "combat" ? battleId : null);
     await Promise.all([
       qc.invalidateQueries({ queryKey: ["character-abilities", characterId] }),
       qc.invalidateQueries({ queryKey: ["character-abilities-battle"] }),
@@ -698,7 +722,7 @@ export function CharacterAbilitiesPanel({
     setBusyId(null);
     if (error) { toast.error(error.message); return; }
     toast.success(`${ability.name} desativada. Seus efeitos foram encerrados.`);
-    void dispatchCustomAbilityScriptEvents(battleId);
+    dispatchAndRefreshAbilityEffects(battleId);
     await Promise.all([
       qc.invalidateQueries({ queryKey: ["character-abilities", characterId] }),
       qc.invalidateQueries({ queryKey: ["character-abilities-battle"] }),
@@ -833,6 +857,7 @@ export function CharacterAbilitiesPanel({
                     mode={mode}
                     battleId={battleId}
                     individualTurn={individualTurn}
+                    activeEffects={activeEffects}
                   />
                 )}
                 {mode === "combat" && battleId && (
