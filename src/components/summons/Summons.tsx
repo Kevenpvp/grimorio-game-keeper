@@ -206,6 +206,7 @@ export function SummonGrantsEditor({ characterId, abilityId, master }: {
       summoner_character_id: characterId ?? null,
       ability_id: abilityId ?? null,
       template_character_id: templateId,
+      display_name: available.find((option) => option.id === templateId)?.name ?? "",
       custom_stats: {},
       transfer_stats: {},
       borrowed_assignment_ids: [],
