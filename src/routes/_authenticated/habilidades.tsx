@@ -18,6 +18,7 @@ import {
 } from "@/lib/custom-ability-scripts";
 import { useDefs, useMe } from "@/lib/sheets";
 import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
+import { SummonGrantsEditor } from "@/components/summons/Summons";
 import type { Json } from "@/integrations/supabase/types";
 
 export const Route = createFileRoute("/_authenticated/habilidades")({
@@ -845,6 +846,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
         defs={defs}
         allowHealing={false}
       />
+      {canActivate && <SummonGrantsEditor abilityId={ability.id} master />}
       <div className="flex flex-wrap gap-2 border-t border-border pt-3">
         <Button disabled={busy} onClick={() => void save()}>{busy ? "Salvando..." : isNew ? "Salvar nova habilidade" : "Salvar habilidade"}</Button>
         <Button disabled={busy} variant="destructive" onClick={() => void remove()}><Trash2 className="mr-1 h-4 w-4" /> Excluir</Button>
