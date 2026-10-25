@@ -109,6 +109,8 @@ export type AbilityAttackDamageConfig = {
 export type AbilityDotDamageMode = "fixed" | "percent" | "attribute";
 export type AbilityDotEffect = {
   id: string;
+  /** Reference to the globally registered DoT (its identity and damage type). */
+  template_id?: string | null;
   name: string;
   damage_kind: "physical" | "magical";
   physical_damage_type_id: string | null;
@@ -138,6 +140,7 @@ export function parseAbilityDotEffects(value: unknown): AbilityDotEffect[] {
     if (!damageKind) return [];
     return [{
       id: typeof raw.id === "string" && raw.id.trim() ? raw.id : `dot-${index + 1}`,
+      template_id: typeof raw.template_id === "string" && raw.template_id ? raw.template_id : null,
       name,
       damage_kind: damageKind,
       physical_damage_type_id: typeof raw.physical_damage_type_id === "string" ? raw.physical_damage_type_id : null,
