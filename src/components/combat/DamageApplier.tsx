@@ -6,6 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
+import { DefenseIgnoreInputs } from "@/components/abilities/DefenseIgnoreInputs";
+import { applyAbilityTargetDamage, isValidAbilityTargetAdjustment } from "@/lib/ability-attack-damage";
+import { defenseIgnoreText, ZERO_DEFENSE_IGNORE, type DefenseIgnore } from "@/lib/defense-ignore";
 import { type AbilityEffectDefinition, useDotTemplates } from "@/lib/abilities";
 import { useDefs } from "@/lib/sheets";
 import type { Json } from "@/integrations/supabase/types";
@@ -34,6 +37,9 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
   const [magicLevel, setMagicLevel] = useState<MagicLevel>("baixa");
   const [sourceCharacterId, setSourceCharacterId] = useState(defaultSourceCharacterId ?? "");
   const [criticalDamage, setCriticalDamage] = useState(false);
+  const [extraDamageFixed, setExtraDamageFixed] = useState("0");
+  const [extraDamagePercent, setExtraDamagePercent] = useState("0");
+  const [defenseIgnore, setDefenseIgnore] = useState<DefenseIgnore>({ ...ZERO_DEFENSE_IGNORE });
   const [applyingDamage, setApplyingDamage] = useState(false);
   const [effects, setEffects] = useState<AbilityEffectDefinition[]>([]);
   const [dots, setDots] = useState<ManualDotDraft[]>([]);
@@ -161,6 +167,16 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
         return;
       }
     }
+    const adjustmentFixed = Number(extraDamageFixed);
+    const adjustmentPercent = Number(extraDamagePercent);
+    if (!isValidAbilityTargetAdjustment(adjustmentFixed, adjustmentPercent)) {
+      toast.error("Ajuste fixo deve ser inteiro entre -1.000.000 e +1.000.000; percentual entre -100% e +1000%.");
+      return;
+    }
+    // Each hit uses its own raw value, even in list mode. Damage bonuses from
+    // the source and armor/mitigation are still calculated on the server.
+    values = values.map((value) => applyAbilityTargetDamage(value, adjustmentFixed, adjustmentPercent));
+
     if (needsMagic && !selectedMagicDamageTypeId) {
       setCriticalDamage(false);
       toast.error("Selecione um tipo de dano mágico");
@@ -194,6 +210,7 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
           _magic_level: needsMagic ? magicLevel : null,
           _source_character_id: effectiveSourceCharacterId,
           _critical_damage: criticalDamageForThisHit,
+          _defense_ignore: damageKind === "true" ? ZERO_DEFENSE_IGNORE : defenseIgnore,
         },
       });
       if (error) {
@@ -292,8 +309,12 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
               + reductionPart(`Mitigação da metade mágica (${magicTypeName}, grau ${magicLevel})`, magicalReductionFixed, magicalReductionPercent)
             : "";
       const criticalSummary = result.critical_damage === true ? "⚔️ DANO CRÍTICO ×2 aplicado. " : "";
+      const manualDamageSummary = adjustmentFixed || adjustmentPercent
+        ? ` Ajuste por golpe: ${adjustmentFixed >= 0 ? "+" : ""}${adjustmentFixed} fixo, ${adjustmentPercent >= 0 ? "+" : ""}${adjustmentPercent}%.` : "";
+      const penetrationSummary = damageKind !== "true" && defenseIgnoreText(defenseIgnore)
+        ? ` Defesa ignorada: ${defenseIgnoreText(defenseIgnore)}.` : "";
       toast.success(
-        `${criticalSummary}${target.name}: ${result.hits} golpe(s) de ${damageDescription}; ${defenseText}; ${result.total_damage} de dano total. HP: ${result.hp_before} → ${result.hp_after}.${sourceSummary}${reductionSummary}${hitSummary}`,
+        `${criticalSummary}${target.name}: ${result.hits} golpe(s) de ${damageDescription}; ${defenseText}; ${result.total_damage} de dano total. HP: ${result.hp_before} → ${result.hp_after}.${manualDamageSummary}${penetrationSummary}${sourceSummary}${reductionSummary}${hitSummary}`,
         { duration: 8000 },
       );
       const hookErrors = result.custom_script_hooks?.errors ?? [];
@@ -422,6 +443,43 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
           <Input value={damageList} onChange={(e) => setDamageList(e.target.value)} placeholder="50, 35, 45, 86, 20, 10, 50" />
         </div>
       )}
+      <div className="space-y-3 rounded-md border border-gold/30 p-3">
+        <h4 className="text-sm font-semibold text-gold">Modificadores de dano em {target.name}</h4>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="space-y-1 text-xs font-medium">
+            Aumentar ou reduzir o dano (valor fixo +/-)
+            <Input type="number" min={-1000000} max={1000000} step={1}
+              disabled={applyingDamage} value={extraDamageFixed}
+              onChange={(event) => setExtraDamageFixed(event.target.value)} />
+          </label>
+          <label className="space-y-1 text-xs font-medium">
+            Aumentar ou reduzir o dano (% +/-)
+            <Input type="number" min={-100} max={1000} step={1}
+              disabled={applyingDamage} value={extraDamagePercent}
+              onChange={(event) => setExtraDamagePercent(event.target.value)} />
+          </label>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Aplica o ajuste fixo e depois o percentual em cada golpe, antes de calcular defesa, buffs e redução de dano.
+          Por exemplo: 50 + 10 fixos - 50% = 30 de dano bruto por golpe.
+        </p>
+        {damageKind !== "true" ? (
+          <div className="border-t border-border/60 pt-3">
+            <DefenseIgnoreInputs
+              title="Ignorar Defesa Física ou Defesa Mágica neste alvo"
+              value={defenseIgnore}
+              onChange={setDefenseIgnore}
+              disabled={applyingDamage}
+            />
+            <p className="mt-2 text-xs text-muted-foreground">
+              A porcentagem reduz primeiro a defesa efetiva, depois o valor fixo; o mínimo é zero.
+              Defesa ignorada não remove outros efeitos de mitigação.
+            </p>
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">Dano verdadeiro já ignora ambas as defesas.</p>
+        )}
+      </div>
       <label className="flex cursor-pointer items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
         <input
           type="checkbox"
