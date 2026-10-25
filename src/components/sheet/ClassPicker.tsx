@@ -137,10 +137,10 @@ export function ClassPicker({ character, isMaster }: { character: Character; isM
                   <div className="mt-3 space-y-2 rounded-md border border-gold/25 bg-gold/5 p-3">
                     <div>
                       <div className="text-xs font-semibold text-gold">Bônus extras desta ficha</div>
-                      <p className="mt-1 text-[11px] text-muted-foreground">Só afeta este personagem enquanto ele tiver esta classe. Os modificadores base da classe continuam iguais para todos.</p>
+                      <p className="mt-1 text-[11px] text-muted-foreground">Só afeta este personagem enquanto ele tiver esta classe. Os modificadores base da classe continuam iguais para todos. Cada +1 ponto de Mana concede +50 de Mana máxima.</p>
                     </div>
                     <div className="grid gap-2 sm:grid-cols-2">
-                      {defs.filter((definition) => definition.key !== "hp" && definition.key !== "mana").map((definition) => (
+                      {defs.filter((definition) => definition.key !== "hp").map((definition) => (
                         <label key={definition.key} className="space-y-1 text-xs font-medium">
                           + {definition.label}
                           <input
