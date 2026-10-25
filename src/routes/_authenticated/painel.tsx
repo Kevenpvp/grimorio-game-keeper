@@ -39,7 +39,7 @@ function PlayerView({ userId }: { userId: string }) {
   const { data: mine, isLoading, error } = useQuery({
     queryKey: ["my-character", userId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("characters").select("id").eq("owner_id", userId).limit(1).maybeSingle();
+      const { data, error } = await supabase.from("characters").select("id").eq("owner_id", userId).eq("is_summon_snapshot", false).limit(1).maybeSingle();
       if (error) throw error;
       return data;
     },
@@ -95,6 +95,7 @@ function MasterDashboard() {
       const { data, error } = await supabase
         .from("characters")
         .select("*, character_attributes(attribute_key,current_value,max_value,points,bonus)")
+        .eq("is_summon_snapshot", false)
         .order("name");
       if (error) throw error;
       return data;
