@@ -10,6 +10,12 @@ describe("modificador de dano por alvo", () => {
     expect(applyAbilityTargetDamage(50, 0, -50)).toBe(25);
     expect(applyAbilityTargetDamage(50, 0, -100)).toBe(0);
   });
+  it("usa os mesmos ajustes em todos os golpes do Aplicar Dano, preservando a ordem da lista", () => {
+    expect([50, 35, 45].map((hit) => applyAbilityTargetDamage(hit, 10, -50)))
+      .toEqual([30, 23, 28]);
+    expect(Array.from({ length: 3 }, () => 50).map((hit) => applyAbilityTargetDamage(hit, -5, 20)))
+      .toEqual([54, 54, 54]);
+  });
   it("combina ajustes fixos e percentuais sem criar dano negativo", () => {
     expect(applyAbilityTargetDamage(50, 10, -25)).toBe(45);
     expect(applyAbilityTargetDamage(50, -20, 20)).toBe(36);
