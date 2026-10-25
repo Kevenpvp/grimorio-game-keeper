@@ -247,6 +247,8 @@ function CharacterAbilityCustomAttributesEditor({
 }
 
 export function effectSummary(effect: AbilityEffectDefinition, defs: NonNullable<ReturnType<typeof useDefs>["data"]>, damageTypes: NonNullable<ReturnType<typeof useDamageTypes>["data"]>, races: NonNullable<ReturnType<typeof useRaces>["data"]>) {
+  if (effect.effect_type === "visual_tag") return `🏷️ ${effect.name}`;
+  if (effect.effect_type === "temporal_freeze") return `${effect.name}: Congelamento temporal · imune a dano e a perdas de Mana/Corpo`;
   const amount = effect.value_mode === "percent" ? `${effect.amount}%` : effect.effect_type === "damage_dealt" ? String(effect.amount) : (effect.effect_type === "mana_regeneration" || effect.effect_type === "mana_used") ? `${effect.amount} Mana` : `${effect.amount} pontos`;
   const polarity = effect.polarity === "buff" ? "+" : "−";
   if (effect.effect_type === "status") return `${effect.name}: ${polarity}${amount} em ${defs.find((d) => d.key === effect.attribute_key)?.label ?? effect.attribute_key}`;
@@ -869,8 +871,8 @@ export function CharacterAbilitiesPanel({
               <div className="text-xs font-semibold text-muted-foreground">Efeitos ativos no personagem</div>
               <div className="flex flex-wrap gap-1.5">
                 {activeEffects.map((effect) => (
-                  <span key={effect.id} className="rounded bg-muted px-2 py-1 text-xs">
-                    {effect.name} · {(effect as typeof effect & { source_class_id?: string | null }).source_class_id ? "permanente (classe)" : effect.source_race_id ? "permanente (raça)" : effect.until_combat_end ? "até o fim do combate" : `${effect.duration} turno(s)`}
+                  <span key={effect.id} className={`rounded border px-2 py-1 text-xs ${effect.effect_type === "visual_tag" ? "border-violet-500/40 bg-violet-500/10 text-violet-300" : effect.effect_type === "temporal_freeze" ? "border-sky-500/40 bg-sky-500/10 text-sky-300" : "border-border bg-muted"}`}>
+                    {effect.effect_type === "visual_tag" ? "🏷️ " : ""}{effect.name} · {(effect as typeof effect & { source_class_id?: string | null }).source_class_id ? "permanente (classe)" : effect.source_race_id ? "permanente (raça)" : effect.until_combat_end ? "até o fim do combate" : `${effect.duration} turno(s)`}
                   </span>
                 ))}
               </div>
@@ -887,6 +889,9 @@ export function CharacterAbilitiesPanel({
                       {ability.granted_by_virtue_id && (
                         <span className="rounded bg-gold/10 px-2 py-1 text-gold">Concedida por virtude</span>
                       )}
+                      {ability.passive_effects.filter((effect) => effect.effect_type === "visual_tag").map((tag,index) => (
+                        <span key={`tag-${index}`} className="rounded border border-violet-500/40 bg-violet-500/10 px-2 py-1 text-violet-300">🏷️ {tag.name}</span>
+                      ))}
                       <span className={`rounded px-2 py-1 ${ability.is_magical ? "bg-violet-500/10 text-violet-300" : "bg-muted text-muted-foreground"}`}>
                         {ability.is_magical ? "Habilidade Mágica" : "Não mágica"}
                       </span>
