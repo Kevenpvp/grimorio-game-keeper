@@ -518,7 +518,7 @@ export function CharacterAbilitiesPanel({
   }, [characterId]);
 
   function openAttackDialog(ability: CharacterAbility) {
-    if (!canUse || mode !== "combat" || !battleId || !ability.can_activate || ability.cooldown_remaining > 0 || ability.cooldown_turns < 0) return;
+    if (!canUse || mode !== "combat" || !battleId || !ability.can_activate || ability.cooldown_remaining > 0 || ability.active_duration_remaining > 0 || ability.cooldown_turns < 0) return;
     if ((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle && usedOnceAbilityIds.includes(ability.id)) {
       toast.error("Esta habilidade já foi usada neste combate.");
       return;
@@ -770,7 +770,7 @@ export function CharacterAbilitiesPanel({
   }
 
   async function activate(ability: CharacterAbility) {
-    if (!canUse || mode !== "combat" || !ability.can_activate || ability.cooldown_turns < 0 || ability.cooldown_remaining > 0 || busyId || ability.toggle_active) return;
+    if (!canUse || mode !== "combat" || !ability.can_activate || ability.cooldown_turns < 0 || ability.cooldown_remaining > 0 || ability.active_duration_remaining > 0 || busyId || ability.toggle_active) return;
     if ((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle && mode === "combat" && usedOnceAbilityIds.includes(ability.id)) {
       toast.error("Esta habilidade já foi usada neste combate.");
       return;
@@ -901,9 +901,10 @@ export function CharacterAbilitiesPanel({
                         <span className="rounded bg-gold/10 px-2 py-1 text-gold"><Sparkles className="mr-1 inline h-3 w-3" /> Não ativável</span>
                       ) : (
                         <span className={`rounded px-2 py-1 ${ability.cooldown_remaining > 0 ? "bg-muted text-muted-foreground" : "bg-emerald-500/10 text-emerald-500"}`}>
-                          <Clock3 className="mr-1 inline h-3 w-3" /> {ability.toggle_active ? "Em uso" : ability.cooldown_remaining > 0 ? `Cooldown: ${ability.cooldown_remaining} turno(s)` : "Pronta para usar"}
+                          <Clock3 className="mr-1 inline h-3 w-3" /> {ability.toggle_active ? "Em uso" : ability.active_duration_remaining > 0 ? `Em duração: ${ability.active_duration_remaining} turno(s)` : ability.cooldown_remaining > 0 ? `Cooldown: ${ability.cooldown_remaining} turno(s)` : "Pronta para usar"}
                         </span>
                       )}
+                      {ability.active_duration_remaining > 0 && <span className="rounded bg-sky-500/15 px-2 py-1 text-sky-400">Duração: {ability.active_duration_remaining} turno(s) · recarga após terminar</span>}
                       {ability.can_activate && ability.mana_cost > 0 && <span className="rounded bg-muted px-2 py-1">Custo base: {ability.mana_cost} Mana</span>}
                       {ability.can_activate && !ability.mana_cost && <span className="rounded bg-muted px-2 py-1">Sem custo base de Mana</span>}
                     </div>
@@ -915,7 +916,7 @@ export function CharacterAbilitiesPanel({
                           <Zap className="mr-1 h-3.5 w-3.5" /> {busyId === ability.id ? "Desativando..." : "Desativar"}
                         </Button>
                       ) : (
-                        <Button size="sm" disabled={busyId !== null || attackBusy || ability.cooldown_turns < 0 || ability.cooldown_remaining > 0 || (Boolean((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle) && mode === "combat" && usedOnceAbilityIds.includes(ability.id))} onClick={() => void activate(ability)}>
+                        <Button size="sm" disabled={busyId !== null || attackBusy || ability.cooldown_turns < 0 || ability.cooldown_remaining > 0 || ability.active_duration_remaining > 0 || (Boolean((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle) && mode === "combat" && usedOnceAbilityIds.includes(ability.id))} onClick={() => void activate(ability)}>
                           <Zap className="mr-1 h-3.5 w-3.5" /> {busyId === ability.id ? "Ativando..." : ability.toggle_mode ? "Ligar" : "Ativar"}
                         </Button>
                       )}
@@ -946,7 +947,7 @@ export function CharacterAbilitiesPanel({
                           ? abilityCatalog.some((catalogAbility) => catalogAbility.id === ability.ability_id && catalogAbility.attack_enabled)
                           : ability.attack_enabled
                       ) && (
-                        <Button size="sm" variant="outline" disabled={busyId !== null || attackBusy || attackDialogAbilityId !== null || ability.cooldown_turns < 0 || ability.cooldown_remaining > 0 || (Boolean((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle) && usedOnceAbilityIds.includes(ability.id))} onClick={() => openAttackDialog(ability)}>
+                        <Button size="sm" variant="outline" disabled={busyId !== null || attackBusy || attackDialogAbilityId !== null || ability.cooldown_turns < 0 || ability.cooldown_remaining > 0 || ability.active_duration_remaining > 0 || (Boolean((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle) && usedOnceAbilityIds.includes(ability.id))} onClick={() => openAttackDialog(ability)}>
                           <Swords className="mr-1 h-3.5 w-3.5" /> Atacar
                         </Button>
                       )}
@@ -1480,6 +1481,7 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
   const [isMagical, setIsMagical] = useState(ability.is_magical);
   const [selfTargetOnly, setSelfTargetOnly] = useState(ability.self_target_only);
   const [cooldown, setCooldown] = useState(String(ability.cooldown_turns));
+  const [duration, setDuration] = useState(String(ability.duration_turns ?? 0));
   const [manaCost, setManaCost] = useState(String(ability.mana_cost));
   const [effects, setEffects] = useState<AbilityEffectDefinition[]>(ability.effects);
   const [passiveEffects, setPassiveEffects] = useState<AbilityEffectDefinition[]>(ability.passive_effects);
@@ -1501,6 +1503,7 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
     setIsMagical(ability.is_magical);
     setSelfTargetOnly(ability.self_target_only);
     setCooldown(String(ability.cooldown_turns));
+    setDuration(String(ability.duration_turns ?? 0));
     setManaCost(String(ability.mana_cost));
     setEffects(parseAbilityEffects(ability.effects));
     setPassiveEffects(parseAbilityEffects(ability.passive_effects));
@@ -1513,6 +1516,7 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
 
   async function save() {
     const cooldownTurns = canActivate ? Math.floor(Number(cooldown)) : 0;
+    const durationTurns = canActivate && !toggleMode ? Math.floor(Number(duration)) : 0;
     const cost = Math.floor(Number(manaCost));
     if (!name.trim()) { toast.error("Informe o nome"); return; }
     if (ability.toggle_active) { toast.error("Desative esta habilidade antes de alterar sua configuração."); return; }
@@ -1537,6 +1541,8 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
         return;
       }
     }
+    if (!Number.isInteger(durationTurns) || durationTurns < 0 || durationTurns > 1000) { toast.error("Duração deve ser um inteiro de 0 a 1000 turnos."); return; }
+    if (ability.active_duration_remaining > 0) { toast.error("Aguarde o fim da duração antes de alterar a habilidade."); return; }
     if (!Number.isFinite(cost) || cost < 0) { toast.error("Custo de Mana inválido"); return; }
     if (canActivate && (!Number.isFinite(cooldownTurns) || cooldownTurns < 0)) { toast.error("O cooldown precisa ser 0 ou maior"); return; }
     const canTriggerEndEffects = effects.some((effect) =>
@@ -1573,6 +1579,7 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
       self_target_only: canActivate && selfTargetOnly,
       is_passive: !canActivate,
       cooldown_turns: cooldownTurns,
+      duration_turns: durationTurns,
       cooldown_remaining: canActivate ? Math.min(ability.cooldown_remaining, cooldownTurns) : 0,
       mana_cost: canActivate ? cost : 0,
       effects: effects.map((effect) => ({ ...effect, duration: Math.max(1, effect.duration) })) as unknown as Json,
@@ -1630,7 +1637,7 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="font-semibold">{ability.name}</div>
-          <div className="text-xs text-muted-foreground">{ability.is_magical ? "Habilidade Mágica · " : "Não mágica · "}{ability.granted_by_virtue_id ? "Concedida por virtude · " : ""}{ability.can_activate ? `Cooldown atual: ${ability.cooldown_remaining}/${ability.cooldown_turns}` : "Não ativável · efeitos passivos permanentes"}</div>
+          <div className="text-xs text-muted-foreground">{ability.is_magical ? "Habilidade Mágica · " : "Não mágica · "}{ability.active_duration_remaining > 0 ? `Em duração: ${ability.active_duration_remaining} turno(s) · ` : ""}{ability.granted_by_virtue_id ? "Concedida por virtude · " : ""}{ability.can_activate ? `Cooldown atual: ${ability.cooldown_remaining}/${ability.cooldown_turns}` : "Não ativável · efeitos passivos permanentes"}</div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <Button
@@ -1684,6 +1691,9 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
         {canActivate && <div className="space-y-1"><Label>Custo base de Mana</Label><Input type="number" min="0" value={manaCost} onChange={(e) => setManaCost(e.target.value)} /></div>}
         {!canActivate && <p className="text-xs text-muted-foreground">Não ativável: não gasta Mana nem possui cooldown; seus efeitos passivos continuam funcionando.</p>}
         {canActivate && <div className="space-y-1"><Label>Cooldown máximo (turnos)</Label><Input type="number" min="0" value={cooldown} onChange={(e) => setCooldown(e.target.value)} /></div>}
+        {canActivate && !toggleMode && <div className="space-y-1"><Label>Duração da habilidade (turnos)</Label><Input type="number" min="0" max="1000" value={duration} onChange={(e) => setDuration(e.target.value)} />
+          <p className="text-[11px] text-muted-foreground">0 = sem duração. Se maior que 0, a recarga só começa quando a duração terminar.</p>
+        </div>}
         <div className="space-y-1 sm:col-span-2"><Label>Descrição para este jogador</Label><Input value={description} onChange={(e) => setDescription(e.target.value)} /></div>
       </div>
       {ability.ability_id === null && (
