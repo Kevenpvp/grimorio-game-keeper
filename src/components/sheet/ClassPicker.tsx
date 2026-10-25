@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { numberAllocation, useClasses, useDefs, type Character, type ClassTrait } from "@/lib/sheets";
 import { parseAbilityEffects, useAbilities } from "@/lib/abilities";
 import { ModsList } from "@/components/sheet/RacePicker";
+import { classSelectionHasChanges } from "@/lib/class-selection";
 
 export function ClassPicker({ character, isMaster }: { character: Character; isMaster: boolean }) {
   const qc = useQueryClient();
@@ -33,6 +34,14 @@ export function ClassPicker({ character, isMaster }: { character: Character; isM
     setPendingClassModifiers(Object.fromEntries(Object.entries(numberAllocation(character.class_custom_modifiers)).map(([key, value]) => [key, String(value)])));
   }, [character.id, character.class_id, character.class_custom_modifiers]);
 
+  const hasPendingChanges = classSelectionHasChanges({
+    selectedClassId: pendingClassId,
+    confirmedClassId: character.class_id ?? null,
+    draftModifiers: pendingClassModifiers,
+    confirmedModifiers: numberAllocation(character.class_custom_modifiers),
+    isMaster,
+  });
+
   if (!classes || !defs) return null;
   if (!isMaster && character.class_id) return null;
 
@@ -53,10 +62,7 @@ export function ClassPicker({ character, isMaster }: { character: Character; isM
         if (value > 0) cleanCustomModifiers[definition.key] = value;
       }
     }
-    const currentCustom = numberAllocation(character.class_custom_modifiers);
-    const customChanged = JSON.stringify(Object.fromEntries(Object.entries(cleanCustomModifiers).sort(([a], [b]) => a.localeCompare(b))))
-      !== JSON.stringify(Object.fromEntries(Object.entries(currentCustom).sort(([a], [b]) => a.localeCompare(b))));
-    if (pendingClassId === (character.class_id ?? null) && (!isMaster || !customChanged)) return;
+    if (!hasPendingChanges) return;
     setBusy(true);
     const { error } = await db.rpc("choose_character_class", {
       _character_id: character.id,
@@ -92,7 +98,7 @@ export function ClassPicker({ character, isMaster }: { character: Character; isM
         </div>
         <div className="flex items-center gap-2">
           {isMaster && pendingClassId && <Button size="sm" variant="ghost" disabled={busy} onClick={() => setPendingClassId(null)}>Nenhuma</Button>}
-          <Button size="sm" disabled={busy || (!isMaster && pendingClassId === (character.class_id ?? null)) || (!isMaster && !pendingClassId) || (noClasses && !pendingClassId)} onClick={() => void confirmClass()}>
+          <Button size="sm" disabled={busy || !hasPendingChanges || (!isMaster && !pendingClassId) || (noClasses && !pendingClassId)} onClick={() => void confirmClass()}>
             <Check className="mr-1 h-3.5 w-3.5" /> {busy ? "Confirmando..." : "Confirmar classe"}
           </Button>
         </div>
