@@ -11,6 +11,7 @@ import { dispatchCustomAbilityScriptEvents } from "@/lib/ability-script-runtime"
 import { applyAbilityTargetDamage, isValidAbilityTargetAdjustment } from "@/lib/ability-attack-damage";
 import { addDefenseIgnore, defenseIgnoreText, ZERO_DEFENSE_IGNORE, type DefenseIgnore } from "@/lib/defense-ignore";
 import { DefenseIgnoreInputs } from "@/components/abilities/DefenseIgnoreInputs";
+import { attackDiceModifier } from "@/lib/combat-dice";
 import { sedentoInvincibilityCooldown } from "@/lib/sedento-invincibility";
 import { useDefs, useMe, useRaces, useClasses, useVirtues } from "@/lib/sheets";
 import { parseAbilityEffects, parseAbilityAttackDamage, parseAbilityAttackEffectGroups, parseAbilityDotEffects, useAbilities, useCharacterAbilities, useCharacterActiveEffects, useDamageTypes, type Ability, type AbilityEffectDefinition, type CharacterAbility, type AbilityDotEffect } from "@/lib/abilities";
@@ -339,7 +340,7 @@ export function effectSummary(effect: AbilityEffectDefinition, defs: NonNullable
 }
 
 export function CharacterAbilitiesPanel({
-  characterId, characterName, mode, canUse, battleId, individualTurn, targets = [], getAttributeValue, showActiveEffects = true, allowCustomAttributeEdit = false,
+  characterId, characterName, mode, canUse, battleId, individualTurn, targets = [], stunnedTargetIds = [], getAttributeValue, showActiveEffects = true, allowCustomAttributeEdit = false,
 }: {
   characterId: string;
   characterName: string;
@@ -348,6 +349,7 @@ export function CharacterAbilitiesPanel({
   battleId?: string;
   individualTurn?: number;
   targets?: TargetOption[];
+  stunnedTargetIds?: string[];
   getAttributeValue?: (characterId: string, attributeKey: string) => number;
   /** Hide the active runtime effects list when viewing another character in combat. */
   showActiveEffects?: boolean;
@@ -1061,7 +1063,8 @@ export function CharacterAbilitiesPanel({
                   {currentAttackTargets.map((target) => {
                     const attackSpeed = statValue(characterId, "atk_speed");
                     const targetSpeed = statValue(target.id, "speed");
-                    const attackMod = diceModifier(attackSpeed, targetSpeed);
+                    const stunned = stunnedTargetIds.includes(target.id);
+                    const attackMod = attackDiceModifier(attackSpeed, targetSpeed, stunned);
                     const dodgeMod = diceModifier(targetSpeed, attackSpeed);
                     const extra = Number(attackExtraDamage[target.id] ?? 0) || 0;
                     const percent = Number(attackExtraDamagePercent[target.id] ?? 0) || 0;
@@ -1073,6 +1076,7 @@ export function CharacterAbilitiesPanel({
                             <div className="font-semibold">{target.name}</div>
                             <div className="mt-1 text-xs text-muted-foreground">Lançamento: ({attackSpeed} Velocidade de Ataque − {targetSpeed} Velocidade) ÷ 10, mínimo 0</div>
                             <div className="text-xs text-muted-foreground">Esquiva: ({targetSpeed} Velocidade − {attackSpeed} Velocidade de Ataque) ÷ 10, mínimo 0</div>
+                            {stunned && <div className="text-xs font-semibold text-amber-400">Alvo com Stun: +1 no dado de ataque.</div>}
                           </div>
 
                         </div>
