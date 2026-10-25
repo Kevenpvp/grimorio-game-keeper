@@ -167,7 +167,9 @@ function scheduleCombatRefresh(queryClient: QueryClient, ...queryKeys: QueryKey[
     batch.queryKeys.set(JSON.stringify(queryKey), queryKey);
   }
 
-  if (batch.timer) clearTimeout(batch.timer);
+  // Flush regularly even during a burst of Realtime events. Resetting the
+  // timer on every event could postpone a refresh indefinitely.
+  if (batch.timer) return;
   batch.timer = setTimeout(() => {
     if (pendingCombatRefreshes.get(queryClient) !== batch) return;
     pendingCombatRefreshes.delete(queryClient);
@@ -231,6 +233,12 @@ function useLiveBattles(isMaster: boolean, userId: string | undefined) {
   return useQuery({
     queryKey: ["battles", userId, isMaster],
     enabled: !!userId,
+    // Mobile browsers may suspend the Realtime connection in an embedded
+    // preview or after returning from another app. Poll visible battles as a
+    // bounded fallback, without needing a manual page reload.
+    refetchInterval: 5000,
+    refetchOnWindowFocus: "always",
+    refetchOnReconnect: "always",
     queryFn: async () => {
       const masterSelection = "*, battle_participants(sort_order,turn_count, characters(id,name,player_name,photo_path,race_id,virtue_id,class_id,class_custom_modifiers,owner_id,race_physical_allocations,virtue_physical_allocations,class_physical_allocations,race_physical_points_granted,virtue_physical_points_granted,class_physical_points_granted,body,sanity,character_attributes(attribute_key,current_value,max_value,points,bonus)))";
       const playerSelection = "*, battle_participants(sort_order,turn_count, characters(id,name,player_name,photo_path,owner_id,race_id,virtue_id,class_id))";
@@ -275,6 +283,7 @@ function useLiveBattles(isMaster: boolean, userId: string | undefined) {
 }
 
 function CombatPage() {
+  const qc = useQueryClient();
   const { data: me } = useMe();
   const isMaster = !!me?.isMaster;
   const { data: battles, isLoading } = useLiveBattles(isMaster, me?.user.id);
@@ -286,6 +295,9 @@ function CombatPage() {
     const { data, error } = await supabase.from("battles").insert({ name: `Batalha ${list.length + 1}` }).select("id").single();
     if (error) { toast.error(error.message); return; }
     setSel(data.id);
+    // This write belongs to this tab. Do not wait for a Realtime echo:
+    // otherwise a brand-new battle remains invisible until page refresh.
+    await qc.invalidateQueries({ queryKey: ["battles"] });
   }
 
   if (isLoading || !me) return <p className="text-muted-foreground">Carregando…</p>;
@@ -483,6 +495,9 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
   const { data: effects = [] } = useQuery({
     queryKey: ["battle-effects", battle.id, visibleEffectCharacterIds],
     enabled: visibleEffectCharacterIds.length > 0,
+    refetchInterval: battle.active ? 5000 : false,
+    refetchOnWindowFocus: "always",
+    refetchOnReconnect: "always",
     queryFn: async () => {
       const [battleResult, standaloneResult] = await Promise.all([
         supabase.from("battle_effects").select("*").eq("battle_id", battle.id).in("character_id", visibleEffectCharacterIds),
@@ -1291,8 +1306,8 @@ function BattleAdmin({ battle, fighters, onUpdate }: {
   async function del() {
     if (!confirm("Excluir esta batalha?")) return;
     const { error } = await supabase.from("battles").delete().eq("id", battle.id);
-    if (error) toast.error(error.message);
-    refresh();
+    if (error) { toast.error(error.message); return; }
+    await refresh();
   }
   return (
     <div className="panel space-y-4 p-4">
