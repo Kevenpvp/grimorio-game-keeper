@@ -280,9 +280,10 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
           <section>
             <h2 className="mb-3 text-lg text-gold">Pontos de atributo</h2>
             <PointsDistribution character={character} attrs={attrs} defs={defs} canRemove />
-          {(character.race_physical_points_granted + character.virtue_physical_points_granted + (character.class_physical_points_granted ?? 0)) > 0 && (
-            <PhysicalPointsDistribution character={character} attrs={attrs} defs={defs} />
-          )}
+          {/* Always show this section to the master, even before race/virtue/class
+              grants physical points. The component already explains the empty
+              balance and disables allocation when none are available. */}
+          <PhysicalPointsDistribution character={character} attrs={attrs} defs={defs} />
           </section>
 
           <section>
