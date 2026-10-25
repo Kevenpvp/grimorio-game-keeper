@@ -182,18 +182,26 @@ function useLiveBattles(isMaster: boolean, userId: string | undefined) {
   const qc = useQueryClient();
   useEffect(() => {
     const refreshBattles = () => scheduleCombatRefresh(qc, ["battles"], ["battle-character-public-states"]);
+    const dispatchAndRefreshScripts = () => {
+      if (!isMaster) return;
+      void dispatchCustomAbilityScriptEvents().then(() => {
+        // Script effects are inserted asynchronously *after* the HP/turn write.
+        // Re-fetch both effect lists once the script queue has been drained.
+        scheduleCombatRefresh(qc, ["battle-effects"], ["character-active-effects"], ["character-abilities"]);
+      });
+    };
     const ch = supabase
       .channel("battles-live")
       .on("postgres_changes", { event: "*", schema: "public", table: "battles" }, refreshBattles)
       .on("postgres_changes", { event: "*", schema: "public", table: "battle_participants" }, () => {
         refreshBattles();
-        if (isMaster) void dispatchCustomAbilityScriptEvents();
+        dispatchAndRefreshScripts();
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "character_attributes" }, () => {
         refreshBattles();
         // The HP-change trigger can queue Sedento por Sangue script events when
         // HP is edited directly, not only by damage/turn actions.
-        if (isMaster) void dispatchCustomAbilityScriptEvents();
+        dispatchAndRefreshScripts();
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "characters" }, refreshBattles)
       .on("postgres_changes", { event: "*", schema: "public", table: "character_abilities" }, () => {
@@ -201,7 +209,7 @@ function useLiveBattles(isMaster: boolean, userId: string | undefined) {
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "battle_effects" }, () => {
         scheduleCombatRefresh(qc, ["battles"], ["battle-effects"], ["character-active-effects"], ["battle-character-public-states"]);
-        if (isMaster) void dispatchCustomAbilityScriptEvents();
+        dispatchAndRefreshScripts();
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "character_abilities" }, () => {
         scheduleCombatRefresh(qc, ["character-abilities"], ["character-abilities-battle"], ["battle-character-public-states"]);
@@ -597,7 +605,9 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
         toast.error("Não foi possível avançar o turno: " + error.message);
         return;
       }
-      void dispatchCustomAbilityScriptEvents(battle.id);
+      void dispatchCustomAbilityScriptEvents(battle.id).then(() => {
+        scheduleCombatRefresh(qc, ["battle-effects"], ["character-active-effects"], ["character-abilities"]);
+      });
 
       const confirmedTurn = Number(nextTurn);
       // Cooldowns are part of character_abilities, not the battle snapshot. Refresh them
