@@ -687,6 +687,20 @@ async function applyDamageWithScripts(
   const physicalTypeId = typeof body._physical_damage_type_id === "string" ? body._physical_damage_type_id : null;
   const magicLevel = typeof body._magic_level === "string" ? body._magic_level as DamageCall["magicLevel"] : null;
   const critical = body._critical_damage === true;
+  const defenseIgnorePayload = body._defense_ignore;
+  const defenseIgnore = defenseIgnorePayload !== undefined
+    ? asObject(defenseIgnorePayload)
+    : null;
+  if (defenseIgnore) {
+    for (const [key, value] of Object.entries(defenseIgnore)) {
+      if (!["physical_fixed", "physical_percent", "magical_fixed", "magical_percent"].includes(key)
+        || typeof value !== "number" || !Number.isFinite(value) || value < 0
+        || value > (key.endsWith("_percent") ? 100 : 1_000_000)
+        || !Number.isInteger(value)) {
+        throw new Error(`Valor inválido de ignorar defesa: ${key}`);
+      }
+    }
+  }
 
   if (!targetId || !["physical", "magical", "hybrid", "true"].includes(kind) ||
       rawValues.length < 1 || rawValues.length > 200 ||
@@ -705,6 +719,7 @@ async function applyDamageWithScripts(
     _magic_level: magicLevel,
     _source_character_id: sourceId,
     _physical_damage_type_id: physicalTypeId,
+    ...(defenseIgnore !== null ? { _defense_ignore: defenseIgnore } : {}),
   });
   if (error) throw error;
   const base = asObject(data) as DamageRpcResult;
