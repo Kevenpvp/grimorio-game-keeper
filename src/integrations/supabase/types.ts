@@ -22,6 +22,7 @@ export type Database = {
           can_activate: boolean
           toggle_mode: boolean
           cooldown_turns: number
+          duration_turns: number
           created_at: string
           custom_attributes: Json
           custom_script_key: string | null
@@ -45,6 +46,8 @@ export type Database = {
           can_activate?: boolean
           toggle_mode?: boolean
           cooldown_turns?: number
+          duration_turns?: number
+          duration_turns?: number
           created_at?: string
           custom_attributes?: Json
           custom_script_key?: string | null
@@ -512,6 +515,9 @@ export type Database = {
           character_id: string
           cooldown_remaining: number
           cooldown_turns: number
+          duration_turns: number
+          active_duration_remaining: number
+          pending_cooldown_turns: number
           created_at: string
           custom_attributes: Json | null
           custom_state: Json
@@ -549,6 +555,12 @@ export type Database = {
           character_id: string
           cooldown_remaining?: number
           cooldown_turns?: number
+          duration_turns?: number
+          active_duration_remaining?: number
+          pending_cooldown_turns?: number
+          duration_turns?: number
+          active_duration_remaining?: number
+          pending_cooldown_turns?: number
           created_at?: string
           custom_attributes?: Json | null
           custom_state?: Json
