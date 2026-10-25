@@ -126,9 +126,13 @@ export function RacePicker({ character, isMaster }: { character: Character; isMa
     setPendingVirtueId(character.virtue_id);
   }, [character.id, character.race_id, character.virtue_id]);
 
+  // Each trait is locked independently as soon as it has been confirmed.
+  // Players can finish an unchosen Virtue without reopening the Race picker.
+  const canChooseRace = isMaster || !character.race_id;
+  const canChooseVirtue = isMaster || !character.virtue_id;
+
   if (!races || !virtues || !defs) return null;
-  // Once a player has both traits, the GM is the only one allowed to change them.
-  if (!isMaster && character.race_id && character.virtue_id) return null;
+  if (!canChooseRace && !canChooseVirtue) return null;
 
   async function refreshAfterConfirmation(message: string) {
     toast.success(message);
@@ -143,6 +147,7 @@ export function RacePicker({ character, isMaster }: { character: Character; isMa
   }
 
   async function confirmRace() {
+    if (!canChooseRace) return;
     if (!isMaster && !pendingRaceId) {
       toast.error("Selecione uma raça antes de confirmar");
       return;
@@ -163,6 +168,7 @@ export function RacePicker({ character, isMaster }: { character: Character; isMa
   }
 
   async function confirmVirtue() {
+    if (!canChooseVirtue) return;
     if (!isMaster && !character.race_id) {
       toast.error("Confirme sua raça antes de escolher a virtude");
       return;
@@ -194,14 +200,14 @@ export function RacePicker({ character, isMaster }: { character: Character; isMa
       <div className="flex flex-wrap items-center gap-2">
         <div className="rounded-lg bg-gold/10 p-2 text-gold"><Shield className="h-5 w-5" /></div>
         <div className="min-w-0 flex-1">
-          <h2 className="text-lg text-gold">{isMaster ? "Raça e Virtude da ficha" : "Escolha sua Raça e Virtude"}</h2>
+          <h2 className="text-lg text-gold">{isMaster ? "Raça e Virtude da ficha" : canChooseRace && canChooseVirtue ? "Escolha sua Raça e Virtude" : canChooseRace ? "Escolha sua Raça" : "Escolha sua Virtude"}</h2>
           <p className="text-xs text-muted-foreground">
-            Confirme a Raça e a Virtude separadamente. Cada escolha é salva de forma independente.
+            {isMaster ? "Confirme a Raça e a Virtude separadamente. Cada escolha é salva de forma independente." : "Cada escolha é feita uma única vez. Depois da confirmação, somente o mestre pode alterá-la."}
           </p>
         </div>
       </div>
 
-      <div className="space-y-3">
+      {canChooseRace && <div className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-sm font-semibold">1. Raça</h3>
           <div className="flex items-center gap-2">
@@ -239,9 +245,9 @@ export function RacePicker({ character, isMaster }: { character: Character; isMa
             })}
           </div>
         )}
-      </div>
+      </div>}
 
-      <div className="space-y-3">
+      {canChooseVirtue && <div className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="flex items-center gap-2 text-sm font-semibold"><Sparkles className="h-4 w-4 text-gold" /> 2. Virtude</h3>
           <div className="flex items-center gap-2">
@@ -278,11 +284,11 @@ export function RacePicker({ character, isMaster }: { character: Character; isMa
             })}
           </div>
         )}
-      </div>
+      </div>}
 
-      <div className="border-t border-border pt-4 text-xs text-muted-foreground">
+      {isMaster && <div className="border-t border-border pt-4 text-xs text-muted-foreground">
         Selecione e confirme a Raça no bloco acima e confirme a Virtude separadamente. Confirmar a Virtude não altera os pontos concedidos pela Raça.
-      </div>
+      </div>}
     </section>
   );
 }
