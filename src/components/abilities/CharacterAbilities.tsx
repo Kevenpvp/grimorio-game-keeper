@@ -14,10 +14,11 @@ import { DefenseIgnoreInputs } from "@/components/abilities/DefenseIgnoreInputs"
 import { attackDiceModifier } from "@/lib/combat-dice";
 import { sedentoInvincibilityCooldown } from "@/lib/sedento-invincibility";
 import { useDefs, useMe, useRaces, useClasses, useVirtues } from "@/lib/sheets";
-import { parseAbilityEffects, parseAbilityAttackDamage, parseAbilityAttackEffectGroups, parseAbilityDotEffects, useAbilities, useCharacterAbilities, useCharacterActiveEffects, useDamageTypes, type Ability, type AbilityEffectDefinition, type CharacterAbility, type AbilityDotEffect, type AbilityAttackDamageConfig, type AbilityAttackEffectGroup } from "@/lib/abilities";
+import { parseAbilityEffects, parseAbilityAttackDamage, parseAbilityAttackEffectGroups, parseAbilityDotEffects, useAbilities, useCharacterAbilities, useCharacterActiveEffects, useDamageTypes, useDotTemplates, type Ability, type AbilityEffectDefinition, type CharacterAbility, type AbilityDotEffect, type AbilityAttackDamageConfig, type AbilityAttackEffectGroup } from "@/lib/abilities";
 import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
 import { SheetAbilityAttackEditor } from "@/components/abilities/SheetAbilityAttackEditor";
 import { TemporaryAttackCategoryEditor } from "@/components/abilities/TemporaryAttackCategoryEditor";
+import { findRegisteredDotTemplate, registerAbilityDotTemplates } from "@/lib/ability-dot-templates";
 import type { Json } from "@/integrations/supabase/types";
 import { parseCustomAbilityAttributes, type CustomAbilityAttribute } from "@/lib/custom-ability-scripts";
 
@@ -1539,6 +1540,7 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
   const [attackEffectGroups, setAttackEffectGroups] = useState<AbilityAttackEffectGroup[]>(() => parseAbilityAttackEffectGroups(ability.attack_effect_groups));
   const [dotEffects, setDotEffects] = useState<AbilityDotEffect[]>(() => parseAbilityDotEffects(ability.dot_effects));
   const { data: damageTypes = [] } = useDamageTypes();
+  const { data: dotTemplates = [] } = useDotTemplates();
   const [busy, setBusy] = useState(false);
   const [expanded, setExpanded] = useState(true);
 
@@ -1615,6 +1617,11 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
       toast.error("Configure pelo menos uma ação em cada efeito de cura.");
       return;
     }
+    if (!ability.ability_id && [...dotEffects, ...attackEffectGroups.flatMap((group) => group.dots)]
+      .some((dot) => !findRegisteredDotTemplate(dot, dotTemplates))) {
+      toast.error("Selecione um DoT já cadastrado na página DoTs para cada entrada.");
+      return;
+    }
     setBusy(true);
     const db = supabase as any;
     const { error } = await db.from("character_abilities").update({
@@ -1643,8 +1650,9 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
             ...group,
             name: group.name.trim(),
             effects: group.effects.map((effect) => ({ ...effect, duration: Math.max(1, effect.duration) })),
+            dots: registerAbilityDotTemplates(group.dots, dotTemplates),
           })),
-        dot_effects: dotEffects,
+        dot_effects: registerAbilityDotTemplates(dotEffects, dotTemplates),
       } : {}),
     }).eq("id", ability.id);
     setBusy(false);
