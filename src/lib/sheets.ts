@@ -43,6 +43,12 @@ export function useCharacter(id: string | undefined) {
   return useQuery({
     queryKey: ["character", id],
     enabled: !!id,
+    // On mobile the Realtime channel can disconnect when backgrounded. Always
+    // reconcile the confirmed race/class/virtue after returning to the tab.
+    refetchOnMount: "always",
+    refetchOnWindowFocus: "always",
+    refetchOnReconnect: "always",
+    refetchInterval: 10000,
     queryFn: async () => {
       const [{ data: c, error }, { data: attrs, error: e2 }] = await Promise.all([
         supabase.from("characters").select("*").eq("id", id!).maybeSingle(),
