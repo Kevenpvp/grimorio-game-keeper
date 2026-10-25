@@ -312,8 +312,10 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
           ? [qc.invalidateQueries({ queryKey: ["character-abilities", effectiveSourceCharacterId] })]
           : []),
         qc.invalidateQueries({ queryKey: ["character-abilities-battle"] }),
-        // Vulnerabilidade de Dano may create a new status effect after this hit.
+        // Vulnerabilidade and custom scripts (Sedento's Invencibilidade)
+        // can insert effects as part of resolving this damage.
         qc.invalidateQueries({ queryKey: ["battle-effects"] }),
+        qc.invalidateQueries({ queryKey: ["character-active-effects", target.id] }),
         qc.invalidateQueries({ queryKey: ["demonio-interno-hp"] }),
       ]);
       if (effects.length > 0 || dots.length > 0) {
