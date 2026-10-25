@@ -860,6 +860,7 @@ export type Database = {
           created_at: string
           description: string | null
           id: string
+          is_summon_snapshot: boolean
           kills: number
           name: string
           owner_id: string | null
@@ -890,6 +891,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          is_summon_snapshot?: boolean
           kills?: number
           name: string
           owner_id?: string | null
@@ -920,6 +922,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          is_summon_snapshot?: boolean
           kills?: number
           name?: string
           owner_id?: string | null
