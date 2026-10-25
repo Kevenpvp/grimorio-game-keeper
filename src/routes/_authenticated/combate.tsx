@@ -1308,7 +1308,12 @@ function BattleAdmin({ battle, fighters, onUpdate }: {
   const { data: all } = useQuery({
     queryKey: ["characters-min"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("characters").select("id,name").order("name");
+      const { data, error } = await supabase.from("characters")
+        .select("id,name")
+        // Summoned clones belong only to their current battle. They must never
+        // appear in the list of reusable, permanent character sheets.
+        .eq("is_summon_snapshot", false)
+        .order("name");
       if (error) throw error;
       return data;
     },
