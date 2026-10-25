@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { dispatchCustomAbilityScriptEvents } from "@/lib/ability-script-runtime";
+import { applyAbilityTargetDamage, isValidAbilityTargetAdjustment } from "@/lib/ability-attack-damage";
 import { sedentoInvincibilityCooldown } from "@/lib/sedento-invincibility";
 import { useDefs, useMe, useRaces, useClasses, useVirtues } from "@/lib/sheets";
 import { parseAbilityEffects, parseAbilityAttackDamage, parseAbilityAttackEffectGroups, parseAbilityDotEffects, useAbilities, useCharacterAbilities, useCharacterActiveEffects, useDamageTypes, type Ability, type AbilityEffectDefinition, type CharacterAbility, type AbilityDotEffect } from "@/lib/abilities";
@@ -456,8 +457,10 @@ export function CharacterAbilitiesPanel({
   const [attackHits, setAttackHits] = useState<Record<string, boolean>>({});
   const [attackEffectHits, setAttackEffectHits] = useState<Record<string, string[]>>({});
   const [attackExtraDamage, setAttackExtraDamage] = useState<Record<string, string>>({});
+  const [attackExtraDamagePercent, setAttackExtraDamagePercent] = useState<Record<string, string>>({});
   const [attackBusy, setAttackBusy] = useState(false);
-  const [attackResolved, setAttackResolved] = useState(false);
+  const [attackStarted, setAttackStarted] = useState(false);
+  const [attackCount, setAttackCount] = useState(0);
   const [attackResults, setAttackResults] = useState<Record<string, string>>({});
   const eligibleAttackTargets = targets.filter((target) => target.id !== characterId);
   const attackAbility = loadout?.find((ability) => ability.id === attackDialogAbilityId);
@@ -517,8 +520,10 @@ export function CharacterAbilitiesPanel({
     setAttackHits({});
     setAttackEffectHits({});
     setAttackExtraDamage({});
+    setAttackExtraDamagePercent({});
     setAttackResults({});
-    setAttackResolved(false);
+    setAttackStarted(false);
+    setAttackCount(0);
   }
 
   function copyDiceValue(value: string) {
@@ -528,7 +533,7 @@ export function CharacterAbilitiesPanel({
   }
 
   async function resolveAbilityAttack() {
-    if (!attackAbility || !attackCatalogEntry || !attackConfig || !battleId || attackBusy || attackResolved) return;
+    if (!attackAbility || !attackCatalogEntry || !attackConfig || !battleId || attackBusy) return;
     if (attackTargetIds.length === 0) {
       toast.error("Selecione pelo menos um alvo para este ataque.");
       return;
@@ -545,12 +550,14 @@ export function CharacterAbilitiesPanel({
     }
 
     const hitTargets = currentAttackTargets.filter((target) => attackHits[target.id]);
-    const hasInvalidExtraDamage = hitTargets.some((target) => {
-      const extra = Number(attackExtraDamage[target.id] ?? 0);
-      return !Number.isFinite(extra) || extra < 0 || extra > 1000000;
-    });
+    const hasInvalidExtraDamage = hitTargets.some((target) =>
+      !isValidAbilityTargetAdjustment(
+        Number(attackExtraDamage[target.id] ?? 0),
+        Number(attackExtraDamagePercent[target.id] ?? 0),
+      )
+    );
     if (hasInvalidExtraDamage) {
-      toast.error("O dano extra de cada alvo deve ficar entre 0 e 1.000.000.");
+      toast.error("Por alvo: ajuste fixo inteiro entre -1.000.000 e +1.000.000; percentual entre -100% e +1000%.");
       return;
     }
     const guaranteedDots = parseAbilityDotEffects(attackCatalogEntry.dot_effects);
@@ -571,11 +578,13 @@ export function CharacterAbilitiesPanel({
     setAttackBusy(true);
     setAttackResults({});
     try {
-      const { data: spentMana, error: activationError } = await db.rpc("activate_character_ability_attack", {
+      const continuingAttack = attackStarted;
+      const { data: spentMana, error: activationError } = await db.rpc(
+        continuingAttack ? "repeat_character_ability_attack" : "activate_character_ability_attack", {
         _character_ability_id: attackAbility.id,
         _target_character_id: hitTargets[0]?.id ?? characterId,
         _battle_id: battleId,
-        _extra_mana_cost: extraMana,
+        _extra_mana_cost: continuingAttack ? 0 : extraMana,
         _hit_target_ids: hitTargets.map((target) => target.id),
         _hit_effect_groups: hitTargets.map((target) => ({
           target_id: target.id,
@@ -585,17 +594,22 @@ export function CharacterAbilitiesPanel({
         _dot_attribute_values: dotAttributeValues,
       });
       if (activationError) throw activationError;
-
-      if ((attackAbility as CharacterAbility & { once_per_battle?: boolean }).once_per_battle) {
-        await qc.invalidateQueries({ queryKey: ["battle-ability-uses", battleId, characterId] });
+      // A sequência continua mesmo que um alvo falhe depois desta ativação.
+      // As próximas aplicações repetem dano/efeitos, não o custo nem a recarga.
+      if (!continuingAttack) {
+        setAttackStarted(true);
+        if ((attackAbility as CharacterAbility & { once_per_battle?: boolean }).once_per_battle) {
+          await qc.invalidateQueries({ queryKey: ["battle-ability-uses", battleId, characterId] });
+        }
+        setExtraManaCosts((current) => ({ ...current, [attackAbility.id]: "0" }));
+        void dispatchCustomAbilityScriptEvents(battleId);
       }
-      setExtraManaCosts((current) => ({ ...current, [attackAbility.id]: "0" }));
-      void dispatchCustomAbilityScriptEvents(battleId);
 
       const results: Record<string, string> = {};
       for (const target of hitTargets) {
-        const extraRaw = Math.floor(Number(attackExtraDamage[target.id] ?? 0));
-        const finalBaseDamage = Math.min(1000000, attackBaseDamage + extraRaw);
+        const extraRaw = Number(attackExtraDamage[target.id] ?? 0);
+        const extraPercent = Number(attackExtraDamagePercent[target.id] ?? 0);
+        const finalBaseDamage = applyAbilityTargetDamage(attackBaseDamage, extraRaw, extraPercent);
         const needsPhysical = attackConfig.damage_kind === "physical" || attackConfig.damage_kind === "hybrid";
         const needsMagic = attackConfig.damage_kind === "magical" || attackConfig.damage_kind === "hybrid";
         const { data: runtimeResponse, error: damageError } = await supabase.functions.invoke("ability-runtime", {
@@ -635,10 +649,10 @@ export function CharacterAbilitiesPanel({
       }
 
       setAttackResults(results);
-      setAttackResolved(true);
+      setAttackCount((count) => count + 1);
       toast.success(hitTargets.length
-        ? `${attackAbility.name} resolvida em ${hitTargets.length} alvo(s).${typeof spentMana === "number" && spentMana > 0 ? ` Mana gasta: ${spentMana}.` : ""}`
-        : `${attackAbility.name}: ataque sem acertos.${typeof spentMana === "number" && spentMana > 0 ? ` Mana gasta: ${spentMana}.` : ""}`);
+        ? `${attackAbility.name}: golpe aplicado em ${hitTargets.length} alvo(s).${!continuingAttack && typeof spentMana === "number" && spentMana > 0 ? ` Mana gasta: ${spentMana}.` : ""}`
+        : `${attackAbility.name}: aplicação sem acertos.${!continuingAttack && typeof spentMana === "number" && spentMana > 0 ? ` Mana gasta: ${spentMana}.` : ""}`);
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["character-abilities", characterId] }),
         qc.invalidateQueries({ queryKey: ["character-abilities-battle"] }),
@@ -654,6 +668,30 @@ export function CharacterAbilitiesPanel({
     } finally {
       setAttackBusy(false);
     }
+  }
+
+  async function finishAbilityAttack() {
+    if (attackBusy || !attackDialogAbilityId) return;
+    const completedAbilityId = attackDialogAbilityId;
+    if (attackStarted && battleId) {
+      setAttackBusy(true);
+      try {
+        const { error } = await db.rpc("finish_character_ability_attack", {
+          _character_ability_id: completedAbilityId,
+          _battle_id: battleId,
+        });
+        if (error) throw error;
+      } catch (error) {
+        toast.error("Não foi possível finalizar a sequência: " + (error instanceof Error ? error.message : String(error)));
+        setAttackBusy(false);
+        return;
+      }
+      setAttackBusy(false);
+    }
+    setAttackDialogAbilityId(null);
+    setAttackStarted(false);
+    setAttackCount(0);
+    setAttackResults({});
   }
 
   function dispatchAndRefreshAbilityEffects(scriptBattleId?: string | null) {
@@ -961,7 +999,7 @@ export function CharacterAbilitiesPanel({
       )}
       
       <Dialog open={attackDialogAbilityId !== null} onOpenChange={(open) => {
-        if (!open && !attackBusy) setAttackDialogAbilityId(null);
+        if (!open) void finishAbilityAttack();
       }}>
         <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
           <DialogHeader>
@@ -984,7 +1022,7 @@ export function CharacterAbilitiesPanel({
                       const selected = attackTargetIds.includes(target.id);
                       return (
                         <label key={target.id} className={`flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm ${selected ? "border-gold bg-gold/5" : "border-border"}`}>
-                          <input type="checkbox" checked={selected} disabled={attackResolved || attackBusy}
+                          <input type="checkbox" checked={selected} disabled={attackBusy}
                             onChange={(event) => {
                               setAttackTargetIds((current) => event.target.checked
                                 ? [...new Set([...current, target.id])]
@@ -992,6 +1030,7 @@ export function CharacterAbilitiesPanel({
                               if (!event.target.checked) {
                                 setAttackHits((current) => { const next = { ...current }; delete next[target.id]; return next; });
                                 setAttackExtraDamage((current) => { const next = { ...current }; delete next[target.id]; return next; });
+                                setAttackExtraDamagePercent((current) => { const next = { ...current }; delete next[target.id]; return next; });
                               }
                             }} />
                           <span className="min-w-0 flex-1">{target.name}</span>
@@ -1012,8 +1051,9 @@ export function CharacterAbilitiesPanel({
                     const targetSpeed = statValue(target.id, "speed");
                     const attackMod = diceModifier(attackSpeed, targetSpeed);
                     const dodgeMod = diceModifier(targetSpeed, attackSpeed);
-                    const extra = Math.max(0, Math.min(1000000, Math.floor(Number(attackExtraDamage[target.id] ?? 0) || 0)));
-                    const damage = Math.min(1000000, attackBaseDamage + extra);
+                    const extra = Number(attackExtraDamage[target.id] ?? 0) || 0;
+                    const percent = Number(attackExtraDamagePercent[target.id] ?? 0) || 0;
+                    const damage = applyAbilityTargetDamage(attackBaseDamage, extra, percent);
                     return (
                       <article key={target.id} className="space-y-3 rounded-md border border-border p-3">
                         <div className="flex flex-wrap items-start justify-between gap-2">
@@ -1045,7 +1085,7 @@ export function CharacterAbilitiesPanel({
                           </div>
                         </div>
                         <label className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
-                          <input type="checkbox" checked={attackHits[target.id] === true} disabled={attackResolved || attackBusy}
+                          <input type="checkbox" checked={attackHits[target.id] === true} disabled={attackBusy}
                             onChange={(event) => {
                               setAttackHits((current) => ({ ...current, [target.id]: event.target.checked }));
                               if (!event.target.checked) {
@@ -1065,7 +1105,7 @@ export function CharacterAbilitiesPanel({
                                 </div>
                                 {attackEffectGroups.map((group) => (
                                   <label key={group.id} className="flex cursor-pointer items-start gap-2 rounded-md border border-border/70 px-3 py-2 text-sm">
-                                    <input type="checkbox" className="mt-1" disabled={attackResolved || attackBusy}
+                                    <input type="checkbox" className="mt-1" disabled={attackBusy}
                                       checked={(attackEffectHits[target.id] ?? []).includes(group.id)}
                                       onChange={(event) => setAttackEffectHits((current) => {
                                         const selected = current[target.id] ?? [];
@@ -1100,20 +1140,27 @@ export function CharacterAbilitiesPanel({
                                 ))}
                               </div>
                             )}
-                            <div className="grid gap-2 sm:grid-cols-[1fr_1fr]">
-                            <label className="space-y-1 text-xs font-medium">
-                              Dano extra deste alvo
-                              <Input type="number" min={0} max={1000000} disabled={attackResolved || attackBusy}
-                                value={attackExtraDamage[target.id] ?? "0"}
-                                onChange={(event) => setAttackExtraDamage((current) => ({ ...current, [target.id]: event.target.value }))} />
-                            </label>
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              <label className="space-y-1 text-xs font-medium">
+                                Ajuste fixo deste alvo (+/-)
+                                <Input type="number" min={-1000000} max={1000000} step={1} disabled={attackBusy}
+                                  value={attackExtraDamage[target.id] ?? "0"}
+                                  onChange={(event) => setAttackExtraDamage((current) => ({ ...current, [target.id]: event.target.value }))} />
+                              </label>
+                              <label className="space-y-1 text-xs font-medium">
+                                Ajuste percentual deste alvo (+/- %)
+                                <Input type="number" min={-100} max={1000} step={1} disabled={attackBusy}
+                                  value={attackExtraDamagePercent[target.id] ?? "0"}
+                                  onChange={(event) => setAttackExtraDamagePercent((current) => ({ ...current, [target.id]: event.target.value }))} />
+                              </label>
+                            </div>
                             <div className="rounded-md border border-gold/30 bg-gold/5 p-3">
-                              <div className="text-xs text-muted-foreground">Dano base calculado</div>
+                              <div className="text-xs text-muted-foreground">Dano calculado para este alvo</div>
                               <div className="text-lg font-bold text-gold">{damage}</div>
                               <div className="text-[11px] text-muted-foreground">
                                 {attackConfig.attribute_key
                                   ? `${attackConfig.attribute_percent}% de ${defs?.find((def) => def.key === attackConfig.attribute_key)?.label ?? attackConfig.attribute_key} (${statValue(characterId, attackConfig.attribute_key)})`
-                                  : "Sem atributo de origem"} + {attackConfig.fixed_damage} fixos + {extra} extra; antes de defesa/mitigação
+                                  : "Sem atributo de origem"} + {attackConfig.fixed_damage} fixos; ajuste {extra >= 0 ? "+" : ""}{extra} fixo, {percent >= 0 ? "+" : ""}{percent}%; antes de defesa/mitigação
                               </div>
                             </div>
                             </div>
@@ -1134,16 +1181,18 @@ export function CharacterAbilitiesPanel({
                   ? ` · Mágico: ${damageTypes.find((type) => type.id === attackConfig.damage_type_id)?.name ?? "tipo não configurado"} · grau ${attackConfig.magic_level}`
                   : ""}
               </div>
-              {attackResolved && !Object.values(attackResults).some((result) => result.startsWith("Erro")) && (
-                <p className="text-sm text-emerald-500">Ataque resolvido. Você pode fechar esta janela pelo X quando terminar.</p>
+              {attackStarted && (
+                <p className="text-sm text-emerald-500">
+                  {attackCount} aplicação(ões) nesta sequência. Causar o Ataque pode ser usado novamente, com outros alvos, acertos ou modificadores. A Mana e a recarga foram aplicadas apenas na primeira vez.
+                </p>
               )}
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAttackDialogAbilityId(null)} disabled={attackBusy}>Fechar</Button>
-            <Button onClick={() => void resolveAbilityAttack()} disabled={attackBusy || attackResolved || !attackAbility || !attackConfig || attackTargetIds.length === 0 || !battleId}>
+            <Button variant="outline" onClick={() => void finishAbilityAttack()} disabled={attackBusy}>Finalizar Ataque</Button>
+            <Button onClick={() => void resolveAbilityAttack()} disabled={attackBusy || !attackAbility || !attackConfig || attackTargetIds.length === 0 || !battleId}>
               <Swords className="mr-1 h-4 w-4" />
-              {attackBusy ? "Resolvendo..." : currentAttackTargets.some((target) => attackHits[target.id]) ? "Causou dano" : "Finalizar ataque sem acertos"}
+              {attackBusy ? "Aplicando..." : "Causar o Ataque"}
             </Button>
           </DialogFooter>
         </DialogContent>
