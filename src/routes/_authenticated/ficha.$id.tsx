@@ -33,6 +33,7 @@ import { CharacterSheetEffectsManager } from "@/components/sheet/CharacterSheetE
 import { passiveEffectTypeActive, passiveStatusModifiers, statusEffectModifiers, useCharacterAbilities, useCharacterActiveEffects } from "@/lib/abilities";
 import { CharacterAbilitiesManager, CharacterAbilitiesPanel } from "@/components/abilities/CharacterAbilities";
 import { CharacterTransformationImages } from "@/components/transformations/CharacterTransformationImages";
+import { SummonGrantsEditor } from "@/components/summons/Summons";
 
 export const Route = createFileRoute("/_authenticated/ficha/$id")({
   head: () => ({
@@ -70,6 +71,7 @@ function FichaPage() {
         <ClassPicker character={data.character} isMaster={false} />
         <CharacterTransformationImages character={data.character} />
         <CharacterAbilitiesManager characterId={data.character.id} personalOnly />
+        <SummonGrantsEditor characterId={data.character.id} master={false} />
         <CharacterAbilitiesPanel characterId={data.character.id} characterName={data.character.name} mode="sheet" canUse={false} allowCustomAttributeEdit />
         <CharacterSheetView character={data.character} attrs={data.attrs} defs={defs} />
         {/* Keep this panel before normal points: physical grants must be visible to the player without being buried below the regular allocation panel. */}
@@ -205,6 +207,7 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
 
       {preview ? (
         <>
+          <SummonGrantsEditor characterId={character.id} master={false} />
           <CharacterAbilitiesPanel characterId={character.id} characterName={character.name} mode="sheet" canUse />
           <CharacterSheetView character={character} attrs={attrs} defs={defs} />
         </>
@@ -261,6 +264,7 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
           <ClassPicker character={character} isMaster />
           <CharacterTransformationImages character={character} isMaster />
           <CharacterAbilitiesManager characterId={character.id} />
+          <SummonGrantsEditor characterId={character.id} master />
 
           <DamageApplier target={{ id: character.id, name: character.name }} sources={sourceCharacters.filter((source) => source.id !== character.id).map((source) => ({ id: source.id, name: source.name }))} />
 
