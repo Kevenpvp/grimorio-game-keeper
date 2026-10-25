@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { dispatchCustomAbilityScriptEvents } from "@/lib/ability-script-runtime";
+import { effectiveHpTotal } from "@/lib/hp-total";
 import {
   clampPct, computeValue, conditionAdjustedValue, physicalAttributePoints, useCharacter, useCharacterLive, useCharacterTraitMods, useDefs, useMe,
   type AttributeDef, type Character, type CharacterAttr,
@@ -380,8 +381,11 @@ function AttrEditor({ def, characterId, body, sanity, attr, racePts, virtuePts, 
   const base = def.accepts_points ? computeValue(def, pts0 + traitPts) : max0;
   const rawTotal = def.accepts_points ? base + bonus0 : max0 + traitPts + bonus0;
   const adjustedTotal = Math.floor((rawTotal + statusModifier.fixed) * (1 + statusModifier.percent / 100));
-  // HP can receive negative trait modifiers, but its displayed maximum is always at least 1.
-  const total = noMana ? 0 : def.key === "hp" ? Math.max(1, adjustedTotal) : conditionAdjustedValue({ body, sanity }, def.key, Math.max(0, adjustedTotal));
+  // The editable HP maximum is the stored base. "Total" adds all traits and
+  // active modifiers, matching the limit validated by Supabase.
+  const total = noMana ? 0 : def.key === "hp"
+    ? effectiveHpTotal(max0, traitPts, bonus0, statusModifier.fixed, statusModifier.percent)
+    : conditionAdjustedValue({ body, sanity }, def.key, Math.max(0, adjustedTotal));
   const [cur, setCur] = useState(cur0);
   const [max, setMax] = useState(max0);
   const [bonus, setBonus] = useState(bonus0);
@@ -410,8 +414,9 @@ function AttrEditor({ def, characterId, body, sanity, attr, racePts, virtuePts, 
 
   function commitCur(n: number) {
     let c = noMana ? 0 : Math.max(0, Math.round(Number.isFinite(n) ? n : 0));
-    if (def.accepts_points) c = Math.min(c, Math.max(0, total));
-    else if (def.cap_current) c = Math.min(c, Math.max(0, Math.min(max, total)));
+    // HP is allowed up to its effective total (e.g. base 117 + race 7 = 124),
+    // not just the editable base maximum. Applies to direct edits and +/-.
+    if (def.accepts_points || def.cap_current) c = Math.min(c, Math.max(0, total));
     setCur(c);
     if (c !== cur0) save(c, max);
   }
@@ -420,7 +425,12 @@ function AttrEditor({ def, characterId, body, sanity, attr, racePts, virtuePts, 
     const m = Math.max(0, Math.round(Number.isFinite(n) ? n : 0));
     setMax(m);
     if (m === max0) return;
-    if (def.cap_current && cur > m) { setPendingMax(m); return; }
+    const nextTotal = def.key === "hp"
+      ? effectiveHpTotal(m, traitPts, bonus0, statusModifier.fixed, statusModifier.percent)
+      : m;
+    // Lowering the base maximum is valid so long as the current HP fits in
+    // the NEW effective total, including race/virtue/class and buffs.
+    if (def.cap_current && cur > nextTotal) { setPendingMax(m); return; }
     save(cur, m);
   }
 
@@ -487,6 +497,7 @@ function AttrEditor({ def, characterId, body, sanity, attr, racePts, virtuePts, 
                 onChange={(e) => setCur(Number(e.target.value))} onBlur={() => commitCur(cur)}
                 onKeyDown={(e) => e.key === "Enter" && commitCur(cur)} />
               <Button size="icon" variant="outline" className="h-9 w-9" onClick={() => commitCur(cur + 1)}><Plus className="h-4 w-4" /></Button>
+              {def.key === "hp" && <Button size="sm" variant="ghost" onClick={() => commitCur(total)}>Encher</Button>}
             </div>
           </div>
           <div className="space-y-1">
@@ -494,6 +505,12 @@ function AttrEditor({ def, characterId, body, sanity, attr, racePts, virtuePts, 
             <Input type="number" min={0} className="tabular h-9 w-24 text-center" value={max}
               onChange={(e) => setMax(Number(e.target.value))} onBlur={() => commitMax(max)}
               onKeyDown={(e) => e.key === "Enter" && commitMax(max)} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Total</Label>
+            <div className="tabular flex h-9 min-w-20 items-center justify-center rounded-md border border-border bg-muted/40 px-3 text-sm font-semibold text-gold">
+              {total}
+            </div>
           </div>
         </div>
       )}
@@ -506,14 +523,19 @@ function AttrEditor({ def, characterId, body, sanity, attr, racePts, virtuePts, 
           <AlertDialogHeader>
             <AlertDialogTitle>Máximo menor que o valor atual</AlertDialogTitle>
             <AlertDialogDescription>
-              O valor atual de {def.label} ({cur}) é maior que o novo máximo ({pendingMax}). Deseja reduzir o valor atual para {pendingMax}?
+              O valor atual de {def.label} ({cur}) é maior que o novo Total ({def.key === "hp"
+                ? effectiveHpTotal(pendingMax ?? max0, traitPts, bonus0, statusModifier.fixed, statusModifier.percent)
+                : pendingMax}), considerando todos os bônus. Deseja ajustar o valor atual ao novo Total?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={() => {
               const m = pendingMax ?? 0;
-              setCur(m); setPendingMax(null); save(m, m);
+              const newTotal = def.key === "hp"
+                ? effectiveHpTotal(m, traitPts, bonus0, statusModifier.fixed, statusModifier.percent)
+                : m;
+              setCur(newTotal); setPendingMax(null); save(newTotal, m);
             }}>Ajustar e salvar</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
