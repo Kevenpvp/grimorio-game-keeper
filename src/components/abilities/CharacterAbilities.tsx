@@ -9,6 +9,8 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { dispatchCustomAbilityScriptEvents } from "@/lib/ability-script-runtime";
 import { applyAbilityTargetDamage, isValidAbilityTargetAdjustment } from "@/lib/ability-attack-damage";
+import { addDefenseIgnore, defenseIgnoreText, ZERO_DEFENSE_IGNORE, type DefenseIgnore } from "@/lib/defense-ignore";
+import { DefenseIgnoreInputs } from "@/components/abilities/DefenseIgnoreInputs";
 import { sedentoInvincibilityCooldown } from "@/lib/sedento-invincibility";
 import { useDefs, useMe, useRaces, useClasses, useVirtues } from "@/lib/sheets";
 import { parseAbilityEffects, parseAbilityAttackDamage, parseAbilityAttackEffectGroups, parseAbilityDotEffects, useAbilities, useCharacterAbilities, useCharacterActiveEffects, useDamageTypes, type Ability, type AbilityEffectDefinition, type CharacterAbility, type AbilityDotEffect } from "@/lib/abilities";
@@ -458,6 +460,7 @@ export function CharacterAbilitiesPanel({
   const [attackEffectHits, setAttackEffectHits] = useState<Record<string, string[]>>({});
   const [attackExtraDamage, setAttackExtraDamage] = useState<Record<string, string>>({});
   const [attackExtraDamagePercent, setAttackExtraDamagePercent] = useState<Record<string, string>>({});
+  const [attackTargetDefenseIgnore, setAttackTargetDefenseIgnore] = useState<Record<string, DefenseIgnore>>({});
   const [attackBusy, setAttackBusy] = useState(false);
   const [attackStarted, setAttackStarted] = useState(false);
   const [attackCount, setAttackCount] = useState(0);
@@ -521,6 +524,7 @@ export function CharacterAbilitiesPanel({
     setAttackEffectHits({});
     setAttackExtraDamage({});
     setAttackExtraDamagePercent({});
+    setAttackTargetDefenseIgnore({});
     setAttackResults({});
     setAttackStarted(false);
     setAttackCount(0);
@@ -610,6 +614,13 @@ export function CharacterAbilitiesPanel({
         const extraRaw = Number(attackExtraDamage[target.id] ?? 0);
         const extraPercent = Number(attackExtraDamagePercent[target.id] ?? 0);
         const finalBaseDamage = applyAbilityTargetDamage(attackBaseDamage, extraRaw, extraPercent);
+        const selectedIgnoreGroups = attackEffectGroups.filter((group) =>
+          (attackEffectHits[target.id] ?? []).includes(group.id));
+        const defenseIgnore = addDefenseIgnore(
+          attackConfig.defense_ignore,
+          ...selectedIgnoreGroups.map((group) => group.defense_ignore),
+          attackTargetDefenseIgnore[target.id] ?? ZERO_DEFENSE_IGNORE,
+        );
         const needsPhysical = attackConfig.damage_kind === "physical" || attackConfig.damage_kind === "hybrid";
         const needsMagic = attackConfig.damage_kind === "magical" || attackConfig.damage_kind === "hybrid";
         const { data: runtimeResponse, error: damageError } = await supabase.functions.invoke("ability-runtime", {
@@ -625,6 +636,7 @@ export function CharacterAbilitiesPanel({
             _magic_level: needsMagic ? attackConfig.magic_level : null,
             _source_character_id: characterId,
             _critical_damage: false,
+            _defense_ignore: defenseIgnore,
           },
         });
         if (damageError) {
@@ -645,7 +657,7 @@ export function CharacterAbilitiesPanel({
           results[target.id] = "Dano enviado, mas sem resultado retornado.";
           continue;
         }
-        results[target.id] = `Dano base ${finalBaseDamage} → dano final ${Number(damageResult.total_damage ?? 0)}; HP ${Number(damageResult.hp_before ?? 0)} → ${Number(damageResult.hp_after ?? 0)}.`;
+        results[target.id] = `Dano base ${finalBaseDamage} → dano final ${Number(damageResult.total_damage ?? 0)}; HP ${Number(damageResult.hp_before ?? 0)} → ${Number(damageResult.hp_after ?? 0)}.${defenseIgnoreText(defenseIgnore) ? ` Ignorou: ${defenseIgnoreText(defenseIgnore)}.` : ""}`;
       }
 
       setAttackResults(results);
@@ -1121,6 +1133,7 @@ export function CharacterAbilitiesPanel({
                                       <span className="mt-1 block text-xs text-muted-foreground">
                                         {[
                                           ...group.effects.map((effect) => effectSummary(effect, defs ?? [], damageTypes, races ?? [])),
+                                          ...(defenseIgnoreText(group.defense_ignore) ? [`Ignorar defesa: ${defenseIgnoreText(group.defense_ignore)}`] : []),
                                           ...group.dots.map((dot) => {
                                             const type = dot.damage_kind === "physical"
                                               ? (damageTypes.find((item) => item.id === dot.physical_damage_type_id)?.name ?? "tipo físico")
@@ -1153,6 +1166,27 @@ export function CharacterAbilitiesPanel({
                                   value={attackExtraDamagePercent[target.id] ?? "0"}
                                   onChange={(event) => setAttackExtraDamagePercent((current) => ({ ...current, [target.id]: event.target.value }))} />
                               </label>
+                            </div>
+                            <div className="rounded-md border border-gold/25 p-3">
+                              <DefenseIgnoreInputs
+                                title="Ignorar defesa apenas deste alvo"
+                                value={attackTargetDefenseIgnore[target.id] ?? ZERO_DEFENSE_IGNORE}
+                                onChange={(value) => setAttackTargetDefenseIgnore((current) => ({
+                                  ...current, [target.id]: value,
+                                }))}
+                                disabled={attackBusy}
+                              />
+                              <p className="mt-2 text-xs text-muted-foreground">
+                                {(() => {
+                                  const selected = attackEffectGroups.filter((g) => (attackEffectHits[target.id] ?? []).includes(g.id));
+                                  const combined = addDefenseIgnore(
+                                    attackConfig.defense_ignore,
+                                    ...selected.map((g) => g.defense_ignore),
+                                    attackTargetDefenseIgnore[target.id] ?? ZERO_DEFENSE_IGNORE,
+                                  );
+                                  return `Total de defesa ignorada neste golpe: ${defenseIgnoreText(combined) || "nenhuma"}.`;
+                                })()}
+                              </p>
                             </div>
                             <div className="rounded-md border border-gold/30 bg-gold/5 p-3">
                               <div className="text-xs text-muted-foreground">Dano calculado para este alvo</div>
