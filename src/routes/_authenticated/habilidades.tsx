@@ -625,7 +625,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <h4 className="text-sm font-semibold text-gold">Efeitos por chance de acerto</h4>
-                  <p className="mt-1 text-xs text-muted-foreground">Crie categorias como 50% de acerto. No popup, o mestre decide separadamente para cada alvo se os efeitos daquela categoria acertaram.</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Crie categorias com efeitos e DoTs. No popup, o mestre decide separadamente quais categorias acertaram cada alvo.</p>
                 </div>
                 <Button type="button" size="sm" variant="outline" onClick={() => setAttackEffectGroups((current) => [
                   ...current,
@@ -665,7 +665,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
                         current.map((entry) => entry.id === group.id ? { ...entry, defense_ignore } : entry))}
                     />
                     <p className="mt-2 text-xs text-muted-foreground">
-                      Só se aplica aos alvos marcados como acertados nesta categoria de {group.chance}%.
+                      Só se aplica aos alvos marcados como acertados nesta categoria.
                       Pode ser configurado mesmo sem DoTs ou outros efeitos.
                     </p>
                   </div>
@@ -673,7 +673,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
                     effects={group.effects}
                     onChange={(next) => setAttackEffectGroups((current) => current.map((entry) => entry.id === group.id ? { ...entry, effects: next } : entry))}
                     permanent={false}
-                    title={`Efeitos — ${group.chance}% de acerto`}
+                    title="Efeitos da categoria"
                     description="Estes efeitos só são aplicados no alvo quando o mestre marcar esta categoria como acertada no popup do ataque."
                     defs={defs}
                   />
@@ -683,7 +683,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
                     defs={defs}
                     physicalTypes={physicalDamageTypes}
                     magicalTypes={magicalDamageTypes}
-                    title={"DoTs — " + group.chance + "% de acerto"}
+                    title="DoTs da categoria"
                     description="Estes DoTs só entram se o mestre marcar esta categoria como acertada para o alvo no popup."
                   />
                 </section>
