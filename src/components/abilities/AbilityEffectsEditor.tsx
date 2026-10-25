@@ -30,6 +30,8 @@ const effectTypeLabels: Record<AbilityEffectType, string> = {
   dot_immunity: "Imunidade a DoTs",
   dot_resistance: "Resistência a DoTs",
   invisibility: "Invisibilidade (visual)",
+  temporal_freeze: "Congelamento temporal (não perde HP, Mana nem Corpo)",
+  visual_tag: "Tag personalizada (somente visual)",
 };
 
 export function AbilityEffectsEditor({
@@ -96,6 +98,7 @@ export function AbilityEffectsEditor({
       duration: 2,
       until_combat_end: false,
       remove_on_attack: false,
+      remove_on_hit: false,
       dot_immunity_scope: "all",
       dot_immunity_template_ids: [],
       dot_resistance_scope: "all",
@@ -151,6 +154,23 @@ export function AbilityEffectsEditor({
     }]);
   }
 
+  function addVisualTag() {
+    onChange([...effects, {
+      name: "Nova tag",
+      effect_type: "visual_tag",
+      attribute_key: null,
+      polarity: "buff",
+      value_mode: "fixed",
+      amount: 0,
+      duration: 2,
+      until_combat_end: false,
+      remove_on_attack: false,
+      remove_on_hit: false,
+      remove_on_hit: false,
+      target_scope: "target",
+    }]);
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -162,7 +182,10 @@ export function AbilityEffectsEditor({
               : "Estes efeitos são aplicados ao alvo quando a habilidade é ativada.")}
           </p>
         </div>
-        <Button size="sm" type="button" variant="outline" onClick={add}><Plus className="mr-1 h-3.5 w-3.5" /> Adicionar efeito</Button>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" type="button" variant="outline" onClick={add}><Plus className="mr-1 h-3.5 w-3.5" /> Adicionar efeito</Button>
+          {(!allowedTypes || allowedTypes.includes("visual_tag")) && <Button size="sm" type="button" variant="outline" onClick={addVisualTag}><Plus className="mr-1 h-3.5 w-3.5" /> Criar tag visual</Button>}
+        </div>
       </div>
       {effects.length === 0 && <p className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">Nenhum efeito configurado.</p>}
       {effects.map((effect, index) => {
@@ -248,7 +271,7 @@ export function AbilityEffectsEditor({
                       : effect.damage_vulnerability_effects,
                     polarity: type === "magic_prohibition" || type === "no_mana" || type === "healing_blocked" || type === "magic_healing_reversal" || type === "damage_received"
                       ? "debuff"
-                      : type === "damage_reduction" || type === "invincible" || type === "mental_control_immunity" || type === "mental_control_chance" || type === "mental_control_resistance" || type === "dot_immunity" || type === "dot_resistance" || type === "invisibility" ? "buff" : effect.polarity,
+                      : type === "damage_reduction" || type === "invincible" || type === "mental_control_immunity" || type === "mental_control_chance" || type === "mental_control_resistance" || type === "dot_immunity" || type === "dot_resistance" || type === "invisibility" || type === "temporal_freeze" || type === "visual_tag" ? "buff" : effect.polarity,
                     value_mode: type === "dot_resistance" ? (effect.dot_resistance_value_mode ?? "percent") : type === "mental_control_chance" || type === "mental_control_resistance" ? "percent" : effect.value_mode,
                     amount: type === "dot_resistance" ? (effect.dot_resistance_amount ?? 25) : type === "mental_control_chance" || type === "mental_control_resistance" ? (effect.amount || 50) : effect.amount,
                     dot_immunity_scope: type === "dot_immunity" ? (effect.dot_immunity_scope || "all") : effect.dot_immunity_scope,
@@ -1079,6 +1102,14 @@ export function AbilityEffectsEditor({
                 </>
               )}
               <label className="flex items-start gap-2 text-xs sm:col-span-2">
+                <input type="checkbox" className="mt-0.5" checked={effect.remove_on_hit ?? false}
+                  onChange={(event) => patch(index, { remove_on_hit: event.target.checked })} />
+                <span>
+                  <span className="font-medium">Remover ao ser atacado</span>
+                  <span className="block text-muted-foreground">Este efeito temporário desaparece se o personagem sofrer dano, inclusive DoTs ou outras fontes de perda de HP.</span>
+                </span>
+              </label>
+              <label className="flex items-start gap-2 text-xs sm:col-span-2">
                 <input type="checkbox" className="mt-0.5" checked={effect.remove_on_attack ?? false}
                   onChange={(event) => patch(index, { remove_on_attack: event.target.checked })} />
                 <span>
@@ -1089,6 +1120,8 @@ export function AbilityEffectsEditor({
               {isPermanent && <p className="self-end text-xs text-muted-foreground">{permanentNote ?? "Efeito permanente enquanto a habilidade estiver atribuída."}</p>}
               {isMagicProhibition && <p className="self-end text-xs text-amber-500 sm:col-span-2">Debuff: impede a ativação de habilidades mágicas ou que consomem Mana enquanto durar.</p>}
               {isNoMana && <p className="self-end text-xs text-amber-500 sm:col-span-2">Debuff: zera a Mana atual e máxima enquanto durar e bloqueia habilidades mágicas ou que gastem Mana. Não é possível mudar sua polaridade.</p>}
+              {effect.effect_type === "visual_tag" && <p className="self-end text-xs text-violet-400 sm:col-span-2">Tag apenas visual: o nome é livre e não altera nenhum atributo. É exibida junto dos efeitos e segue a duração selecionada.</p>}
+              {effect.effect_type === "temporal_freeze" && <p className="self-end text-xs text-amber-500 sm:col-span-2">Congelamento temporal: bloqueia dano, perda de Mana e perda de Corpo; a Sanidade ainda pode diminuir.</p>}
               {effect.effect_type === "invincible" && <p className="self-end text-xs text-amber-500 sm:col-span-2">Buff: bloqueia todo dano recebido enquanto o efeito estiver ativo.</p>}
               {effect.effect_type === "healing_blocked" && <p className="self-end text-xs text-amber-500 sm:col-span-2">Debuff: impede receber cura de habilidades, inclusive cura por rodada.</p>}
               {effect.effect_type === "mana_regeneration" && <p className="self-end text-xs text-muted-foreground">Afeta regeneração de Mana por turno e recuperação manual, mas não o preenchimento completo.</p>}
