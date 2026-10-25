@@ -14,6 +14,7 @@ import { Portrait } from "@/components/sheet/CharacterSheetView";
 import { StatBar } from "@/components/sheet/StatBar";
 import { cn } from "@/lib/utils";
 import { DamageApplier } from "@/components/combat/DamageApplier";
+import { attackDiceModifier, hasActiveStun } from "@/lib/combat-dice";
 import { DamageOverTimeManager } from "@/components/combat/DamageOverTimeManager";
 import { CharacterAbilitiesPanel, effectSummary } from "@/components/abilities/CharacterAbilities";
 import { SummonCombatPanel } from "@/components/summons/Summons";
@@ -880,6 +881,8 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                     canUse={isMaster && battle.active} showActiveEffects={isOwnFighter} battleId={battle.id}
                     individualTurn={f.participant_turn_count ?? 0}
                     targets={fighters.map((target) => ({ id: target.id, name: target.name }))}
+                    stunnedTargetIds={effects.filter((effect) => effect.effect_type === "stun"
+                      && Number(effect.duration) > 0).map((effect) => effect.character_id)}
                     getAttributeValue={(characterId, attributeKey) => {
                       const target = fighters.find((fighter) => fighter.id === characterId);
                       return target ? val(target, attributeKey) : 0;
@@ -1580,11 +1583,12 @@ function Actions({ battleId, actor, targets, fighters, defs, val, effects, abili
     const aAtk = val(actor, "atk_speed");
     const lines = targets.flatMap((target) => {
       const tSpeed = val(target, "speed");
+      const stunned = hasActiveStun(target.id, effects);
       return [
         {
           who: `${actor.name} → ${target.name} (ataque)`,
-          dice: dice(diceMod(aAtk, tSpeed)),
-          detail: `(${label("atk_speed")} ${aAtk} − ${label("speed")} ${tSpeed}) ÷ 10`,
+          dice: dice(attackDiceModifier(aAtk, tSpeed, stunned)),
+          detail: `(${label("atk_speed")} ${aAtk} − ${label("speed")} ${tSpeed}) ÷ 10${stunned ? " +1 (Stun no alvo)" : ""}`,
         },
         {
           who: `${target.name} (esquiva)`,
