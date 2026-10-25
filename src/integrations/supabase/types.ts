@@ -500,6 +500,10 @@ export type Database = {
       character_abilities: {
         Row: {
           ability_id: string | null
+          attack_enabled: boolean
+          attack_damage: Json
+          attack_effect_groups: Json
+          dot_effects: Json
           can_activate: boolean
           toggle_mode: boolean
           toggle_active: boolean
@@ -533,6 +537,10 @@ export type Database = {
         }
         Insert: {
           ability_id?: string | null
+          attack_enabled?: boolean
+          attack_damage?: Json
+          attack_effect_groups?: Json
+          dot_effects?: Json
           can_activate?: boolean
           toggle_mode?: boolean
           toggle_active?: boolean
@@ -566,6 +574,10 @@ export type Database = {
         }
         Update: {
           ability_id?: string | null
+          attack_enabled?: boolean
+          attack_damage?: Json
+          attack_effect_groups?: Json
+          dot_effects?: Json
           can_activate?: boolean
           toggle_mode?: boolean
           toggle_active?: boolean
