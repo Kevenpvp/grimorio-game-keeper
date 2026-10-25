@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Tables } from "@/integrations/supabase/types";
 import { supabase } from "@/integrations/supabase/client";
+import { parseDefenseIgnore, type DefenseIgnore } from "@/lib/defense-ignore";
 
 export type AbilityEffectType = "status" | "regeneration" | "mana_regeneration" | "mana_used" | "no_regen_hp" | "no_regen_mana" | "magic_prohibition" | "stun" | "damage_dealt" | "damage_reduction" | "damage_received" | "damage_vulnerability" | "no_mana" | "healing" | "invincible" | "healing_blocked" | "magic_healing_reversal" | "mental_control_immunity" | "mental_control_chance" | "mental_control_resistance" | "dot_immunity" | "dot_resistance" | "invisibility";
 export type DamageScope = "any" | "physical" | "magical";
@@ -97,6 +98,7 @@ export type AbilityAttackDamageConfig = {
   attribute_key: string | null;
   attribute_percent: number;
   fixed_damage: number;
+  defense_ignore: DefenseIgnore;
   physical_damage_type_id: string | null;
   damage_type_id: string | null;
   magic_level: DamageMagicLevel;
@@ -155,6 +157,7 @@ export type AbilityAttackEffectGroup = {
   chance: number;
   effects: AbilityEffectDefinition[];
   dots: AbilityDotEffect[];
+  defense_ignore: DefenseIgnore;
 };
 
 export function parseAbilityAttackEffectGroups(value: unknown): AbilityAttackEffectGroup[] {
@@ -172,6 +175,7 @@ export function parseAbilityAttackEffectGroups(value: unknown): AbilityAttackEff
       chance: Math.max(0, Math.min(100, Math.round(chance))),
       effects: parseAbilityEffects(raw.effects),
       dots: parseAbilityDotEffects(raw.dots),
+      defense_ignore: parseDefenseIgnore(raw.defense_ignore),
     }];
   });
 }
@@ -191,6 +195,7 @@ export function parseAbilityAttackDamage(value: unknown): AbilityAttackDamageCon
     attribute_key: typeof raw.attribute_key === "string" && raw.attribute_key ? raw.attribute_key : null,
     attribute_percent: Number.isFinite(attributePercent) ? Math.max(0, Math.min(1000, attributePercent)) : 100,
     fixed_damage: Number.isFinite(fixedDamage) ? Math.max(0, Math.min(1_000_000, fixedDamage)) : 0,
+    defense_ignore: parseDefenseIgnore(raw.defense_ignore),
     physical_damage_type_id: typeof raw.physical_damage_type_id === "string" ? raw.physical_damage_type_id : null,
     damage_type_id: typeof raw.damage_type_id === "string" ? raw.damage_type_id : null,
     magic_level: magicLevel,
