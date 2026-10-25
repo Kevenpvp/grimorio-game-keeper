@@ -214,8 +214,8 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
         </>
       ) : (
         <>
-          <section className="panel grid gap-6 p-5 md:grid-cols-[200px_1fr]">
-            <div className="space-y-2">
+          <section className="panel grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6 p-4 sm:p-5 md:grid-cols-[200px_minmax(0,1fr)]">
+            <div className="min-w-0 space-y-2">
               <Portrait path={character.photo_path} name={character.name} className="mx-auto aspect-[3/4] w-full max-w-[200px]" />
               <input ref={fileRef} type="file" accept="image/*" className="hidden"
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ""; }} />
@@ -223,20 +223,23 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
                 <Upload className="mr-1 h-4 w-4" /> {character.photo_path ? "Trocar foto" : "Enviar foto"}
               </Button>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
+            <div className="grid min-w-0 w-full max-w-full grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2">
+              <div className="min-w-0 space-y-1.5">
                 <Label>Nome do personagem</Label>
-                <Input value={info.name} onChange={(e) => setInfo({ ...info, name: e.target.value })} />
+                <Input className="min-w-0 max-w-full" value={info.name} onChange={(e) => setInfo({ ...info, name: e.target.value })} />
               </div>
-              <div className="space-y-1.5">
+              <div className="min-w-0 space-y-1.5">
                 <Label>Nome do jogador</Label>
-                <Input value={info.player_name} onChange={(e) => setInfo({ ...info, player_name: e.target.value })} />
+                <Input className="min-w-0 max-w-full" value={info.player_name} onChange={(e) => setInfo({ ...info, player_name: e.target.value })} />
               </div>
-              <div className="space-y-1.5 sm:col-span-2">
+              <div className="min-w-0 space-y-1.5 sm:col-span-2">
                 <Label>Conta do jogador vinculada</Label>
                 <Select value={info.owner_id ?? "none"} onValueChange={(v) => setInfo({ ...info, owner_id: v === "none" ? null : v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
+                  <SelectTrigger className="min-w-0 max-w-full overflow-hidden [&>span]:min-w-0 [&>span]:truncate [&>svg]:shrink-0"
+                    title={profiles?.find((profile) => profile.id === info.owner_id)?.email ?? undefined}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="max-w-[calc(100vw-2rem)]">
                     <SelectItem value="none">Nenhuma</SelectItem>
                     {profiles?.map((p) => (
                       <SelectItem key={p.id} value={p.id}>{p.display_name} {p.email ? `(${p.email})` : ""}</SelectItem>
@@ -244,12 +247,12 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1.5 sm:col-span-2">
+              <div className="min-w-0 space-y-1.5 sm:col-span-2">
                 <Label>Descrição</Label>
-                <Textarea rows={3} value={info.description} onChange={(e) => setInfo({ ...info, description: e.target.value })} />
+                <Textarea className="min-w-0 max-w-full" rows={3} value={info.description} onChange={(e) => setInfo({ ...info, description: e.target.value })} />
               </div>
-              <div className="sm:col-span-2">
-                <Button onClick={saveInfo}>Salvar informações</Button>
+              <div className="min-w-0 sm:col-span-2">
+                <Button className="max-w-full" onClick={saveInfo}>Salvar informações</Button>
               </div>
             </div>
           </section>
