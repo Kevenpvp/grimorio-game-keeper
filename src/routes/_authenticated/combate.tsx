@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { DamageApplier } from "@/components/combat/DamageApplier";
 import { DamageOverTimeManager } from "@/components/combat/DamageOverTimeManager";
 import { CharacterAbilitiesPanel, effectSummary } from "@/components/abilities/CharacterAbilities";
+import { SummonCombatPanel } from "@/components/summons/Summons";
 import { parseAbilityEffects, passiveEffectTypeActive, passiveRegenerationModifiers, passiveStatusModifiers, useAbilities, useBattleCharacterAbilities, useCharacterAbilities, useDamageTypes, useDotTemplates } from "@/lib/abilities";
 
 export const Route = createFileRoute("/_authenticated/combate")({
@@ -234,6 +235,12 @@ function useLiveBattles(isMaster: boolean, userId: string | undefined) {
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "abilities" }, () => {
         scheduleCombatRefresh(qc, ["abilities"]);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "active_summons" }, () => {
+        scheduleCombatRefresh(qc, ["active-summons"], ["active-summon-names"], ["battles"], ["character-active-effects"]);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "summon_grants" }, () => {
+        scheduleCombatRefresh(qc, ["summon-grants"], ["character-abilities"], ["battles"]);
       })
       .subscribe();
     return () => { void supabase.removeChannel(ch); };
@@ -877,6 +884,13 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                       const target = fighters.find((fighter) => fighter.id === characterId);
                       return target ? val(target, attributeKey) : 0;
                     }} />
+                  <SummonCombatPanel
+                    characterId={f.id}
+                    characterName={f.name}
+                    battleId={battle.id}
+                    master={isMaster && battle.active}
+                    visible={isMaster || isOwnFighter}
+                  />
                   {isOwnFighter && <div className="grid grid-cols-2 gap-2 text-xs">
                     <div className="rounded border border-border p-2"><span className="text-muted-foreground">Corpo</span><div className="font-semibold">{f.body}%</div></div>
                     <div className="rounded border border-border p-2"><span className="text-muted-foreground">Sanidade</span><div className="font-semibold">{f.sanity}%</div></div>
