@@ -18,6 +18,8 @@ import {
 } from "@/lib/custom-ability-scripts";
 import { useDefs, useMe } from "@/lib/sheets";
 import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
+import { DefenseIgnoreInputs } from "@/components/abilities/DefenseIgnoreInputs";
+import { ZERO_DEFENSE_IGNORE, defenseIgnoreText } from "@/lib/defense-ignore";
 import { SummonGrantsEditor } from "@/components/summons/Summons";
 import type { Json } from "@/integrations/supabase/types";
 
@@ -422,12 +424,13 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
         duration: Math.max(1, Math.min(1000, Math.floor(Number(dot.duration) || 1))),
       })) as unknown as Json,
       attack_effect_groups: attackEffectGroups
-        .filter((group) => group.name.trim() && (group.effects.length > 0 || group.dots.length > 0))
+        .filter((group) => group.name.trim() && (group.effects.length > 0 || group.dots.length > 0 || !!defenseIgnoreText(group.defense_ignore)))
         .map((group) => ({
           id: group.id,
           name: group.name.trim(),
           chance: Math.max(0, Math.min(100, Math.round(Number(group.chance) || 0))),
           effects: group.effects.map((effect) => ({ ...effect, duration: Math.max(1, effect.duration) })),
+          defense_ignore: group.defense_ignore,
           dots: group.dots.map((dot) => ({
             ...dot,
             name: dot.name.trim(),
@@ -604,6 +607,17 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
                 </>
               )}
             </div>
+            <div className="rounded-md border border-gold/25 p-3">
+              <DefenseIgnoreInputs
+                title="Ignorar defesa garantido pelo ataque"
+                value={attackDamage.defense_ignore}
+                onChange={(defense_ignore) => setAttackDamage((current) => ({ ...current, defense_ignore }))}
+              />
+              <p className="mt-2 text-xs text-muted-foreground">
+                O percentual ignora parte da Defesa Física ou Mágica efetiva; depois é descontado o valor fixo.
+                A defesa nunca fica negativa. Configurações de chance e de cada alvo são somadas a estas.
+              </p>
+            </div>
             <p className="text-xs text-muted-foreground">
               Exemplo: Força 100, atributo em 100% e dano fixo adicional 20 = 120 de dano base antes da defesa. No combate, o mestre poderá somar dano extra para cada alvo.
             </p>
@@ -615,7 +629,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
                 </div>
                 <Button type="button" size="sm" variant="outline" onClick={() => setAttackEffectGroups((current) => [
                   ...current,
-                  { id: crypto.randomUUID(), name: "Efeitos", chance: 50, effects: [], dots: [] },
+                  { id: crypto.randomUUID(), name: "Efeitos", chance: 50, effects: [], dots: [], defense_ignore: { ...ZERO_DEFENSE_IGNORE } },
                 ])}>
                   <Plus className="mr-1 h-3.5 w-3.5" /> Adicionar categoria
                 </Button>
@@ -642,6 +656,18 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
                     <Button type="button" size="sm" variant="destructive" onClick={() => setAttackEffectGroups((current) => current.filter((entry) => entry.id !== group.id))}>
                       <Trash2 className="mr-1 h-3.5 w-3.5" /> Remover
                     </Button>
+                  </div>
+                  <div className="rounded-md border border-gold/25 p-3">
+                    <DefenseIgnoreInputs
+                      title="Ignorar defesa se esta categoria acertar"
+                      value={group.defense_ignore}
+                      onChange={(defense_ignore) => setAttackEffectGroups((current) =>
+                        current.map((entry) => entry.id === group.id ? { ...entry, defense_ignore } : entry))}
+                    />
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Só se aplica aos alvos marcados como acertados nesta categoria de {group.chance}%.
+                      Pode ser configurado mesmo sem DoTs ou outros efeitos.
+                    </p>
                   </div>
                   <AbilityEffectsEditor
                     effects={group.effects}
