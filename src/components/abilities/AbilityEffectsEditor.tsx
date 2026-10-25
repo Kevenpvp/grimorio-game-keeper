@@ -272,8 +272,8 @@ export function AbilityEffectsEditor({
                     polarity: type === "magic_prohibition" || type === "no_mana" || type === "healing_blocked" || type === "magic_healing_reversal" || type === "damage_received"
                       ? "debuff"
                       : type === "damage_reduction" || type === "invincible" || type === "mental_control_immunity" || type === "mental_control_chance" || type === "mental_control_resistance" || type === "dot_immunity" || type === "dot_resistance" || type === "invisibility" || type === "temporal_freeze" || type === "visual_tag" ? "buff" : effect.polarity,
-                    value_mode: type === "dot_resistance" ? (effect.dot_resistance_value_mode ?? "percent") : type === "mental_control_chance" || type === "mental_control_resistance" ? "percent" : effect.value_mode,
-                    amount: type === "dot_resistance" ? (effect.dot_resistance_amount ?? 25) : type === "mental_control_chance" || type === "mental_control_resistance" ? (effect.amount || 50) : effect.amount,
+                    value_mode: type === "temporal_freeze" || type === "visual_tag" ? "fixed" : type === "dot_resistance" ? (effect.dot_resistance_value_mode ?? "percent") : type === "mental_control_chance" || type === "mental_control_resistance" ? "percent" : effect.value_mode,
+                    amount: type === "temporal_freeze" || type === "visual_tag" ? 0 : type === "dot_resistance" ? (effect.dot_resistance_amount ?? 25) : type === "mental_control_chance" || type === "mental_control_resistance" ? (effect.amount || 50) : effect.amount,
                     dot_immunity_scope: type === "dot_immunity" ? (effect.dot_immunity_scope || "all") : effect.dot_immunity_scope,
                     dot_immunity_template_ids: type === "dot_immunity" ? (effect.dot_immunity_template_ids || []) : effect.dot_immunity_template_ids,
                     dot_resistance_scope: type === "dot_resistance" ? (effect.dot_resistance_scope ?? "all") : effect.dot_resistance_scope,
