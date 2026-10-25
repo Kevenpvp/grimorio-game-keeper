@@ -445,6 +445,12 @@ export function useCharacterActiveEffects(characterId: string | undefined, enabl
   return useQuery({
     queryKey: ["character-active-effects", characterId],
     enabled: !!characterId && enabled,
+    // The script runtime can insert effects after a damage/HP request returns.
+    // Realtime is primary, but mobile/embedded previews can miss notifications.
+    // Reconcile visible effects periodically while this list is mounted.
+    refetchInterval: enabled ? 4000 : false,
+    refetchOnWindowFocus: "always",
+    refetchOnReconnect: "always",
     queryFn: async () => {
       const [standaloneResult, participantsResult] = await Promise.all([
         supabase.from("battle_effects").select("*").eq("character_id", characterId!).is("battle_id", null),
