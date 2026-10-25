@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
+import { lovable } from "@/integrations/lovable";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
@@ -83,12 +84,36 @@ function AuthPage() {
   async function google() {
     setBusy(true);
     try {
-      // Deixa o Supabase iniciar o fluxo OAuth normalmente na mesma aba.
-      // Assim, o callback retorna ao endereço atual do app sem popup nem redirecionamento manual.
+      const hostname = window.location.hostname;
+      const lovablePreviewDomains = [
+        "lovableproject.com",
+        "lovableproject-dev.com",
+        "lovable.app",
+        "gpt-eng.com",
+        "gptengineer.run",
+      ];
+      const insideLovablePreview = window.parent !== window
+        && lovablePreviewDomains.some((domain) =>
+          hostname === domain || hostname.endsWith(`.${domain}`));
+
+      if (insideLovablePreview) {
+        // O broker do Lovable abre o Google fora do iframe sem desmontar a
+        // prévia. O wrapper já configura a sessão no cliente Supabase.
+        const result = await lovable.auth.signInWithOAuth("google", {
+          redirect_uri: window.location.origin,
+        });
+        if (result.error) throw result.error;
+        if (result.redirected) return;
+        // O listener onAuthStateChange encaminha ao painel após setSession.
+        setBusy(false);
+        return;
+      }
+
+      // Fora da prévia, continuamos autenticando diretamente no Supabase
+      // próprio do Grimório, sem depender do backend gerenciado do Lovable.
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          // Return to the auth route so the app can finish the PKCE exchange before navigating.
           redirectTo: `${window.location.origin}/auth`,
         },
       });
