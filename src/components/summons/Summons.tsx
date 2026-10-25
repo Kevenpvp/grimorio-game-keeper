@@ -44,13 +44,10 @@ function useSummonTemplates(enabled: boolean) {
     queryKey: ["summon-templates"],
     enabled,
     queryFn: async () => {
-      const [characters, active] = await Promise.all([
-        db.from("characters").select("id,name").order("name"),
-        db.from("active_summons").select("summoned_character_id"),
-      ]);
-      if (characters.error) throw characters.error;
-      const activeIds = new Set((active.data ?? []).map((s: { summoned_character_id: string }) => s.summoned_character_id));
-      return (characters.data ?? []).filter((c: CharacterOption) => !activeIds.has(c.id));
+      const { data, error } = await db.from("characters")
+        .select("id,name").eq("is_summon_snapshot", false).order("name");
+      if (error) throw error;
+      return data ?? [];
     },
     staleTime: 5000,
   });
@@ -328,6 +325,7 @@ export function SummonCombatPanel({ characterId, characterName, battleId, master
   const { data: abilityIds = [] } = useQuery<string[]>({
     queryKey: ["summon-ability-source-ids", characterId],
     enabled: visible,
+    refetchInterval: 5000,
     queryFn: async () => {
       const { data,error } = await db.from("character_abilities").select("ability_id").eq("character_id",characterId);
       if (error) throw error;
