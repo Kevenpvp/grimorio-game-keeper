@@ -1270,6 +1270,11 @@ export function CharacterAbilitiesPanel({
                   ? ` · Mágico: ${damageTypes.find((type) => type.id === attackConfig.damage_type_id)?.name ?? "tipo não configurado"} · grau ${attackConfig.magic_level}`
                   : ""}
               </div>
+              {!attackStarted && (
+                <p className="text-xs text-muted-foreground">
+                  Finalizar Ataque consome Mana e inicia a recarga mesmo sem nenhum acerto. Fechar pelo X antes de usar cancela sem custo.
+                </p>
+              )}
               {attackStarted && (
                 <p className="text-sm text-emerald-500">
                   {attackCount} aplicação(ões) nesta sequência. Causar o Ataque pode ser usado novamente, com outros alvos, acertos ou modificadores. A Mana e a recarga foram aplicadas apenas na primeira vez.
