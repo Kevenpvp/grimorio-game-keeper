@@ -50,7 +50,7 @@ function HabilidadesPage() {
 
   async function create() {
     const { data, error } = await supabase.from("abilities").insert({
-      name: "Nova habilidade", description: "", is_passive: false, can_activate: true, is_magical: true, self_target_only: false, cooldown_turns: 1, mana_cost: 0, effects: [], passive_effects: [], end_effects: [], dot_effects: [], attack_effect_groups: [], custom_script_key: null, custom_attributes: [],
+      name: "Nova habilidade", description: "", is_passive: false, can_activate: true, is_magical: true, self_target_only: false, cooldown_turns: 1, duration_turns: 0, mana_cost: 0, effects: [], passive_effects: [], end_effects: [], dot_effects: [], attack_effect_groups: [], custom_script_key: null, custom_attributes: [],
     }).select("id").single();
     if (error) { toast.error(error.message); return; }
     setSearch("");
@@ -272,6 +272,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
   const [oncePerBattle, setOncePerBattle] = useState(Boolean((ability as Ability & { once_per_battle?: boolean }).once_per_battle));
   const [selfTargetOnly, setSelfTargetOnly] = useState(ability.self_target_only);
   const [cooldown, setCooldown] = useState(String(ability.cooldown_turns));
+  const [duration, setDuration] = useState(String(ability.duration_turns ?? 0));
   const [manaCost, setManaCost] = useState(String(ability.mana_cost));
   const [effects, setEffects] = useState<AbilityEffectDefinition[]>(() => parseAbilityEffects(ability.effects));
   const [passiveEffects, setPassiveEffects] = useState<AbilityEffectDefinition[]>(() => parseAbilityEffects(ability.passive_effects));
@@ -293,6 +294,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
     setOncePerBattle(Boolean((ability as Ability & { once_per_battle?: boolean }).once_per_battle));
     setSelfTargetOnly(ability.self_target_only);
     setCooldown(String(ability.cooldown_turns));
+    setDuration(String(ability.duration_turns ?? 0));
     setManaCost(String(ability.mana_cost));
     setEffects(parseAbilityEffects(ability.effects));
     setPassiveEffects(parseAbilityEffects(ability.passive_effects));
@@ -301,8 +303,10 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
 
   async function save() {
     const cool = canActivate ? Math.floor(Number(cooldown)) : 0;
+    const activeDuration = canActivate && !toggleMode ? Math.floor(Number(duration)) : 0;
     const mana = Math.floor(Number(manaCost));
     if (!name.trim()) { toast.error("Informe o nome da habilidade"); return; }
+    if (!Number.isInteger(activeDuration) || activeDuration < 0 || activeDuration > 1000) { toast.error("Duração deve ser de 0 a 1000 turnos."); return; }
     if (!Number.isFinite(mana) || mana < 0) { toast.error("O custo de Mana não pode ser negativo"); return; }
     if (canActivate && (!Number.isFinite(cool) || cool < 0)) {
       toast.error("Uma habilidade ativável precisa ter cooldown de 0 ou mais turnos. Marque como não ativável se não puder ser usada.");
@@ -444,6 +448,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
       self_target_only: canActivate && selfTargetOnly,
       is_passive: !canActivate,
       cooldown_turns: cool,
+      duration_turns: activeDuration,
       mana_cost: canActivate ? mana : 0,
       effects: effects.map((effect) => ({ ...effect, duration: Math.max(1, effect.duration) })) as unknown as Json,
       passive_effects: passiveEffects.map((effect) => ({ ...effect, duration: 1 })) as unknown as Json,
@@ -831,6 +836,11 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         {canActivate && <div className="space-y-1.5"><Label>Cooldown (turnos)</Label><Input type="number" min="0" value={cooldown} onChange={(e) => setCooldown(e.target.value)} /></div>}
+        {canActivate && !toggleMode && <div className="space-y-1.5">
+          <Label>Duração da habilidade (turnos, 0 = instantânea)</Label>
+          <Input type="number" min="0" max="1000" value={duration} onChange={(e) => setDuration(e.target.value)} />
+          <p className="text-xs text-muted-foreground">Se tiver duração, o cooldown só começa quando ela terminar. O contador diminui a cada avanço de turno.</p>
+        </div>}
         {canActivate && <div className="space-y-1.5">
           <Label>Custo de Mana (0 = não gasta)</Label>
           <Input type="number" min="0" value={manaCost} onChange={(e) => setManaCost(e.target.value)} />
