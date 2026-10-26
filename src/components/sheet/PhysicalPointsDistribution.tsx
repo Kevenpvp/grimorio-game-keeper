@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { allocationTotal, computeValue, conditionAdjustedValue, numberAllocation, physicalAttributePoints, useCharacterTraitMods, type AttributeDef, type Character, type CharacterAttr } from "@/lib/sheets";
 import { AttrIcon } from "./icons";
@@ -10,8 +11,8 @@ import { AttrIcon } from "./icons";
 const physicalKeys = new Set(["strength", "phys_def", "speed", "atk_speed"]);
 
 export function PhysicalPointsDistribution({
-  character, attrs, defs,
-}: { character: Character; attrs: CharacterAttr[]; defs: AttributeDef[] }) {
+  character, attrs, defs, masterQuickEntry = false,
+}: { character: Character; attrs: CharacterAttr[]; defs: AttributeDef[]; masterQuickEntry?: boolean }) {
   const qc = useQueryClient();
   const [alloc, setAlloc] = useState<Record<string, number>>({});
   const [busy, setBusy] = useState(false);
@@ -49,6 +50,18 @@ export function PhysicalPointsDistribution({
     setAlloc({ ...alloc, [key]: next });
   }
 
+  function setPendingDirectly(key: string, raw: string) {
+    if (busy || !masterQuickEntry) return;
+    const entered = Number(raw);
+    if (!Number.isFinite(entered)) return;
+    const requested = Math.max(0, Math.trunc(entered));
+    const otherPending = spentDraft - (alloc[key] ?? 0);
+    setAlloc((previous) => ({
+      ...previous,
+      [key]: Math.min(requested, Math.max(0, sourceRemaining - otherPending)),
+    }));
+  }
+
   async function confirm() {
     if (busy || remaining < 0) return;
     const clean = Object.fromEntries(Object.entries(alloc).filter(([, value]) => value > 0));
@@ -79,6 +92,7 @@ export function PhysicalPointsDistribution({
         <div>
           <h2 className="text-lg text-gold">Pontos Extras de Atributos Físicos</h2>
           <p className="mt-1 text-xs text-muted-foreground">Só podem ser distribuídos em Força, Defesa física, Velocidade e Velocidade de ataque. Estes pontos são separados dos pontos livres normais.</p>
+          {masterQuickEntry && <p className="mt-1 text-xs text-gold">Mestre: digite a quantidade de pontos físicos que deseja distribuir em cada atributo, em vez de apertar + várias vezes.</p>}
           {physicalPointsGranted === 0 && (
             <p className="mt-2 text-xs text-amber-500">
               Nenhum ponto físico extra foi concedido a esta ficha. Os bônus como “+5 Força” são modificadores de atributo e não formam esse saldo distribuível. O mestre precisa configurar “Pontos extras de atributos físicos” na raça, classe ou virtude.
@@ -120,8 +134,18 @@ export function PhysicalPointsDistribution({
                   </div>
                   {(fromRace > 0 || fromVirtue > 0 || fromClass > 0 || pending > 0) && <div className="mt-1 text-[11px] text-muted-foreground">{fromRace > 0 ? `${fromRace} da raça` : ""}{fromRace > 0 && fromVirtue > 0 ? " · " : ""}{fromVirtue > 0 ? `${fromVirtue} da virtude` : ""}{(fromRace > 0 || fromVirtue > 0) && fromClass > 0 ? " · " : ""}{fromClass > 0 ? `${fromClass} da classe` : ""}{pending > 0 && <> · +{pending} pendentes da {source === "race" ? "raça" : source === "virtue" ? "virtude" : "classe"}</>}</div>}
                 </div>
-                <div className="flex items-center gap-1">
-                  <Button size="icon" variant="outline" className="h-8 w-8" aria-label={`Desfazer ponto físico de ${def.label}`}
+                <div className="flex flex-wrap items-center justify-end gap-1">
+                  {masterQuickEntry && (
+                    <label className="mr-1 space-y-1">
+                      <span className="block text-[10px] text-muted-foreground">Adicionar pontos</span>
+                      <Input type="number" min={0} step={1} inputMode="numeric" disabled={busy}
+                        aria-label={`Pontos físicos para adicionar em ${def.label}`}
+                        className="h-10 w-20 text-center tabular-nums"
+                        value={pending} onChange={(event) => setPendingDirectly(def.key, event.target.value)}
+                      />
+                    </label>
+                  )}
+                  <Button size="icon" variant="outline" className="h-9 w-9" aria-label={`Desfazer ponto físico de ${def.label}`}
                     disabled={pending <= 0 || busy} onClick={() => change(def.key, -1)}><Minus className="h-4 w-4" /></Button>
                   <Button size="icon" variant="outline" className="h-8 w-8" aria-label={`Adicionar ponto físico em ${def.label}`}
                     disabled={remaining <= 0 || busy} onClick={() => change(def.key, 1)}><Plus className="h-4 w-4" /></Button>
