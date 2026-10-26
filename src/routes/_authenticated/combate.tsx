@@ -390,6 +390,9 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
   const { data: classes } = useClasses();
   const qc = useQueryClient();
   const [combatTab, setCombatTab] = useState<CombatTab>("fighters");
+  const [actionMode, setActionMode] = useState<"combat" | "abilities" | "dots">("combat");
+  const [detailTab, setDetailTab] = useState<"status" | "abilities" | "transformations" | "effects">("status");
+  const [battleAdminOpen, setBattleAdminOpen] = useState(false);
   const [fighterSearch, setFighterSearch] = useState("");
   const [fighterFilter, setFighterFilter] = useState<"all" | "targets" | "effects" | "critical">("all");
   const [combatActivity, setCombatActivity] = useState<CombatActivity[]>([]);
@@ -802,7 +805,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
             <p className="text-xs text-muted-foreground">Turno {battle.turn_count ?? 0} · {fighters.length} combatentes{actor ? " · Vez: " + actor.name : ""}</p>
           </div>
           <div className="flex items-center gap-2">
-            {isMaster && <Button size="sm" variant="outline" onClick={() => setCombatTab("summary")} aria-label="Gerenciar batalha no resumo"><Settings2 className="mr-1 h-4 w-4" /> Gerenciar</Button>}
+            {isMaster && <Button size="sm" variant="outline" onClick={() => { setCombatTab("summary"); setBattleAdminOpen(true); }} aria-label="Gerenciar batalha no resumo"><Settings2 className="mr-1 h-4 w-4" /> Gerenciar</Button>}
             {isMaster && <Button size="sm" disabled={!battle.active || advancingTurnKeys.has("__global__")} onClick={() => void advanceCombatTurn(null)}>
               <RotateCw className="mr-1 h-4 w-4" /> {advancingTurnKeys.has("__global__") ? "Avançando..." : "Turno geral"}
             </Button>}
@@ -900,8 +903,19 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                     <SheetTitle className="font-display text-xl text-gold">{f.name}</SheetTitle>
                     <SheetDescription>{f.player_name || "NPC"} · Atributos, habilidades, efeitos, transformações e recursos</SheetDescription>
                   </SheetHeader>
-                  <div className="mt-4 h-[calc(93dvh-7rem)] space-y-4 overflow-y-auto overscroll-contain pb-10 pr-1">
-              {(isOwnFighter || isMaster) && availableTransformations.length > 0 && (
+                  <div role="tablist" aria-label={"Detalhes de " + f.name} className="mt-4 flex gap-2 overflow-x-auto border-b border-border pb-2">
+                    {([
+                      ["status", "Status"],
+                      ["abilities", "Habilidades"],
+                      ["transformations", "Transformações"],
+                      ...(isMaster ? [["effects", "Recursos e efeitos"]] : []),
+                    ] as Array<["status" | "abilities" | "transformations" | "effects", string]>).map(([key, label]) =>
+                      <button key={key} type="button" role="tab" aria-selected={detailTab === key}
+                        onClick={() => setDetailTab(key)}
+                        className={cn("shrink-0 rounded-md px-3 py-2 text-xs font-medium", detailTab === key ? "bg-gold/15 text-gold" : "text-muted-foreground hover:bg-muted")}>{label}</button>)}
+                  </div>
+                  <div className="mt-2 h-[calc(93dvh-11rem)] space-y-4 overflow-y-auto overscroll-contain pb-10 pr-1">
+              {detailTab === "transformations" && (isOwnFighter || isMaster) && availableTransformations.length > 0 && (
                 <div className="space-y-2 rounded-md border border-border p-2">
                   <div className="text-xs font-semibold text-gold">Transformações</div>
                   <div className="space-y-2">
@@ -982,12 +996,16 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                 </div>
               )}
 
+              {detailTab === "transformations" && availableTransformations.length === 0 && <p className="rounded border border-border p-4 text-sm text-muted-foreground">Este personagem não possui transformações disponíveis.</p>}
               {isExpanded && (
                 <>
+                  {detailTab === "status" && <>
                   {isOwnFighter && defs.filter((d) => d.key !== "hp" && d.key !== "mana" && d.show_bar).map((d) => {
                     const attr = f.character_attributes.find((a) => a.attribute_key === d.key);
                     return <Bar key={d.key} label={d.label} cur={attr?.current_value ?? val(f, d.key)} max={val(f, d.key)} tone="bg-sky-500" />;
                   })}
+                  </>}
+                  {detailTab === "abilities" && <>
                   <CharacterAbilitiesPanel characterId={f.id} characterName={f.name} mode="combat"
                     canUse={isMaster && battle.active} showActiveEffects={isOwnFighter} battleId={battle.id}
                     individualTurn={f.participant_turn_count ?? 0}
@@ -1005,6 +1023,8 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                     master={isMaster && battle.active}
                     visible={isMaster || isOwnFighter}
                   />
+                  </>}
+                  {detailTab === "status" && <>
                   {isOwnFighter && <div className="grid grid-cols-2 gap-2 text-xs">
                     <div className="rounded border border-border p-2"><span className="text-muted-foreground">Corpo</span><div className="font-semibold">{f.body}%</div></div>
                     <div className="rounded border border-border p-2"><span className="text-muted-foreground">Sanidade</span><div className="font-semibold">{f.sanity}%</div></div>
@@ -1014,8 +1034,9 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                       <div key={d.key} className="rounded border border-border p-2"><span className="text-muted-foreground">{d.label}</span><div className="font-semibold">{val(f, d.key)}</div></div>
                     ))}
                   </div>}
-                  {isMaster && <CombatResourceEditor fighter={f} val={val} effects={effects.filter(e => e.character_id === f.id)} defs={defs} onAddEffect={(effect) => void addEffect(f.id, effect)} onRemoveEffect={async (id) => { const { data, error } = await supabase.rpc("remove_manual_character_effect", { _effect_id: id }); if (error) toast.error(error.message); else if (data !== true) toast.error("Este efeito não foi removido."); await qc.invalidateQueries({ queryKey: ["battle-effects", battle.id] }); await qc.invalidateQueries({ queryKey: ["character-active-effects"] }); await qc.invalidateQueries({ queryKey: ["battles"] }); }} hpRegenBlocked={blocked(f.id, "no_regen_hp")} manaRegenBlocked={blocked(f.id, "no_regen_mana") || blocked(f.id, "no_mana")} manaRegenMode={manaRegenSettings[f.id]?.mode ?? "percent"} manaRegenAmount={manaRegenSettings[f.id]?.amount ?? "0"} onManaRegenModeChange={(mode) => setManaRegen(f.id, { mode })} onManaRegenAmountChange={(amount) => setManaRegen(f.id, { amount })} />}
-                  <div className="flex flex-wrap items-center justify-between gap-2 rounded border border-border p-2">
+                  </>}
+                  {detailTab === "effects" && isMaster && <CombatResourceEditor fighter={f} val={val} effects={effects.filter(e => e.character_id === f.id)} defs={defs} onAddEffect={(effect) => void addEffect(f.id, effect)} onRemoveEffect={async (id) => { const { data, error } = await supabase.rpc("remove_manual_character_effect", { _effect_id: id }); if (error) toast.error(error.message); else if (data !== true) toast.error("Este efeito não foi removido."); await qc.invalidateQueries({ queryKey: ["battle-effects", battle.id] }); await qc.invalidateQueries({ queryKey: ["character-active-effects"] }); await qc.invalidateQueries({ queryKey: ["battles"] }); }} hpRegenBlocked={blocked(f.id, "no_regen_hp")} manaRegenBlocked={blocked(f.id, "no_regen_mana") || blocked(f.id, "no_mana")} manaRegenMode={manaRegenSettings[f.id]?.mode ?? "percent"} manaRegenAmount={manaRegenSettings[f.id]?.amount ?? "0"} onManaRegenModeChange={(mode) => setManaRegen(f.id, { mode })} onManaRegenAmountChange={(amount) => setManaRegen(f.id, { amount })} />}
+                  {detailTab === "status" && <div className="flex flex-wrap items-center justify-between gap-2 rounded border border-border p-2">
                     <span className="text-xs text-muted-foreground">Turnos individuais: {f.participant_turn_count ?? 0}</span>
                     {isMaster && <Button size="sm" variant="outline" disabled={!battle.active || advancingTurnKeys.has("__global__") || advancingTurnKeys.has(f.id)} onClick={() => void advanceCombatTurn(f.id)}><RotateCw className="mr-1 h-3.5 w-3.5" /> {advancingTurnKeys.has(f.id) ? "Avançando..." : "Avançar turno"}</Button>}
                   </div>
@@ -1040,12 +1061,15 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                     </Button>
                   </>
                 )}
-                <Button size="sm" variant="ghost" className={isMaster ? "" : "ml-auto"} onClick={() => setExpandedFighterIds((current) => {
+                <Button size="sm" variant="ghost" className={isMaster ? "" : "ml-auto"} onClick={() => {
+                  if (!isExpanded) setDetailTab("status");
+                  setExpandedFighterIds((current) => {
                   const next = new Set(current);
                   if (next.has(f.id)) next.delete(f.id);
                   else next.add(f.id);
                   return next;
-                })}>
+                  });
+                }}>
                   {isExpanded ? <ChevronUp className="mr-1 h-3.5 w-3.5" /> : <ChevronDown className="mr-1 h-3.5 w-3.5" />}
                   {isExpanded ? "Fechar" : "Detalhes"}
                 </Button>
@@ -1060,6 +1084,14 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
         {isMaster ? <>
           <div className="panel space-y-3 p-4">
             <div className="flex items-center gap-2"><Zap className="h-5 w-5 text-gold" /><h3 className="font-display text-lg text-gold">Central de ações</h3></div>
+            <div className="grid grid-cols-3 gap-2" role="group" aria-label="Tipo de ação">
+              {([["combat", "Dano / testes"], ["abilities", "Habilidades"], ["dots", "DoTs"]] as const).map(([key, label]) => (
+                <button key={key} type="button" onClick={() => setActionMode(key)}
+                  aria-pressed={actionMode === key}
+                  className={cn("min-h-11 rounded-md border px-1 py-2 text-xs font-semibold sm:text-sm",
+                    actionMode === key ? "border-gold bg-gold/15 text-gold" : "border-border text-muted-foreground hover:bg-muted")}>{label}</button>
+              ))}
+            </div>
             <label className="block space-y-1 text-sm">
               <span className="text-muted-foreground">Quem está agindo?</span>
               <select className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm"
@@ -1087,8 +1119,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
               </div>
             </div>
           </div>
-          {actor ? <>
-            <div className="panel space-y-3 p-4">
+          {actionMode === "abilities" && actor && <div className="panel space-y-3 p-4">
               <h3 className="font-display text-lg text-gold">Habilidades de {actor.name}</h3>
               <CharacterAbilitiesPanel characterId={actor.id} characterName={actor.name} mode="combat"
                 canUse={battle.active} showActiveEffects battleId={battle.id}
@@ -1099,16 +1130,16 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                   const fighter = fighters.find((item) => item.id === characterId);
                   return fighter ? val(fighter, attributeKey) : 0;
                 }} />
-            </div>
-            <Actions battleId={battle.id} actor={actor} targets={targets} fighters={fighters} defs={defs}
+            </div>}
+          {actionMode === "combat" && actor && <Actions battleId={battle.id} actor={actor} targets={targets} fighters={fighters} defs={defs}
               val={val} effects={effects} abilitiesOf={abilitiesOf}
-              onDamageApplied={(targetName, total) => noteActivity("damage", targetName + " recebeu " + total + " de dano manual.")} />
-          </> : <p className="panel p-5 text-sm text-muted-foreground">Escolha quem está agindo para habilitar ataques, testes, habilidades e controle mental.</p>}
-          <details className="panel p-4">
-            <summary className="cursor-pointer font-semibold text-gold">Gerenciar e aplicar DoTs cadastrados</summary>
-            <div className="mt-4"><DamageOverTimeManager mode="combat" battleId={battle.active ? battle.id : null}
-              fighters={fighters.map((fighter) => ({ id: fighter.id, name: fighter.name }))} active={!!battle.active} /></div>
-          </details>
+              onDamageApplied={(targetName, total) => noteActivity("damage", targetName + " recebeu " + total + " de dano manual.")} />}
+          {actionMode !== "dots" && !actor && <p className="panel p-5 text-sm text-muted-foreground">Escolha quem está agindo para habilitar ataques, testes, habilidades e controle mental.</p>}
+          {actionMode === "dots" && <div className="panel space-y-3 p-4">
+            <h3 className="font-display text-lg text-gold">Aplicar DoTs cadastrados</h3>
+            <DamageOverTimeManager mode="combat" battleId={battle.active ? battle.id : null}
+              fighters={fighters.map((fighter) => ({ id: fighter.id, name: fighter.name }))} active={!!battle.active} />
+          </div>}
         </> : <p className="panel p-5 text-sm text-muted-foreground">As ações de combate são controladas pelo mestre. Abra Detalhes em Combatentes para consultar sua ficha, seus efeitos e habilidades.</p>}
       </section>}
       {combatTab === "summary" && <section className="space-y-4" aria-label="Resumo da batalha">
@@ -1143,7 +1174,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
           })}
           {fighters.length === 0 && <p className="text-sm text-muted-foreground">Não há combatentes nesta batalha.</p>}
         </div>
-        {isMaster && <details className="panel p-4">
+        {isMaster && <details className="panel p-4" open={battleAdminOpen} onToggle={(event) => setBattleAdminOpen(event.currentTarget.open)}>
           <summary className="cursor-pointer font-semibold text-gold"><Settings2 className="mr-2 inline h-4 w-4" /> Configurar batalha, participantes e encerramento</summary>
           <div className="mt-4"><BattleAdmin battle={battle} fighters={fighters} onUpdate={update} /></div>
         </details>}
@@ -1922,10 +1953,15 @@ function Actions({ battleId, actor, targets, fighters, defs, val, effects, abili
         <div className="space-y-4">
           <h2 className="text-xl text-gold">Aplicar dano por alvo</h2>
           <p className="text-sm text-muted-foreground">Cada alvo tem campos próprios para quantidade e valores de dano; aplicar em um alvo não altera os outros.</p>
-          {targets.map((target) => <DamageApplier key={target.id} target={target} battleId={battleId}
-            sources={fighters.filter((fighter) => fighter.id !== target.id).map((fighter) => ({ id: fighter.id, name: fighter.name }))}
-            defaultSourceCharacterId={actor.id}
-            onDamageApplied={(result) => onDamageApplied?.(target.name, result.totalDamage)} />)}
+          {targets.map((target) => <details key={target.id} className="panel p-3">
+            <summary className="cursor-pointer rounded-md py-2 font-semibold text-gold">Aplicar dano em {target.name}</summary>
+            <div className="mt-3">
+              <DamageApplier target={target} battleId={battleId}
+                sources={fighters.filter((fighter) => fighter.id !== target.id).map((fighter) => ({ id: fighter.id, name: fighter.name }))}
+                defaultSourceCharacterId={actor.id}
+                onDamageApplied={(result) => onDamageApplied?.(target.name, result.totalDamage)} />
+            </div>
+          </details>)}
         </div>
       )}
     </div>
