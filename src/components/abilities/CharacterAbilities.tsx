@@ -20,6 +20,7 @@ import { ActivationEffectValuesDialog, type ActivationEffectOverrides } from "@/
 import { customizableActivationEffects } from "@/lib/activation-effect-values";
 import { SheetAbilityAttackEditor } from "@/components/abilities/SheetAbilityAttackEditor";
 import { TemporaryAttackCategoryEditor } from "@/components/abilities/TemporaryAttackCategoryEditor";
+import { TemporaryGuaranteedDotsEditor } from "@/components/abilities/TemporaryGuaranteedDotsEditor";
 import { findRegisteredDotTemplate, registerAbilityDotTemplates } from "@/lib/ability-dot-templates";
 import type { Json } from "@/integrations/supabase/types";
 import { parseCustomAbilityAttributes, type CustomAbilityAttribute } from "@/lib/custom-ability-scripts";
@@ -485,6 +486,8 @@ export function CharacterAbilitiesPanel({
     effects: AbilityEffectDefinition[];
     dots: AbilityDotEffect[];
   }>>({});
+  const [attackGuaranteedDotExpanded, setAttackGuaranteedDotExpanded] = useState<Record<string, boolean>>({});
+  const [attackGuaranteedDotEdits, setAttackGuaranteedDotEdits] = useState<Record<string, AbilityDotEffect[]>>({});
   const eligibleAttackTargets = targets.filter((target) => target.id !== characterId);
   const attackAbility = loadout?.find((ability) => ability.id === attackDialogAbilityId);
   const attackCatalogEntry = abilityCatalog.find((catalogAbility) => catalogAbility.id === attackAbility?.ability_id);
@@ -559,6 +562,8 @@ export function CharacterAbilitiesPanel({
     setAttackResults({});
     setAttackExpandedGroups({});
     setAttackGroupEdits({});
+    setAttackGuaranteedDotExpanded({});
+    setAttackGuaranteedDotEdits({});
     setAttackStarted(false);
     setAttackCount(0);
   }
@@ -598,8 +603,16 @@ export function CharacterAbilitiesPanel({
       return;
     }
     const guaranteedDots = parseAbilityDotEffects(attackDefinition.dot_effects);
+    // A target-specific ID avoids collisions when two targets use different
+    // caster attribute calculations for the same guaranteed DoT.
+    const guaranteedDotsForTarget = (targetId: string) => {
+      const edited = attackGuaranteedDotEdits[targetId];
+      return edited === undefined
+        ? guaranteedDots
+        : edited.map((dot) => ({ ...dot, id: `${dot.id}@guaranteed:${targetId}` }));
+    };
     const allAttackDots = [
-      ...guaranteedDots,
+      ...currentAttackTargets.flatMap((target) => guaranteedDotsForTarget(target.id)),
       ...currentAttackTargets.flatMap((target) => attackEffectGroups.flatMap((group) =>
         attackGroupEdits[`${target.id}:${group.id}`]?.dots ?? group.dots)),
     ];
@@ -619,6 +632,9 @@ export function CharacterAbilitiesPanel({
         ? (attackEffectHits[target.id] ?? []).filter((groupId) => attackEffectGroups.some((group) => group.id === groupId))
         : [],
       group_overrides: attackHits[target.id] === true ? groupOverridesForTarget(target.id) : {},
+      ...(attackGuaranteedDotEdits[target.id] === undefined ? {} : {
+        guaranteed_dots_override: guaranteedDotsForTarget(target.id),
+      }),
     }));
     const extraMana = Math.max(0, Math.min(1000000, Math.floor(Number(extraManaCosts[attackAbility.id] ?? 0) || 0)));
     setAttackBusy(true);
@@ -753,6 +769,8 @@ export function CharacterAbilitiesPanel({
       // again requires opening Maximizar for that target/category.
       setAttackExpandedGroups({});
       setAttackGroupEdits({});
+      setAttackGuaranteedDotExpanded({});
+      setAttackGuaranteedDotEdits({});
       toast.success(hitTargets.length
         ? `${attackAbility.name}: golpe aplicado em ${hitTargets.length} alvo(s).${!continuingAttack && typeof spentMana === "number" && spentMana > 0 ? ` Mana gasta: ${spentMana}.` : ""}`
         : `${attackAbility.name}: aplicação sem acertos.${!continuingAttack && typeof spentMana === "number" && spentMana > 0 ? ` Mana gasta: ${spentMana}.` : ""}`);
@@ -834,6 +852,8 @@ export function CharacterAbilitiesPanel({
       setAttackResults({});
       setAttackExpandedGroups({});
       setAttackGroupEdits({});
+      setAttackGuaranteedDotExpanded({});
+      setAttackGuaranteedDotEdits({});
     } catch (error) {
       toast.error("Não foi possível finalizar o ataque: " + (error instanceof Error ? error.message : String(error)));
     } finally {
@@ -1311,6 +1331,30 @@ export function CharacterAbilitiesPanel({
                           <span className="font-semibold">Acertou</span>
                           <span className="text-xs text-muted-foreground">— confirma o acerto, independentemente do dano final (inclusive 0). DoTs garantidos são aplicados mesmo sem marcar Acertou.</span>
                         </label>
+                        {guaranteedAttackDots.length > 0 && (
+                          <TemporaryGuaranteedDotsEditor
+                            targetName={target.name}
+                            dots={attackGuaranteedDotEdits[target.id] ?? guaranteedAttackDots}
+                            expanded={attackGuaranteedDotExpanded[target.id] === true}
+                            disabled={attackBusy}
+                            defs={defs ?? []}
+                            damageTypes={damageTypes}
+                            onToggle={() => {
+                              setAttackGuaranteedDotExpanded((current) => ({
+                                ...current, [target.id]: !current[target.id],
+                              }));
+                              setAttackGuaranteedDotEdits((current) =>
+                                current[target.id] !== undefined ? current : {
+                                  ...current,
+                                  [target.id]: guaranteedAttackDots.map((dot) => ({ ...dot })),
+                                }
+                              );
+                            }}
+                            onChange={(dots) => setAttackGuaranteedDotEdits((current) => ({
+                              ...current, [target.id]: dots,
+                            }))}
+                          />
+                        )}
                         {attackHits[target.id] && (
                           <>
                             {attackEffectGroups.length > 0 && (
