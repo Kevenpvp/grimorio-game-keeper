@@ -18,8 +18,7 @@ import { DamageApplier } from "@/components/combat/DamageApplier";
 import { attackDiceModifier, hasActiveStun } from "@/lib/combat-dice";
 import { DamageOverTimeManager } from "@/components/combat/DamageOverTimeManager";
 import { CharacterAbilitiesPanel, effectSummary } from "@/components/abilities/CharacterAbilities";
-import { ActivationEffectValuesDialog, type ActivationEffectOverrides } from "@/components/abilities/ActivationEffectValuesDialog";
-import { customizableActivationEffects } from "@/lib/activation-effect-values";
+import { TransformationAdvancedActivationDialog, type TransformationActivationOverrides } from "@/components/transformations/TransformationAdvancedActivationDialog";
 import { SummonCombatPanel } from "@/components/summons/Summons";
 import { parseAbilityEffects, passiveEffectTypeActive, passiveRegenerationModifiers, passiveStatusModifiers, useAbilities, useBattleCharacterAbilities, useCharacterAbilities, useDamageTypes, useDotTemplates } from "@/lib/abilities";
 
@@ -502,23 +501,11 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
     return transformationCatalog.filter((transformation) => ids.has(transformation.id) && !overriddenIds.has(transformation.id));
   };
   const [activatingTransformationFor, setActivatingTransformationFor] = useState<string | null>(null);
-  const [pendingTransformationValues, setPendingTransformationValues] = useState<{
-    characterId: string; characterName: string; transformationId: string; transformationName: string;
-    effects: ReturnType<typeof parseAbilityEffects>;
+  const [advancedTransformation, setAdvancedTransformation] = useState<{
+    characterId: string; characterName: string; template: TransformationTemplate;
   } | null>(null);
-  function requestTransformationActivation(characterId: string, characterName: string, transformationId: string) {
-    const template = transformationCatalog.find((item) => item.id === transformationId);
-    const currentEffects = parseAbilityEffects(template?.effects);
-    if (isMaster && template && customizableActivationEffects(currentEffects).length > 0) {
-      setPendingTransformationValues({
-        characterId, characterName, transformationId,
-        transformationName: template.name, effects: currentEffects,
-      });
-      return;
-    }
-    void activateTransformation(characterId, transformationId);
-  }
-  async function activateTransformation(characterId: string, transformationId: string, overrides?: ActivationEffectOverrides): Promise<boolean> {
+  // Normal button activates immediately; customization is an optional master-only action.
+  async function activateTransformation(characterId: string, transformationId: string, overrides?: TransformationActivationOverrides): Promise<boolean> {
     if (!battle.active || activatingTransformationFor) return false;
     setActivatingTransformationFor(characterId);
     try {
@@ -536,9 +523,8 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
       toast.success("Transformação ativada");
       noteActivity("transformation", "Transformação ativada: " + (transformationCatalog.find((item) => item.id === transformationId)?.name ?? "transformação") + ".");
       const configuredTransformation = transformationCatalog.find((item) => item.id === transformationId);
-      const activeDuration = configuredTransformation?.duration_turns
-        ?? (typeof result.duration_remaining === "number" ? result.duration_remaining : undefined)
-        ?? (typeof result.duration_turns === "number" ? result.duration_turns : undefined);
+      const activeDuration = (typeof result.duration_remaining === "number" ? result.duration_remaining : undefined)
+        ?? configuredTransformation?.duration_turns;
       if (activeDuration) toast.info(`Duração: ${activeDuration} turno(s)`);
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["battle-character-transformations"] }),
@@ -977,12 +963,19 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                               size="sm"
                               variant={isActive ? "default" : "outline"}
                               disabled={disabled}
-                              onClick={() => requestTransformationActivation(f.id, f.name, transformation.id)}
+                              onClick={() => void activateTransformation(f.id, transformation.id)}
                             >
                               <Sparkles className="mr-1 h-3.5 w-3.5" />
                               {isActive ? transformation.name : isCoolingDown ? `${transformation.name} · ${state?.cooldown_remaining}T` : activatingTransformationFor === f.id ? "Ativando…" : transformation.name}
                             </Button>}
-                            <Button size="sm" variant="ghost" onClick={() => setExpandedTransformationDetailsIds((current) => {
+                            {isMaster && <Button
+                              size="sm" variant="outline" className="min-h-11 border-gold/40 text-gold"
+                              disabled={disabled}
+                              onClick={() => setAdvancedTransformation({ characterId: f.id, characterName: f.name, template: transformation })}
+                            >
+                              <Settings2 className="mr-1.5 h-4 w-4" /> Opções avançadas
+                            </Button>}
+                            <Button size="sm" variant="ghost" className="min-h-11" onClick={() => setExpandedTransformationDetailsIds((current) => {
                               const next = new Set(current);
                               if (next.has(detailKey)) next.delete(detailKey); else next.add(detailKey);
                               return next;
@@ -1234,15 +1227,17 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
           </ol>
         )}
       </section>}
-      {pendingTransformationValues && <ActivationEffectValuesDialog
-        key={pendingTransformationValues.transformationId + ":" + pendingTransformationValues.characterId}
-        abilityName={"Transformação: " + pendingTransformationValues.transformationName}
-        targetName={pendingTransformationValues.characterName}
-        effects={pendingTransformationValues.effects}
-        onCancel={() => setPendingTransformationValues(null)}
-        onConfirm={(values) => activateTransformation(
-          pendingTransformationValues.characterId,
-          pendingTransformationValues.transformationId, values
+      {isMaster && advancedTransformation && defs && <TransformationAdvancedActivationDialog
+        key={advancedTransformation.template.id + ":" + advancedTransformation.characterId}
+        transformation={advancedTransformation.template}
+        characterName={advancedTransformation.characterName}
+        defs={defs}
+        busy={!!activatingTransformationFor}
+        onCancel={() => setAdvancedTransformation(null)}
+        onConfirm={(overrides) => activateTransformation(
+          advancedTransformation.characterId,
+          advancedTransformation.template.id,
+          overrides,
         )}
       />}
       <CombatNavigation active={combatTab} onSelect={setCombatTab} mobile />
