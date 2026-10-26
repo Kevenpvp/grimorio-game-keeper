@@ -5,7 +5,7 @@ import { parseDefenseIgnore, type DefenseIgnore } from "@/lib/defense-ignore";
 
 export type AbilityEffectType = "status" | "regeneration" | "mana_regeneration" | "mana_used" | "no_regen_hp" | "no_regen_mana" | "magic_prohibition" | "stun" | "damage_dealt" | "damage_reduction" | "damage_received" | "damage_vulnerability" | "no_mana" | "healing" | "invincible" | "healing_blocked" | "magic_healing_reversal" | "mental_control_immunity" | "mental_control_chance" | "mental_control_resistance" | "dot_immunity" | "dot_resistance" | "invisibility" | "temporal_freeze" | "visual_tag";
 export type DamageScope = "any" | "physical" | "magical";
-export type DamageReductionScope = "physical" | "magical";
+export type DamageReductionScope = "physical" | "magical" | "both";
 export type DamageReceivedScope = "any" | "physical" | "magical" | "race";
 export type DamageMagicLevel = "baixa" | "media" | "alta";
 export type DamageTypeCategory = "physical" | "magical";
@@ -88,6 +88,13 @@ export type AbilityEffectDefinition = {
   /** Empty arrays mean all registered magic types / all magic grades. */
   damage_reduction_type_ids?: string[] | null;
   damage_reduction_magic_levels?: DamageMagicLevel[] | null;
+  /** Distinct allowlists let one mitigation cover physical and magical damage. Empty = all. */
+  damage_reduction_physical_type_ids?: string[];
+  damage_reduction_magic_type_ids?: string[];
+  /** Exclusions always win over the allowlists. */
+  damage_reduction_physical_blacklist_ids?: string[];
+  damage_reduction_magic_blacklist_ids?: string[];
+  damage_reduction_magic_level_blacklist?: DamageMagicLevel[];
   /** How incoming damage is increased by this debuff. */
   damage_received_scope?: DamageReceivedScope;
   /** Empty arrays mean every magic type or magic level is affected. */
@@ -264,11 +271,23 @@ export function parseAbilityEffects(value: unknown, nested = false): AbilityEffe
       damage_dealt_physical_type_ids: Array.isArray(raw.damage_dealt_physical_type_ids)
         ? [...new Set(raw.damage_dealt_physical_type_ids.filter((value): value is string => typeof value === "string"))]
         : [],
-      damage_reduction_scope: raw.damage_reduction_scope === "magical" ? "magical" : "physical",
+      damage_reduction_scope: raw.damage_reduction_scope === "magical" || raw.damage_reduction_scope === "both" ? raw.damage_reduction_scope : "physical",
       damage_reduction_type_id: null,
       damage_reduction_magic_level: null,
       damage_reduction_type_ids: damageReductionTypeIds,
       damage_reduction_magic_levels: damageReductionMagicLevels,
+      damage_reduction_physical_type_ids: Array.isArray(raw.damage_reduction_physical_type_ids)
+        ? [...new Set(raw.damage_reduction_physical_type_ids.filter((x): x is string => typeof x === "string"))]
+        : effectType === "damage_reduction" && raw.damage_reduction_scope !== "magical" ? damageReductionTypeIds : [],
+      damage_reduction_magic_type_ids: Array.isArray(raw.damage_reduction_magic_type_ids)
+        ? [...new Set(raw.damage_reduction_magic_type_ids.filter((x): x is string => typeof x === "string"))]
+        : effectType === "damage_reduction" && raw.damage_reduction_scope === "magical" ? damageReductionTypeIds : [],
+      damage_reduction_physical_blacklist_ids: Array.isArray(raw.damage_reduction_physical_blacklist_ids)
+        ? [...new Set(raw.damage_reduction_physical_blacklist_ids.filter((x): x is string => typeof x === "string"))] : [],
+      damage_reduction_magic_blacklist_ids: Array.isArray(raw.damage_reduction_magic_blacklist_ids)
+        ? [...new Set(raw.damage_reduction_magic_blacklist_ids.filter((x): x is string => typeof x === "string"))] : [],
+      damage_reduction_magic_level_blacklist: Array.isArray(raw.damage_reduction_magic_level_blacklist)
+        ? [...new Set(raw.damage_reduction_magic_level_blacklist.filter((x): x is DamageMagicLevel => validMagicLevels.includes(x as DamageMagicLevel)))] : [],
       damage_received_scope: raw.damage_received_scope === "physical" || raw.damage_received_scope === "magical" || raw.damage_received_scope === "race" ? raw.damage_received_scope : "any",
       damage_received_type_ids: Array.isArray(raw.damage_received_type_ids)
         ? [...new Set(raw.damage_received_type_ids.filter((value): value is string => typeof value === "string"))]
