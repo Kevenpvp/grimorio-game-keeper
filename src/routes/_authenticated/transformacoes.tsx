@@ -300,11 +300,12 @@ function TransformationEditor({
           effects={effects}
           onChange={setEffects}
           title="Efeitos ao ativar"
-          description="Estes efeitos ficam vinculados à transformação e são removidos quando o cooldown chega a zero."
+          description="Efeitos da transformação aplicados ao próprio personagem. Permanecem enquanto ela estiver ativa e são removidos ao terminar; a duração é controlada pela transformação."
           defs={defs}
           allowHealing
           allowPeriodicHealing
           hideDuration
+          hideTargeting
         />
       </div>
       <div className="rounded-md border border-border p-3">
@@ -312,10 +313,11 @@ function TransformationEditor({
           effects={endEffects}
           onChange={setEndEffects}
           title="Efeitos ao terminar"
-          description="Estes efeitos são aplicados quando a transformação termina. A duração definida em cada efeito é mantida normalmente."
+          description="Efeitos aplicados ao próprio personagem quando a transformação termina. Escolha a duração de cada efeito ou até o fim do combate."
           defs={defs}
           allowHealing
           allowPeriodicHealing
+          hideTargeting
         />
       </div>
 
