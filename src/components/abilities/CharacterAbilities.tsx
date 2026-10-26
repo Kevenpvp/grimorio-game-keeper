@@ -18,7 +18,7 @@ import { useDefs, useMe, useRaces, useClasses, useVirtues } from "@/lib/sheets";
 import { parseAbilityEffects, parseAbilityAttackDamage, parseAbilityAttackEffectGroups, parseAbilityDotEffects, useAbilities, useCharacterAbilities, useCharacterActiveEffects, useDamageTypes, useDotTemplates, type Ability, type AbilityEffectDefinition, type CharacterAbility, type AbilityDotEffect, type AbilityAttackDamageConfig, type AbilityAttackEffectGroup } from "@/lib/abilities";
 import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
 import { ContinuousRulesEditor } from "@/components/abilities/ContinuousRulesEditor";
-import { parseContinuousRules, type ContinuousRule } from "@/lib/continuous-effects";
+import { parseContinuousRules, type ContinuousRule, type ContinuousInstance } from "@/lib/continuous-effects";
 import { parseAttributeStatusModifiers } from "@/lib/multi-attribute-effects";
 import { ActivationEffectValuesDialog, type ActivationEffectOverrides } from "@/components/abilities/ActivationEffectValuesDialog";
 import { customizableActivationEffects } from "@/lib/activation-effect-values";
@@ -384,6 +384,34 @@ export function CharacterAbilitiesPanel({
   const { data: classes = [] } = useClasses();
   const { data: abilityCatalog = [] } = useAbilities();
   const db = supabase as any;
+  const { data: attackContinuousLinks = [] } = useQuery<ContinuousInstance[]>({
+    queryKey:["battle-continuous-instances",battleId],
+    enabled:mode==="combat" && !!battleId && !!me?.isMaster,
+    refetchInterval:5000,
+    queryFn:async()=>{
+      const {data,error}=await db.from("continuous_effect_instances").select(
+        "id,battle_id,character_ability_id,caster_character_id,target_character_id,rule_index,name,rule,ticks,active"
+      ).eq("battle_id",battleId!).eq("active",true).order("created_at");
+      if(error)throw error;
+      return (data??[]).map((value:ContinuousInstance)=>({
+        ...value,rule:parseContinuousRules([value.rule])[0]??value.rule,
+      }));
+    },
+  });
+  const [releasingContinuous,setReleasingContinuous] = useState<string|null>(null);
+  async function releaseContinuousTarget(id:string){
+    if(releasingContinuous || !battleId)return;
+    setReleasingContinuous(id);
+    const {error}=await db.rpc("control_continuous_effect",{_id:id,_mode:"interrupt"});
+    setReleasingContinuous(null);
+    if(error){toast.error("Não foi possível liberar este alvo: "+error.message);return;}
+    toast.success("Vínculo encerrado. A penalidade residual foi preservada.");
+    await Promise.all([
+      qc.invalidateQueries({queryKey:["battle-continuous-instances",battleId]}),
+      qc.invalidateQueries({queryKey:["battle-effects"]}),
+      qc.invalidateQueries({queryKey:["character-active-effects"]}),
+    ]);
+  }
   const { data: characterTraitIds = { raceId: null, classId: null } } = useQuery<{ raceId: string | null; classId: string | null }>({
     queryKey: ["character-traits-for-custom-ability-attributes", characterId],
     queryFn: async () => {
@@ -511,6 +539,8 @@ export function CharacterAbilitiesPanel({
   const [attackGuaranteedDotEdits, setAttackGuaranteedDotEdits] = useState<Record<string, AbilityDotEffect[]>>({});
   const eligibleAttackTargets = targets.filter((target) => target.id !== characterId);
   const attackAbility = loadout?.find((ability) => ability.id === attackDialogAbilityId);
+  const attackContinuousRules = parseContinuousRules((attackAbility as CharacterAbility & {continuous_rules?:unknown}|undefined)?.continuous_rules);
+  const heldAttackTargets = attackContinuousLinks.filter(instance=>instance.character_ability_id===attackAbility?.id);
   const attackCatalogEntry = abilityCatalog.find((catalogAbility) => catalogAbility.id === attackAbility?.ability_id);
   // Catalog abilities keep their shared model; exclusive sheet abilities use
   // the attack settings stored directly on character_abilities.
@@ -1602,6 +1632,40 @@ export function CharacterAbilitiesPanel({
                   ? ` · Mágico: ${damageTypes.find((type) => type.id === attackConfig.damage_type_id)?.name ?? "tipo não configurado"} · grau ${attackConfig.magic_level}`
                   : ""}
               </div>
+              {attackContinuousRules.some(rule=>rule.max_targets!==null) &&
+                <section className="space-y-2 rounded-xl border border-gold/35 bg-gold/5 p-3">
+                  <p className="text-sm font-semibold text-gold">Vínculos sustentados e limite de alvos</p>
+                  <p className="text-xs text-muted-foreground">
+                    Se a habilidade atingiu o limite e está configurada para pedir escolha, solte uma vítima anterior antes do próximo acerto.
+                    Os debuffs antigos permanecem pelo tempo residual configurado.
+                  </p>
+                  {attackContinuousRules.map((rule,index)=>rule.max_targets===null?null:(
+                    <div key={index} className="space-y-2 rounded-lg border border-gold/15 p-2.5">
+                      <div className="flex flex-wrap justify-between gap-2 text-xs">
+                        <span className="font-semibold">{rule.name}</span>
+                        <span className="font-semibold text-gold">
+                          {heldAttackTargets.filter(item=>item.rule_index===index).length}/{rule.max_targets} alvos
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {rule.on_limit==="choose"?"Escolher quem liberar":rule.on_limit==="block"?"Bloquear novos alvos ao atingir o limite":"Substituir automaticamente o mais antigo"}
+                      </p>
+                      {heldAttackTargets.filter(item=>item.rule_index===index).map(instance=>(
+                        <div key={instance.id} className="flex items-center justify-between gap-2 rounded-lg bg-background/60 px-2.5 py-2">
+                          <span className="min-w-0 truncate text-xs">
+                            {targets.find(target=>target.id===instance.target_character_id)?.name??"Alvo anterior"} · {instance.ticks} acúmulo(s)
+                          </span>
+                          <Button type="button" size="sm" variant="outline"
+                            className="min-h-10 shrink-0 border-amber-600/40 text-amber-300"
+                            disabled={!!releasingContinuous || attackBusy}
+                            onClick={()=>void releaseContinuousTarget(instance.id)}>
+                            {releasingContinuous===instance.id?"Liberando...":"Soltar alvo"}
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </section>}
               {!attackStarted && (
                 <p className="text-xs text-muted-foreground">
                   Custo base de Atacar: {attackAbility ? attackManaBaseFor(attackAbility) : 0} Mana
