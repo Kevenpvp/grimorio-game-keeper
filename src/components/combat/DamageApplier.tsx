@@ -45,6 +45,7 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
     hpBefore: number;
     hpAfter: number;
     hits: number[];
+    criticalRawHits: number[];
   } | null>(null);
   const [extraDamageFixed, setExtraDamageFixed] = useState("0");
   const [extraDamagePercent, setExtraDamagePercent] = useState("0");
@@ -264,6 +265,8 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
         magical_reduction_fixed?: number;
         magical_reduction_percent?: number;
         critical_damage?: boolean;
+        critical_before_defense?: boolean;
+        critical_raw_damage_by_hit?: number[];
       } } | null)?.damage_result;
       if (!result) {
         toast.error("O servidor não retornou o resultado do dano.");
@@ -318,7 +321,7 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
             ? reductionPart("Mitigação da metade física", physicalReductionFixed, physicalReductionPercent)
               + reductionPart(`Mitigação da metade mágica (${magicTypeName}, grau ${magicLevel})`, magicalReductionFixed, magicalReductionPercent)
             : "";
-      const criticalConfirmed = result.critical_damage === true;
+      const criticalConfirmed = result.critical_damage === true && result.critical_before_defense === true;
       setLastDamageOutcome({
         criticalRequested: criticalDamageForThisHit,
         criticalConfirmed,
@@ -326,6 +329,7 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
         hpBefore: Number(result.hp_before ?? 0),
         hpAfter: Number(result.hp_after ?? 0),
         hits: result.final_damage_by_hit ?? [],
+        criticalRawHits: result.critical_raw_damage_by_hit ?? [],
       });
       if (criticalDamageForThisHit && !criticalConfirmed) {
         toast.error("O servidor não confirmou a aplicação do crítico ×2; confira o dano final.", { duration: 10000 });
@@ -512,9 +516,10 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
           onChange={(e) => setCriticalDamage(e.target.checked)}
         />
         <span>
-          <span className="block font-semibold text-amber-500">Dano Crítico — ×2 de dano final</span>
+          <span className="block font-semibold text-amber-500">Dano Crítico — ×2 do dano bruto</span>
           <span className="mt-0.5 block text-xs text-muted-foreground">
-            Dobra o dano após defesa, mitigação e modificadores normais. A opção é desmarcada automaticamente ao terminar a aplicação.
+            Multiplica cada golpe por 2 antes de calcular a Defesa e a Mitigação. Exemplo: 40 × 2 − 78 de Defesa = 2 de dano.
+            Limite: 500000 de dano bruto por golpe no crítico. A opção desmarca após a aplicação.
           </span>
         </span>
       </label>
@@ -607,9 +612,14 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
           </div>
           <p className="text-xs text-muted-foreground">Dano final: <strong className="text-foreground">{lastDamageOutcome.damage}</strong>
             {" · "}HP: {lastDamageOutcome.hpBefore} → {lastDamageOutcome.hpAfter}</p>
-          {lastDamageOutcome.hits.length > 0 && <p className="break-words text-xs text-muted-foreground">Dano por golpe após defesa e mitigação: {lastDamageOutcome.hits.join(", ")}</p>}
+          {lastDamageOutcome.criticalRawHits.length > 0 && <p className="break-words text-xs text-muted-foreground">
+            Dano bruto com crítico, antes da defesa: {lastDamageOutcome.criticalRawHits.join(", ")}
+          </p>}
+          {lastDamageOutcome.hits.length > 0 && <p className="break-words text-xs text-muted-foreground">
+            Dano por golpe depois da defesa e mitigação: {lastDamageOutcome.hits.join(", ")}
+          </p>}
           {lastDamageOutcome.criticalRequested && <p className="text-xs text-muted-foreground">
-            O ×2 é aplicado depois das defesas e reduções. A vida nunca desce abaixo de zero; por isso a perda visível de HP pode ser menor que o dano calculado.
+            O ×2 é aplicado ao dano bruto, antes da defesa e da mitigação. A vida nunca desce abaixo de zero; por isso a perda visível de HP pode ser menor que o dano calculado.
           </p>}
         </div>
       )}
