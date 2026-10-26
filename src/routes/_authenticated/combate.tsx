@@ -6,6 +6,8 @@ import { ChevronDown, ChevronUp, Crosshair, Dices, Plus, Swords, Trash2, Copy, F
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { SearchableGrantPicker } from "@/components/ui/searchable-grant-picker";
+import { ContinuousTurnDialog } from "@/components/combat/ContinuousTurnDialog";
+import { pendingContinuousInstances, parseContinuousRules, type ContinuousInstance, type ContinuousDecision } from "@/lib/continuous-effects";
 import { parseAttributeStatusModifiers, type AttributeStatusModifier } from "@/lib/multi-attribute-effects";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -409,6 +411,8 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
   const [selectedTargetIds, setSelectedTargetIds] = useState<string[]>(() => battle.target_character_id ? [battle.target_character_id] : []);
   const [manaRegenSettings, setManaRegenSettings] = useState<Record<string, { mode: "percent" | "fixed"; amount: string }>>({});
   const [advancingTurnKeys, setAdvancingTurnKeys] = useState<Set<string>>(() => new Set());
+  const [pendingContinuousTurn,setPendingContinuousTurn] = useState<{ characterId:string|null; title:string; items:ContinuousInstance[] } | null>(null);
+  const [stoppingContinuous,setStoppingContinuous] = useState<string|null>(null);
   // Keep cards compact by default; expand detailed abilities/resources independently per character.
   const [expandedFighterIds, setExpandedFighterIds] = useState<Set<string>>(() => new Set());
   const [expandedTransformationDetailsIds, setExpandedTransformationDetailsIds] = useState<Set<string>>(() => new Set());
@@ -435,6 +439,18 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
   );
   const fighterIds = useMemo(() => fighters.map((fighter) => fighter.id), [fighters]);
   const db = supabase as any;
+  const { data: continuousInstances = [] } = useQuery<ContinuousInstance[]>({
+    queryKey:["battle-continuous-instances",battle.id],
+    enabled:isMaster && battle.active,
+    refetchInterval:8000,
+    queryFn:async()=>{
+      const {data,error}=await db.from("continuous_effect_instances").select(
+        "id,battle_id,character_ability_id,caster_character_id,target_character_id,name,ticks,rule,active"
+      ).eq("battle_id",battle.id).eq("active",true).order("created_at");
+      if(error)throw error;
+      return (data??[]).map((item:ContinuousInstance)=>({...item,rule:parseContinuousRules([item.rule])[0]??item.rule}));
+    },
+  });
   const { data: transformationCatalog = [] } = useQuery<TransformationTemplate[]>({
     queryKey: ["transformations"],
     queryFn: async () => {
@@ -629,7 +645,15 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
     const percent = passive.percent + active.filter(e => e.value_mode === "percent").reduce((n,e) => n + (e.polarity === "buff" ? 1 : -1) * Number(e.amount), 0);
     return Math.max(0, Math.floor(base * (1 + percent / 100) + fixed));
   };
-  async function advanceCombatTurn(characterId: string | null) {
+  async function advanceCombatTurn(characterId: string | null, decisions?:Record<string,ContinuousDecision>) {
+    const due=pendingContinuousInstances(continuousInstances,characterId);
+    if(due.length && !decisions){
+      setPendingContinuousTurn({
+        characterId,items:due,
+        title:characterId ? "Turno de "+(fighters.find(f=>f.id===characterId)?.name??"personagem") : "Turno geral",
+      });
+      return;
+    }
     // Track loading per button: one fighter advancing must not make every
     // individual-turn button look like it is processing.
     if (!isMaster) return;
@@ -656,15 +680,23 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
         manaRegenerationSettingsForTurn[fighter.id] = { mode: setting.mode, amount };
       }
 
-      const { data: nextTurn, error } = await supabase.rpc("advance_combat_turn", {
-        _battle_id: battle.id,
-        _character_id: characterId,
-        _mana_regeneration_settings: manaRegenerationSettingsForTurn as unknown as Json,
-      });
+      const { data: nextTurn, error } = due.length
+        ? await db.rpc("confirm_continuous_and_advance",{
+            _battle_id:battle.id,_character_id:characterId,
+            _mana_regeneration_settings:manaRegenerationSettingsForTurn,
+            _choices:decisions??{},
+          })
+        : await supabase.rpc("advance_combat_turn", {
+            _battle_id: battle.id,
+            _character_id: characterId,
+            _mana_regeneration_settings: manaRegenerationSettingsForTurn as unknown as Json,
+          });
       if (error) {
         toast.error("Não foi possível avançar o turno: " + error.message);
         return;
       }
+      setPendingContinuousTurn(null);
+      void qc.invalidateQueries({queryKey:["battle-continuous-instances",battle.id]});
       void dispatchCustomAbilityScriptEvents(battle.id).then(() => {
         scheduleCombatRefresh(qc, ["battle-effects"], ["character-active-effects"], ["character-abilities"]);
       });
@@ -853,6 +885,46 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
           {mindControlEffects.length > 0 && <span className="rounded-full border border-violet-500/50 px-2 py-1 text-violet-400">{mindControlEffects.length} controlado(s)</span>}
         </div>
       </header>
+      {isMaster && continuousInstances.length > 0 && <details className="panel border-gold/30 p-3 sm:p-4">
+        <summary className="min-h-10 cursor-pointer font-display text-sm font-semibold text-gold">
+          <Repeat2 className="mr-2 inline h-4 w-4"/> Vínculos e efeitos contínuos ativos ({continuousInstances.length})
+        </summary>
+        <p className="mb-3 mt-2 text-xs text-muted-foreground">Interrompa uma mordida, agarrão ou canalização. As penalidades residuais permanecerão pelo tempo configurado.</p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {continuousInstances.map(instance=>(
+            <div key={instance.id} className="flex min-w-0 items-center justify-between gap-2 rounded-lg border border-gold/20 bg-background/50 p-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold">{instance.name}</p>
+                <p className="text-xs text-muted-foreground">{fighters.find(f=>f.id===instance.caster_character_id)?.name??"Origem"} → {fighters.find(f=>f.id===instance.target_character_id)?.name??"Alvo"} · {instance.ticks} acúmulo(s)</p>
+              </div>
+              <Button size="sm" variant="outline" className="min-h-10 shrink-0 border-red-500/30 text-red-300"
+                disabled={stoppingContinuous===instance.id}
+                onClick={()=>{void (async()=>{
+                  setStoppingContinuous(instance.id);
+                  const {error}=await db.rpc("stop_continuous_effect",{_id:instance.id});
+                  setStoppingContinuous(null);
+                  if(error){toast.error("Não foi possível interromper: "+error.message);return;}
+                  toast.success("Efeito interrompido; resíduos preservados.");
+                  await Promise.all([
+                    qc.invalidateQueries({queryKey:["battle-continuous-instances",battle.id]}),
+                    qc.invalidateQueries({queryKey:["battle-effects"]}),
+                    qc.invalidateQueries({queryKey:["character-active-effects"]}),
+                  ]);
+                })();}}
+              >Soltar / Parar</Button>
+            </div>
+          ))}
+        </div>
+      </details>}
+      {isMaster && pendingContinuousTurn && <ContinuousTurnDialog
+        key={pendingContinuousTurn.characterId??"global"}
+        items={pendingContinuousTurn.items}
+        title={pendingContinuousTurn.title}
+        fighterNames={Object.fromEntries(fighters.map(f=>[f.id,f.name]))}
+        busy={advancingTurnKeys.has(pendingContinuousTurn.characterId??"__global__")}
+        onCancel={()=>setPendingContinuousTurn(null)}
+        onConfirm={(choices)=>{void advanceCombatTurn(pendingContinuousTurn.characterId,choices);}}
+      />}
       <CombatNavigation active={combatTab} onSelect={setCombatTab} />
       <div className={cn("gap-4", (combatTab === "fighters" || combatTab === "actions") && "xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] xl:items-start")}>
       {(combatTab === "fighters" || combatTab === "actions") && <section className={cn("min-w-0 space-y-3", combatTab !== "fighters" && "hidden xl:block")} aria-label="Combatentes da batalha">
