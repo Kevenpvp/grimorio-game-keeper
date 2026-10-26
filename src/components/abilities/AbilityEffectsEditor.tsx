@@ -117,6 +117,11 @@ export function AbilityEffectsEditor({
       damage_reduction_magic_level: null,
       damage_dealt_physical_type_ids: [],
       damage_reduction_type_ids: [],
+      damage_reduction_physical_type_ids: [],
+      damage_reduction_magic_type_ids: [],
+      damage_reduction_physical_blacklist_ids: [],
+      damage_reduction_magic_blacklist_ids: [],
+      damage_reduction_magic_level_blacklist: [],
       damage_reduction_magic_levels: [],
       damage_received_scope: "any",
       damage_received_type_ids: [],
@@ -208,6 +213,10 @@ export function AbilityEffectsEditor({
         const isMentalControlModifier = effect.effect_type === "mental_control_chance" || effect.effect_type === "mental_control_resistance";
         const selectedReductionTypeIds = effect.damage_reduction_type_ids ?? (effect.damage_reduction_type_id ? [effect.damage_reduction_type_id] : []);
         const selectedReductionMagicLevels = effect.damage_reduction_magic_levels ?? (effect.damage_reduction_magic_level ? [effect.damage_reduction_magic_level] : []);
+        const selectedReductionPhysicalTypeIds = effect.damage_reduction_physical_type_ids ??
+          (effect.damage_reduction_scope === "physical" ? selectedReductionTypeIds : []);
+        const selectedReductionMagicalTypeIds = effect.damage_reduction_magic_type_ids ??
+          (effect.damage_reduction_scope === "magical" ? selectedReductionTypeIds : []);
         const selectedDamageReceivedTypeIds = effect.damage_received_type_ids ?? [];
         const selectedDamageReceivedPhysicalTypeIds = effect.damage_received_physical_type_ids ?? [];
         const selectedDamageReceivedLevels = effect.damage_received_magic_levels ?? [];
@@ -267,6 +276,11 @@ export function AbilityEffectsEditor({
                           damage_scope: "any",
                           damage_reduction_scope: "physical",
                           damage_reduction_type_ids: [],
+      damage_reduction_physical_type_ids: [],
+      damage_reduction_magic_type_ids: [],
+      damage_reduction_physical_blacklist_ids: [],
+      damage_reduction_magic_blacklist_ids: [],
+      damage_reduction_magic_level_blacklist: [],
                           damage_reduction_magic_levels: [],
                           damage_dealt_physical_type_ids: [],
                           damage_received_scope: "any",
@@ -485,110 +499,144 @@ export function AbilityEffectsEditor({
                 </>
               )}
               {isDamageReduction && (
-                <>
-                  <label className="space-y-1 text-xs font-medium">
-                    Categoria de dano reduzido
-                    <select aria-label="Categoria de dano reduzido" className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                <div className="space-y-3 sm:col-span-2">
+                  <label className="block space-y-1 text-xs font-medium">
+                    Categorias de dano mitigadas
+                    <select aria-label="Categorias de dano mitigadas" className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
                       value={effect.damage_reduction_scope ?? "physical"}
-                      onChange={(e) => {
-                        const scope = e.target.value as DamageReductionScope;
+                      onChange={(event) => {
+                        const scope = event.target.value as DamageReductionScope;
                         patch(index, {
                           damage_reduction_scope: scope,
+                          // Keep independent allowlists when switching between
+                          // Físico, Mágico and Ambos. Legacy fields are only
+                          // maintained for old consumers in single-scope mode.
+                          damage_reduction_type_ids: scope === "physical"
+                            ? selectedReductionPhysicalTypeIds
+                            : scope === "magical" ? selectedReductionMagicalTypeIds : [],
                           damage_reduction_type_id: null,
                           damage_reduction_magic_level: null,
-                          damage_reduction_type_ids: scope === effect.damage_reduction_scope
-                            ? selectedReductionTypeIds
-                            : [],
-                          damage_reduction_magic_levels: scope === "magical"
-                            ? (effect.damage_reduction_scope === "magical" ? selectedReductionMagicLevels : [])
-                            : null,
                           polarity: "buff",
                         });
                       }}>
-                      <option value="physical">Físico</option>
-                      <option value="magical">Mágico</option>
+                      <option value="physical">Apenas físico</option>
+                      <option value="magical">Apenas mágico</option>
+                      <option value="both">Físico e mágico (mesmo efeito)</option>
                     </select>
                   </label>
-                  {effect.damage_reduction_scope === "physical" && (
-                    <fieldset className="space-y-2 text-xs sm:col-span-2">
-                      <legend className="font-medium">Tipos físicos mitigados</legend>
-                      <label className="flex items-center gap-2 rounded-md border border-border px-2 py-2">
-                        <input type="radio" name={`${effectEditorId}-mitigacao-fisica-${index}`} checked={selectedReductionTypeIds.length === 0}
-                          onChange={() => patch(index, { damage_reduction_type_ids: [], damage_reduction_type_id: null, polarity: "buff" })} />
-                        Todos os tipos físicos
-                      </label>
-                      <p className="text-muted-foreground">{selectedReductionTypeIds.length === 0 ? "A redução afeta todos os tipos físicos." : `${selectedReductionTypeIds.length} tipo(s) físico(s) selecionado(s).`}</p>
-                      {physicalDamageTypes.length === 0
-                        ? <p className="text-amber-500">Nenhum tipo físico cadastrado; a mitigação vale para todo dano físico.</p>
-                        : <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                            {physicalDamageTypes.map((type) => (
-                              <label key={type.id} className="flex items-center gap-2 rounded-md border border-border px-2 py-2">
-                                <input type="checkbox" checked={selectedReductionTypeIds.includes(type.id)}
-                                  onChange={(e) => {
-                                    const next = e.target.checked
-                                      ? [...selectedReductionTypeIds, type.id]
-                                      : selectedReductionTypeIds.filter((id) => id !== type.id);
-                                    patch(index, { damage_reduction_type_ids: next, damage_reduction_type_id: null, polarity: "buff" });
-                                  }} />
-                                {type.name}
-                              </label>
-                            ))}
-                          </div>}
+                  <p className="text-xs text-muted-foreground">
+                    As listas de tipos permitidos e a blacklist funcionam separadamente. A blacklist sempre prevalece.
+                  </p>
+                  {(effect.damage_reduction_scope === "physical" || effect.damage_reduction_scope === "both") && (
+                    <fieldset className="space-y-2 rounded-md border border-border/70 p-3 text-xs">
+                      <legend className="px-1 font-medium">Danos físicos</legend>
+                      <p className="text-muted-foreground">Tipos mitigados (nenhum marcado = todos os tipos físicos)</p>
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        {physicalDamageTypes.map((type) => (
+                          <label key={type.id} className="flex items-center gap-2 rounded-md border border-border px-2 py-2">
+                            <input type="checkbox" checked={selectedReductionPhysicalTypeIds.includes(type.id)}
+                              onChange={(event) => {
+                                const next = event.target.checked
+                                  ? [...selectedReductionPhysicalTypeIds, type.id]
+                                  : selectedReductionPhysicalTypeIds.filter((id) => id !== type.id);
+                                patch(index, {
+                                  damage_reduction_physical_type_ids: next,
+                                  ...(effect.damage_reduction_scope === "physical"
+                                    ? { damage_reduction_type_ids: next, damage_reduction_type_id: null }
+                                    : {}),
+                                });
+                              }} />
+                            {type.name}
+                          </label>
+                        ))}
+                      </div>
+                      {physicalDamageTypes.length === 0 && <p className="text-muted-foreground">Nenhum tipo físico cadastrado: afeta todos.</p>}
+                      <p className="font-semibold text-red-400">Blacklist física — nunca serão mitigados</p>
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        {physicalDamageTypes.map((type) => (
+                          <label key={type.id} className="flex items-center gap-2 rounded-md border border-red-500/20 px-2 py-2">
+                            <input type="checkbox" checked={(effect.damage_reduction_physical_blacklist_ids ?? []).includes(type.id)}
+                              onChange={(event) => {
+                                const list = effect.damage_reduction_physical_blacklist_ids ?? [];
+                                patch(index, { damage_reduction_physical_blacklist_ids: event.target.checked
+                                  ? [...list, type.id] : list.filter((id) => id !== type.id) });
+                              }} />
+                            {type.name}
+                          </label>
+                        ))}
+                      </div>
                     </fieldset>
                   )}
-                  {effect.damage_reduction_scope === "magical" && (
-                    <>
-                      <fieldset className="space-y-2 text-xs sm:col-span-2">
-                        <legend className="font-medium">Tipo mágico</legend>
-                        <label className="flex items-center gap-2 rounded-md border border-border px-2 py-2">
-                          <input type="radio" name={`${effectEditorId}-mitigacao-tipos-${index}`} checked={selectedReductionTypeIds.length === 0}
-                            onChange={() => patch(index, { damage_reduction_type_ids: [], damage_reduction_type_id: null, polarity: "buff" })} />
-                          Todos os tipos
-                        </label>
-                        <p className="text-muted-foreground">{selectedReductionTypeIds.length === 0 ? "A redução afeta todos os tipos mágicos cadastrados." : `${selectedReductionTypeIds.length} tipo(s) selecionado(s).`}</p>
-                        {damageTypes.length === 0
-                          ? <p className="text-amber-500">Nenhum tipo mágico cadastrado.</p>
-                          : <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                              {damageTypes.map((type) => (
-                                <label key={type.id} className="flex items-center gap-2 rounded-md border border-border px-2 py-2">
-                                  <input type="checkbox" checked={selectedReductionTypeIds.includes(type.id)}
-                                    onChange={(e) => {
-                                      const next = e.target.checked
-                                        ? [...selectedReductionTypeIds, type.id]
-                                        : selectedReductionTypeIds.filter((id) => id !== type.id);
-                                      patch(index, { damage_reduction_type_ids: next, damage_reduction_type_id: null, polarity: "buff" });
-                                    }} />
-                                  {type.name}
-                                </label>
-                              ))}
-                            </div>}
-                      </fieldset>
-                      <fieldset className="space-y-2 text-xs sm:col-span-2">
-                        <legend className="font-medium">Grau da magia</legend>
-                        <label className="flex items-center gap-2 rounded-md border border-border px-2 py-2">
-                          <input type="radio" name={`${effectEditorId}-mitigacao-graus-${index}`} checked={selectedReductionMagicLevels.length === 0}
-                            onChange={() => patch(index, { damage_reduction_magic_levels: [], damage_reduction_magic_level: null, polarity: "buff" })} />
-                          Todos os graus
-                        </label>
-                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                          {([["baixa", "Baixa"], ["media", "Média"], ["alta", "Alta"]] as const).map(([level, label]) => (
-                            <label key={level} className="flex items-center gap-2 rounded-md border border-border px-2 py-2">
-                              <input type="checkbox" checked={selectedReductionMagicLevels.includes(level)}
-                                onChange={(e) => {
-                                  const next = e.target.checked
-                                    ? [...selectedReductionMagicLevels, level]
-                                    : selectedReductionMagicLevels.filter((selected) => selected !== level);
-                                  patch(index, { damage_reduction_magic_levels: next, damage_reduction_magic_level: null, polarity: "buff" });
-                                }} />
-                              {label}
-                            </label>
-                          ))}
-                        </div>
-                      </fieldset>
-                    </>
+                  {(effect.damage_reduction_scope === "magical" || effect.damage_reduction_scope === "both") && (
+                    <fieldset className="space-y-3 rounded-md border border-border/70 p-3 text-xs">
+                      <legend className="px-1 font-medium">Danos mágicos</legend>
+                      <p className="text-muted-foreground">Tipos mitigados (nenhum marcado = todos os tipos mágicos)</p>
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        {damageTypes.map((type) => (
+                          <label key={type.id} className="flex items-center gap-2 rounded-md border border-border px-2 py-2">
+                            <input type="checkbox" checked={selectedReductionMagicalTypeIds.includes(type.id)}
+                              onChange={(event) => {
+                                const next = event.target.checked
+                                  ? [...selectedReductionMagicalTypeIds, type.id]
+                                  : selectedReductionMagicalTypeIds.filter((id) => id !== type.id);
+                                patch(index, {
+                                  damage_reduction_magic_type_ids: next,
+                                  ...(effect.damage_reduction_scope === "magical"
+                                    ? { damage_reduction_type_ids: next, damage_reduction_type_id: null }
+                                    : {}),
+                                });
+                              }} />
+                            {type.name}
+                          </label>
+                        ))}
+                      </div>
+                      <p className="text-muted-foreground">Graus de magia mitigados (nenhum = todos)</p>
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                        {([["baixa","Baixa"],["media","Média"],["alta","Alta"]] as const).map(([level,label]) => (
+                          <label key={level} className="flex items-center gap-2 rounded-md border border-border px-2 py-2">
+                            <input type="checkbox" checked={selectedReductionMagicLevels.includes(level)}
+                              onChange={(event) => patch(index, {
+                                damage_reduction_magic_levels: event.target.checked
+                                  ? [...selectedReductionMagicLevels, level]
+                                  : selectedReductionMagicLevels.filter((l) => l !== level),
+                                damage_reduction_magic_level: null,
+                              })} />
+                            {label}
+                          </label>
+                        ))}
+                      </div>
+                      <p className="font-semibold text-red-400">Blacklist mágica — tipos que ignoram a mitigação</p>
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        {damageTypes.map((type) => (
+                          <label key={type.id} className="flex items-center gap-2 rounded-md border border-red-500/20 px-2 py-2">
+                            <input type="checkbox" checked={(effect.damage_reduction_magic_blacklist_ids ?? []).includes(type.id)}
+                              onChange={(event) => {
+                                const list = effect.damage_reduction_magic_blacklist_ids ?? [];
+                                patch(index, { damage_reduction_magic_blacklist_ids: event.target.checked
+                                  ? [...list, type.id] : list.filter((id) => id !== type.id) });
+                              }} />
+                            {type.name}
+                          </label>
+                        ))}
+                      </div>
+                      <p className="font-semibold text-red-400">Blacklist de graus mágicos (opcional)</p>
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                        {([["baixa","Baixa"],["media","Média"],["alta","Alta"]] as const).map(([level,label]) => (
+                          <label key={level} className="flex items-center gap-2 rounded-md border border-red-500/20 px-2 py-2">
+                            <input type="checkbox" checked={(effect.damage_reduction_magic_level_blacklist ?? []).includes(level)}
+                              onChange={(event) => {
+                                const list = effect.damage_reduction_magic_level_blacklist ?? [];
+                                patch(index, { damage_reduction_magic_level_blacklist: event.target.checked
+                                  ? [...list, level] : list.filter((l) => l !== level) });
+                              }} />
+                            {label}
+                          </label>
+                        ))}
+                      </div>
+                    </fieldset>
                   )}
-                  <p className="self-end text-xs text-muted-foreground sm:col-span-2">Reduz o dano recebido depois da defesa correspondente. O valor fixo é aplicado primeiro e depois a porcentagem. Em dano híbrido, a redução atua apenas na metade compatível.</p>
-                </>
+                  <p className="text-xs text-muted-foreground">A mitigação atua depois da Defesa Física ou Mágica. No dano híbrido, o mesmo efeito mitiga cada parte permitida (uma vez por parte); danos da blacklist não recebem nenhuma mitigação deste efeito.</p>
+                </div>
               )}
               {isDamageReceived && (
                 <>
