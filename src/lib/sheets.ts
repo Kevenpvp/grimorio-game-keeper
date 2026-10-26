@@ -118,6 +118,8 @@ export const clampPct = (n: number) => Math.max(0, Math.min(100, Math.round(Numb
 
 /** Defense is allowed to be negative: negative values amplify received damage. */
 export function clampNonDefenseAttribute(key: string, value: number): number {
+  // Normalize negative zero from rounding a negative stat at 0% Corpo.
+  if (value === 0) return 0;
   return key === "phys_def" || key === "mag_def" ? value : Math.max(0, value);
 }
 
