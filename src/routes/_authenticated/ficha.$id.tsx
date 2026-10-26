@@ -26,6 +26,7 @@ import { CharacterSheetView, Portrait } from "@/components/sheet/CharacterSheetV
 import { SheetSectionTabs, SheetTabPanel, type SheetTabKey } from "@/components/sheet/SheetSectionTabs";
 import { PointsDistribution } from "@/components/sheet/PointsDistribution";
 import { PhysicalPointsDistribution } from "@/components/sheet/PhysicalPointsDistribution";
+import { QuickMasterAttributes } from "@/components/sheet/QuickMasterAttributes";
 import { RacePicker } from "@/components/sheet/RacePicker";
 import { ClassPicker } from "@/components/sheet/ClassPicker";
 import { AttrIcon, barTone } from "@/components/sheet/icons";
@@ -319,6 +320,22 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
           </SheetTabPanel>
 
           <SheetTabPanel tab="attributes" active={tab}>
+            <QuickMasterAttributes
+              character={character}
+              attrs={attrs}
+              defs={defs}
+              traitModifiers={mods}
+              statusModifiers={Object.fromEntries(defs.map((definition) => {
+                const active = statusEffectModifiers(activeEffects, definition.key);
+                const passive = passiveStatus[definition.key];
+                return [definition.key, {
+                  fixed: active.fixed + (passive?.fixed ?? 0),
+                  percent: active.percent + (passive?.percent ?? 0),
+                }];
+              }))}
+              noMana={noMana}
+              onSaved={() => { mark(); refresh(); }}
+            />
             <div className="grid gap-3 sm:grid-cols-2">
               <NumberField label="Pontos disponíveis" icon="sparkles" value={character.available_points}
                 onSave={(v) => updateCharacter({ available_points: v })} />
