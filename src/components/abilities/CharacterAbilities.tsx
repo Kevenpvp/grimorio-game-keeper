@@ -624,6 +624,18 @@ export function CharacterAbilitiesPanel({
     setAttackBusy(true);
     setAttackResults({});
     try {
+      // Snapshot existing effects before casting. This lets the popup confirm
+      // which DoTs/buffs/debuffs were created by this strike independently
+      // of the direct damage result (including damage reduced to zero).
+      const existingEffectsResponse = await supabase.from("battle_effects")
+        .select("id")
+        .eq("battle_id", battleId)
+        .eq("source_character_ability_id", attackAbility.id)
+        .in("character_id", attackTargetIds);
+      const existingEffectIds = existingEffectsResponse.error
+        ? null
+        : new Set((existingEffectsResponse.data ?? []).map((effect) => effect.id));
+
       const continuingAttack = attackStarted;
       const { data: spentMana, error: activationError } = await db.rpc(
         continuingAttack ? "repeat_character_ability_attack" : "activate_character_ability_attack", {
@@ -703,6 +715,38 @@ export function CharacterAbilitiesPanel({
         results[target.id] = `Dano base ${finalBaseDamage} → dano final ${Number(damageResult.total_damage ?? 0)}; HP ${Number(damageResult.hp_before ?? 0)} → ${Number(damageResult.hp_after ?? 0)}.${defenseIgnoreText(defenseIgnore) ? ` Ignorou: ${defenseIgnoreText(defenseIgnore)}.` : ""}`;
       }
 
+      // Report the real status effects and DoTs applied during this use, even
+      // if defense/mitigation/invincibility reduced direct damage to 0 HP.
+      // Guaranteed DoTs apply to selected targets regardless of the Acertou
+      // checkbox; category effects require the master's category selection.
+      const appliedEffectsResponse = existingEffectIds === null
+        ? null
+        : await supabase.from("battle_effects")
+            .select("id,character_id,effect_type,name")
+            .eq("battle_id", battleId)
+            .eq("source_character_ability_id", attackAbility.id)
+            .in("character_id", attackTargetIds);
+      const newEffects = appliedEffectsResponse?.data?.filter(
+        (effect) => !existingEffectIds?.has(effect.id)
+      ) ?? [];
+      for (const target of currentAttackTargets) {
+        const appliedToTarget = newEffects.filter((effect) => effect.character_id === target.id);
+        const dots = appliedToTarget.filter((effect) => effect.effect_type === "damage_over_time");
+        const otherEffects = appliedToTarget.filter((effect) => effect.effect_type !== "damage_over_time");
+        const directlyHit = attackHits[target.id] === true;
+        const directText = results[target.id] || (directlyHit
+          ? "Ataque marcado como acertado."
+          : "Sem dano direto (alvo não marcado como acertado).");
+        if (existingEffectIds === null || appliedEffectsResponse?.error) {
+          results[target.id] = `${directText} Não foi possível confirmar a lista de efeitos; consulte os efeitos ativos.`;
+          continue;
+        }
+        const effectNames = [
+          ...dots.map((effect) => effect.name),
+          ...otherEffects.map((effect) => effect.name),
+        ];
+        results[target.id] = `${directText} DoTs aplicados: ${dots.length}. Outros efeitos aplicados: ${otherEffects.length}.${effectNames.length ? ` ${effectNames.join(" · ")}.` : ""}`;
+      }
       setAttackResults(results);
       setAttackCount((count) => count + 1);
       // Another Causar o Ataque starts with the saved defaults; changing them
@@ -1265,7 +1309,7 @@ export function CharacterAbilitiesPanel({
                               }
                             }} />
                           <span className="font-semibold">Acertou</span>
-                          <span className="text-xs text-muted-foreground">— libera dano e efeitos que forem marcados como acertados</span>
+                          <span className="text-xs text-muted-foreground">— confirma o acerto, independentemente do dano final (inclusive 0). DoTs garantidos são aplicados mesmo sem marcar Acertou.</span>
                         </label>
                         {attackHits[target.id] && (
                           <>
