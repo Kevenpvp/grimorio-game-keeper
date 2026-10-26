@@ -181,7 +181,7 @@ BEGIN
       _attribute_key := NULL;
       _polarity := 'buff';
       IF _effect_type = 'mental_control_chance' AND _value_mode = 'percent' AND _amount > 99 THEN
-        RAISE EXCEPTION 'Potência de controle mental deve ser inferior a 100%';
+        RAISE EXCEPTION 'Potência de controle mental deve ser inferior a 100 por cento';
       END IF;
     ELSIF _effect_type IN ('dot_immunity','mental_control_immunity','invisibility','visual_tag','temporal_freeze') THEN
       _attribute_key := NULL;
