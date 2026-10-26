@@ -838,7 +838,8 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
         </div>
       </header>
       <CombatNavigation active={combatTab} onSelect={setCombatTab} />
-      {combatTab === "fighters" && <section className="space-y-3" aria-label="Combatentes da batalha">
+      <div className={cn("gap-4", (combatTab === "fighters" || combatTab === "actions") && "xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] xl:items-start")}>
+      {(combatTab === "fighters" || combatTab === "actions") && <section className={cn("min-w-0 space-y-3", combatTab !== "fighters" && "hidden xl:block")} aria-label="Combatentes da batalha">
         <div className="panel flex flex-col gap-3 border-gold/25 p-3 sm:flex-row sm:items-center">
           <div className="relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -852,7 +853,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
           </select>
           {isMaster && <Button size="sm" className="min-h-10" onClick={() => setCombatTab("actions")}><Zap className="mr-1 h-4 w-4" /> Ações rápidas</Button>}
         </div>
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-2">
         {visibleFighters.map((f) => {
           const isActor = f.id === actor?.id;
           const isTarget = selectedTargetIds.includes(f.id) && f.id !== actor?.id;
@@ -1125,7 +1126,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
         </div>
         {visibleFighters.length === 0 && <p className="panel p-6 text-center text-sm text-muted-foreground">Nenhum combatente encontrado com esses filtros.</p>}
       </section>}
-      {combatTab === "actions" && <section className="space-y-4" aria-label="Ações de combate">
+      {(combatTab === "fighters" || combatTab === "actions") && <section className={cn("min-w-0 space-y-4", combatTab !== "actions" && "hidden xl:block")} aria-label="Ações de combate">
         {isMaster ? <>
           <div className="panel space-y-3 border-gold/30 p-4">
             <div className="flex items-center gap-2"><span className="rounded-lg border border-gold/30 bg-gold/10 p-2"><Zap className="h-5 w-5 text-gold" /></span><div><p className="text-[10px] uppercase tracking-widest text-muted-foreground">Mesa do mestre</p><h3 className="font-display text-lg text-gold">Central de ações</h3></div></div>
@@ -1182,6 +1183,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
           </div>}
         </> : <p className="panel p-5 text-sm text-muted-foreground">As ações de combate são controladas pelo mestre. Abra Detalhes em Combatentes para consultar sua ficha, seus efeitos e habilidades.</p>}
       </section>}
+      </div>
       {combatTab === "summary" && <section className="space-y-4" aria-label="Resumo da batalha">
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {([
