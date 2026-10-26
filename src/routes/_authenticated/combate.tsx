@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { dispatchCustomAbilityScriptEvents } from "@/lib/ability-script-runtime";
 
-import { computeValue, conditionAdjustedValue, physicalAttributePoints, traitMods, numberAllocation, useDefs, useMe, useRaces, useVirtues, useClasses, type AttributeDef } from "@/lib/sheets";
+import { computeValue, conditionAdjustedValue, clampNonDefenseAttribute, physicalAttributePoints, traitMods, numberAllocation, useDefs, useMe, useRaces, useVirtues, useClasses, type AttributeDef } from "@/lib/sheets";
 import { Portrait } from "@/components/sheet/CharacterSheetView";
 import { StatBar } from "@/components/sheet/StatBar";
 import { cn } from "@/lib/utils";
@@ -564,7 +564,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
     const fixed = passive.fixed + active.filter(e => e.value_mode === "fixed").reduce((n,e) => n + (e.polarity === "buff" ? 1 : -1) * Number(e.amount), 0);
     const percent = passive.percent + active.filter(e => e.value_mode === "percent").reduce((n,e) => n + (e.polarity === "buff" ? 1 : -1) * Number(e.amount), 0);
     const result = Math.floor((base + fixed) * (1 + percent / 100));
-    return noMana && key === "mana" ? 0 : key === "hp" ? Math.max(1, result) : conditionAdjustedValue(f, key, Math.max(0, result));
+    return noMana && key === "mana" ? 0 : key === "hp" ? Math.max(1, result) : conditionAdjustedValue(f, key, clampNonDefenseAttribute(key, result));
   };
   const blocked = (fighterId: string, type: "no_regen_hp" | "no_regen_mana" | "no_mana") =>
     effects.some(e => e.character_id === fighterId && e.effect_type === type) ||
