@@ -64,9 +64,9 @@ function VirtudesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="grimorio-section-header flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl text-gold">Virtudes</h1>
+          <h1 className="text-2xl font-semibold text-gold">Virtudes</h1>
           <p className="mt-1 text-sm text-muted-foreground">As virtudes usam os mesmos bônus de pontos e modificadores por atributo das raças.</p>
         </div>
         <Button onClick={() => void create()}><Plus className="mr-1 h-4 w-4" /> Nova virtude</Button>
