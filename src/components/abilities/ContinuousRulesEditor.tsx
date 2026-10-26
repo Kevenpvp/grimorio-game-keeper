@@ -67,6 +67,45 @@ export function ContinuousRulesEditor({ rules, onChange, defs, disabled = false 
                     onChange={(e) => changeRule(i, { linger_turns: numberValue(e.target.value, 1000) })}/>
                 </label>
               </div>
+              <div className="space-y-3 rounded-xl border border-gold/30 bg-gold/5 p-3">
+                <div>
+                  <p className="font-semibold text-sm text-gold">Vínculo com os alvos</p>
+                  <p className="text-xs text-muted-foreground">Controle quantas vítimas podem ficar agarradas, mordidas ou amaldiçoadas ao mesmo tempo.</p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="space-y-1 text-xs font-semibold">Quantidade máxima de alvos
+                    <select className="min-h-11 w-full rounded-lg border border-input bg-background px-3 text-sm"
+                      value={rule.max_targets == null ? "unlimited" : String(rule.max_targets)}
+                      disabled={disabled}
+                      onChange={(e)=>changeRule(i,{max_targets:e.target.value==="unlimited"?null:Number(e.target.value)})}>
+                      <option value="unlimited">Sem limite</option>
+                      {[1,2,3,4,5,6,8,10,20].map(count=><option key={count} value={count}>{count} alvo{count>1?"s":""}</option>)}
+                    </select>
+                  </label>
+                  <label className="space-y-1 text-xs font-semibold">Ao atingir o limite
+                    <select className="min-h-11 w-full rounded-lg border border-input bg-background px-3 text-sm"
+                      value={rule.on_limit} disabled={disabled||rule.max_targets===null}
+                      onChange={(e)=>changeRule(i,{on_limit:e.target.value as ContinuousRule["on_limit"]})}>
+                      <option value="choose">Perguntar qual alvo soltar</option>
+                      <option value="replace_oldest">Soltar automaticamente o mais antigo</option>
+                      <option value="block">Impedir novo vínculo</option>
+                    </select>
+                  </label>
+                </div>
+                {rule.max_targets!==null && rule.on_limit==="choose" &&
+                  <p className="text-xs text-muted-foreground">No ataque, o mestre poderá soltar um alvo antigo antes de confirmar o novo. A penalidade residual será preservada.</p>}
+                <p className="font-semibold text-xs text-gold">Interrupção automática</p>
+                {([
+                  ["stop_on_caster_leave","Se o usuário sair da batalha"],
+                  ["stop_on_caster_death","Se o usuário morrer"],
+                  ["stop_on_caster_stun","Se o usuário ficar atordoado"],
+                ] as const).map(([key,label])=>
+                  <label key={key} className="flex min-h-11 items-center gap-2 text-sm">
+                    <input type="checkbox" disabled={disabled} checked={rule[key]}
+                      onChange={e=>changeRule(i,{[key]:e.target.checked})}/>
+                    {label}
+                  </label>)}
+              </div>
               {rule.actions.map((action, j) => (
                 <div key={j} className="space-y-3 rounded-lg border border-gold/20 bg-background/40 p-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
