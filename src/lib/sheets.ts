@@ -116,6 +116,11 @@ export function usePhotoUrl(path: string | null | undefined) {
 
 export const clampPct = (n: number) => Math.max(0, Math.min(100, Math.round(Number.isFinite(n) ? n : 0)));
 
+/** Defense is allowed to be negative: negative values amplify received damage. */
+export function clampNonDefenseAttribute(key: string, value: number): number {
+  return key === "phys_def" || key === "mag_def" ? value : Math.max(0, value);
+}
+
 /** Calculated value from invested points, using the configurable rule on the definition. */
 export function computeValue(def: AttributeDef, points: number) {
   return Math.round((Number(def.base_value) + points * Number(def.points_multiplier)) * 100) / 100;
@@ -140,7 +145,7 @@ export function conditionAdjustedValue(
   }
   if (condition === 100) return value;
   // Keep fractional values so a 1% condition loss translates to exactly 1% stat loss.
-  return Math.max(0, Math.round(value * condition) / 100);
+  return clampNonDefenseAttribute(key, Math.round(value * condition) / 100);
 }
 
 export type Race = Tables<"races">;
