@@ -62,8 +62,8 @@ function DamageTypesPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="flex items-center gap-2 text-3xl text-gold">
+      <div className="grimorio-section-header">
+        <h1 className="flex items-center gap-2 text-3xl font-semibold text-gold">
           <Sparkles className="h-7 w-7" /> Tipos de Dano
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
