@@ -18,6 +18,8 @@ import { DamageApplier } from "@/components/combat/DamageApplier";
 import { attackDiceModifier, hasActiveStun } from "@/lib/combat-dice";
 import { DamageOverTimeManager } from "@/components/combat/DamageOverTimeManager";
 import { CharacterAbilitiesPanel, effectSummary } from "@/components/abilities/CharacterAbilities";
+import { ActivationEffectValuesDialog, type ActivationEffectOverrides } from "@/components/abilities/ActivationEffectValuesDialog";
+import { customizableActivationEffects } from "@/lib/activation-effect-values";
 import { SummonCombatPanel } from "@/components/summons/Summons";
 import { parseAbilityEffects, passiveEffectTypeActive, passiveRegenerationModifiers, passiveStatusModifiers, useAbilities, useBattleCharacterAbilities, useCharacterAbilities, useDamageTypes, useDotTemplates } from "@/lib/abilities";
 
@@ -500,18 +502,35 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
     return transformationCatalog.filter((transformation) => ids.has(transformation.id) && !overriddenIds.has(transformation.id));
   };
   const [activatingTransformationFor, setActivatingTransformationFor] = useState<string | null>(null);
-  async function activateTransformation(characterId: string, transformationId: string) {
-    if (!battle.active || activatingTransformationFor) return;
+  const [pendingTransformationValues, setPendingTransformationValues] = useState<{
+    characterId: string; characterName: string; transformationId: string; transformationName: string;
+    effects: ReturnType<typeof parseAbilityEffects>;
+  } | null>(null);
+  function requestTransformationActivation(characterId: string, characterName: string, transformationId: string) {
+    const template = transformationCatalog.find((item) => item.id === transformationId);
+    const currentEffects = parseAbilityEffects(template?.effects);
+    if (isMaster && template && customizableActivationEffects(currentEffects).length > 0) {
+      setPendingTransformationValues({
+        characterId, characterName, transformationId,
+        transformationName: template.name, effects: currentEffects,
+      });
+      return;
+    }
+    void activateTransformation(characterId, transformationId);
+  }
+  async function activateTransformation(characterId: string, transformationId: string, overrides?: ActivationEffectOverrides): Promise<boolean> {
+    if (!battle.active || activatingTransformationFor) return false;
     setActivatingTransformationFor(characterId);
     try {
       const { data, error } = await db.rpc("activate_character_transformation", {
         _character_id: characterId,
         _transformation_id: transformationId,
         _battle_id: battle.id,
+        ...(overrides ? { _effect_overrides: overrides } : {}),
       });
       if (error) {
         toast.error(error.message);
-        return;
+        return false;
       }
       const result = data && typeof data === "object" ? data as Record<string, unknown> : {};
       toast.success("Transformação ativada");
@@ -528,6 +547,10 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
         qc.invalidateQueries({ queryKey: ["character-attributes"] }),
         qc.invalidateQueries({ queryKey: ["battle-effects"] }),
       ]);
+      return true;
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível ativar a transformação.");
+      return false;
     } finally {
       setActivatingTransformationFor(null);
     }
@@ -954,7 +977,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                               size="sm"
                               variant={isActive ? "default" : "outline"}
                               disabled={disabled}
-                              onClick={() => void activateTransformation(f.id, transformation.id)}
+                              onClick={() => requestTransformationActivation(f.id, f.name, transformation.id)}
                             >
                               <Sparkles className="mr-1 h-3.5 w-3.5" />
                               {isActive ? transformation.name : isCoolingDown ? `${transformation.name} · ${state?.cooldown_remaining}T` : activatingTransformationFor === f.id ? "Ativando…" : transformation.name}
@@ -1211,6 +1234,17 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
           </ol>
         )}
       </section>}
+      {pendingTransformationValues && <ActivationEffectValuesDialog
+        key={pendingTransformationValues.transformationId + ":" + pendingTransformationValues.characterId}
+        abilityName={"Transformação: " + pendingTransformationValues.transformationName}
+        targetName={pendingTransformationValues.characterName}
+        effects={pendingTransformationValues.effects}
+        onCancel={() => setPendingTransformationValues(null)}
+        onConfirm={(values) => activateTransformation(
+          pendingTransformationValues.characterId,
+          pendingTransformationValues.transformationId, values
+        )}
+      />}
       <CombatNavigation active={combatTab} onSelect={setCombatTab} mobile />
     </div>
   );
