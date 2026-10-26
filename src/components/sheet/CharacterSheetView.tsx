@@ -1,6 +1,6 @@
 import { User } from "lucide-react";
 import type { AttributeDef, Character, CharacterAttr } from "@/lib/sheets";
-import { computeValue, conditionAdjustedValue, physicalAttributePoints, useCharacterTraitMods, usePhotoUrl } from "@/lib/sheets";
+import { computeValue, conditionAdjustedValue, clampNonDefenseAttribute, physicalAttributePoints, useCharacterTraitMods, usePhotoUrl } from "@/lib/sheets";
 import { passiveEffectTypeActive, passiveStatusModifiers, statusEffectModifiers, useCharacterAbilities, useCharacterActiveEffects } from "@/lib/abilities";
 import { AttrIcon, barTone } from "./icons";
 import { StatBar } from "./StatBar";
@@ -134,7 +134,7 @@ export function CharacterSheetView({
             const passive = passiveMods[d.key] ?? { fixed: 0, percent: 0 };
             const active = statusEffectModifiers(activeEffects, d.key);
             const rawValue = d.accepts_points ? base + bonus : a?.current_value ?? 0;
-            const calculatedValue = Math.max(0, Math.floor((rawValue + passive.fixed + active.fixed) * (1 + (passive.percent + active.percent) / 100)));
+            const calculatedValue = clampNonDefenseAttribute(d.key, Math.floor((rawValue + passive.fixed + active.fixed) * (1 + (passive.percent + active.percent) / 100)));
             const value = noMana && d.key === "mana" ? 0 : conditionAdjustedValue(character, d.key, calculatedValue);
             const conditionHint = ["phys_def", "speed", "atk_speed"].includes(d.key)
               ? character.body < 100 ? `Corpo: ${character.body}% aplicado` : null
