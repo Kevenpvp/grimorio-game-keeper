@@ -1,4 +1,5 @@
-import { type ReactNode } from "react";
+import { Component, useEffect, useState, type ReactNode } from "react";
+import { reportLovableError } from "@/lib/lovable-error-reporting";
 import { BookOpen, ChartNoAxesCombined, HeartPulse, Layers3, Shield, Sparkles, Swords, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -50,18 +51,65 @@ export function SheetSectionTabs({ active, onChange, tabs }: {
   );
 }
 
+type SectionErrorProps = { tab: SheetTabKey; children: ReactNode };
+type SectionErrorState = { error: Error | null };
+
+class SheetSectionErrorBoundary extends Component<SectionErrorProps, SectionErrorState> {
+  state: SectionErrorState = { error: null };
+
+  static getDerivedStateFromError(error: Error): SectionErrorState {
+    return { error };
+  }
+
+  componentDidCatch(error: Error) {
+    reportLovableError(error, { boundary: "sheet_section", section: this.props.tab });
+    console.error("Erro na seção da ficha:", this.props.tab, error);
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div role="alert" className="panel space-y-3 border-red-500/40 p-4 sm:p-5">
+        <h3 className="text-base font-semibold text-red-300">Não foi possível carregar esta seção da ficha</h3>
+        <p className="text-sm text-muted-foreground">
+          As outras abas continuam disponíveis. Seus personagens e pontos não foram alterados.
+        </p>
+        <details className="rounded-lg border border-red-500/20 px-3 py-2">
+          <summary className="cursor-pointer text-xs text-red-200">Ver detalhes técnicos</summary>
+          <p className="mt-2 break-words font-mono text-xs text-muted-foreground">
+            {this.state.error.message || "Erro desconhecido ao exibir esta seção."}
+          </p>
+        </details>
+        <button type="button" className="min-h-11 rounded-lg border border-gold/40 px-4 text-sm font-semibold text-gold hover:bg-gold/10"
+          onClick={() => this.setState({ error: null })}>
+          Tentar abrir seção novamente
+        </button>
+      </div>
+    );
+  }
+}
+
 export function SheetTabPanel({ tab, active, children, className }: {
   tab: SheetTabKey;
   active: SheetTabKey;
   children: ReactNode;
   className?: string;
 }) {
-  // Keep inactive panels mounted: field drafts and confirmation dialogs must
-  // not lose their local state when the master switches between tabs.
+  // Render only the selected tab on first load. Previously every tab was
+  // mounted immediately, causing 10+ unrelated queries and any hidden-panel
+  // rendering failure to break the entire sheet. Once visited, a panel stays
+  // mounted to preserve draft fields when switching tabs.
+  const [visited, setVisited] = useState(active === tab);
+  useEffect(() => {
+    if (active === tab) setVisited(true);
+  }, [active, tab]);
+  if (!visited && active !== tab) return null;
   return (
     <div role="tabpanel" id={"character-tab-panel-" + tab} aria-labelledby={"character-tab-" + tab}
       hidden={active !== tab} className={cn("min-w-0 space-y-4", active !== tab && "hidden", className)}>
-      {children}
+      <SheetSectionErrorBoundary tab={tab}>
+        {children}
+      </SheetSectionErrorBoundary>
     </div>
   );
 }
