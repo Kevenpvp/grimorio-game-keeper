@@ -485,6 +485,12 @@ export function CharacterAbilitiesPanel({
   const attackDefinition = attackAbility?.ability_id
     ? attackCatalogEntry
     : attackAbility;
+  function attackManaBaseFor(ability: CharacterAbility): number {
+    const catalogAbility = ability.ability_id
+      ? abilityCatalog.find((entry) => entry.id === ability.ability_id)
+      : null;
+    return ability.attack_mana_cost ?? catalogAbility?.attack_mana_cost ?? ability.mana_cost;
+  }
   const attackConfig = attackDefinition?.attack_enabled ? parseAbilityAttackDamage(attackDefinition.attack_damage) : null;
   const attackEffectGroups = attackDefinition?.attack_enabled ? parseAbilityAttackEffectGroups(attackDefinition.attack_effect_groups) : [];
   const guaranteedAttackDots = attackDefinition?.attack_enabled ? parseAbilityDotEffects(attackDefinition.dot_effects) : [];
@@ -935,8 +941,12 @@ export function CharacterAbilitiesPanel({
                         </span>
                       )}
                       {ability.active_duration_remaining > 0 && <span className="rounded bg-sky-500/15 px-2 py-1 text-sky-400">Duração: {ability.active_duration_remaining} turno(s) · recarga após terminar</span>}
-                      {ability.can_activate && ability.mana_cost > 0 && <span className="rounded bg-muted px-2 py-1">Custo base: {ability.mana_cost} Mana</span>}
-                      {ability.can_activate && !ability.mana_cost && <span className="rounded bg-muted px-2 py-1">Sem custo base de Mana</span>}
+                      {ability.can_activate && <span className="rounded bg-muted px-2 py-1">Ativar: {ability.mana_cost} Mana</span>}
+                      {ability.can_activate && !ability.toggle_mode && (
+                        ability.ability_id
+                          ? abilityCatalog.some((catalogAbility) => catalogAbility.id === ability.ability_id && catalogAbility.attack_enabled)
+                          : ability.attack_enabled
+                      ) && <span className="rounded bg-violet-500/10 px-2 py-1 text-violet-300">Atacar: {attackManaBaseFor(ability)} Mana</span>}
                     </div>
                   </div>
                   {mode === "combat" && canUse && ability.can_activate && (
@@ -1007,7 +1017,12 @@ export function CharacterAbilitiesPanel({
                     multiplier={multiplierForAbility(ability)}
                   />;
                 })()}
-                {mode === "combat" && ability.can_activate && ability.mana_cost > 0 && (
+                {mode === "combat" && ability.can_activate && (
+                  ability.mana_cost > 0 ||
+                  (!ability.toggle_mode && (ability.ability_id
+                    ? abilityCatalog.some((entry) => entry.id === ability.ability_id && entry.attack_enabled)
+                    : ability.attack_enabled) && attackManaBaseFor(ability) > 0)
+                ) && (
                   <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-violet-500/30 p-2">
                     <Label className="text-xs">Mana extra nesta utilização</Label>
                     <Input
@@ -1019,7 +1034,14 @@ export function CharacterAbilitiesPanel({
                       onChange={(event) => setExtraManaCosts((current) => ({ ...current, [ability.id]: event.target.value }))}
                       disabled={busyId !== null}
                     />
-                    <span className="text-xs text-muted-foreground">Total base + extra: {ability.mana_cost + Math.max(0, Math.min(1000000, Math.floor(Number(extraManaCosts[ability.id] ?? 0) || 0)))} Mana. Volta ao normal após usar.</span>
+                    <span className="text-xs text-muted-foreground">
+                      Ativar: {ability.mana_cost + Math.max(0, Math.min(1000000, Math.floor(Number(extraManaCosts[ability.id] ?? 0) || 0)))} Mana
+                      {!ability.toggle_mode && (ability.ability_id
+                        ? abilityCatalog.some((entry) => entry.id === ability.ability_id && entry.attack_enabled)
+                        : ability.attack_enabled) &&
+                        <> · Atacar: {attackManaBaseFor(ability) + Math.max(0, Math.min(1000000, Math.floor(Number(extraManaCosts[ability.id] ?? 0) || 0)))} Mana</>}
+                      . A Mana extra volta ao normal após o uso.
+                    </span>
                   </div>
                 )}
                 {demonioAssignment?.id === ability.id && (
@@ -1322,6 +1344,10 @@ export function CharacterAbilitiesPanel({
               </div>
               {!attackStarted && (
                 <p className="text-xs text-muted-foreground">
+                  Custo base de Atacar: {attackAbility ? attackManaBaseFor(attackAbility) : 0} Mana
+                  {attackAbility && Number(extraManaCosts[attackAbility.id] ?? 0) > 0
+                    ? ` + ${extraManaCosts[attackAbility.id]} extra`
+                    : ""}.
                   Finalizar Ataque consome Mana e inicia a recarga mesmo sem nenhum acerto. Fechar pelo X antes de usar cancela sem custo.
                 </p>
               )}
