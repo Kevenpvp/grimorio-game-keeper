@@ -1651,7 +1651,7 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
               onClick={() => setStatusAttributes(items => [...items, ...defs.filter(d => !items.some(v => v.attribute_key === d.key)).map(d => ({ attribute_key: d.key, amount: 10, value_mode: "fixed" as const }))])}>
               <Plus className="mr-1 h-4 w-4"/> Todos os atributos
             </Button>
-          </div>
+          </div>}
           {effectType === "damage_dealt" && <label className="col-span-2 space-y-1 text-xs font-medium"><span>Tipo de dano afetado</span><select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={effectDamageScope} onChange={e => setEffectDamageScope(e.target.value as "any" | "physical" | "magical")}><option value="physical">Físico</option><option value="magical">Mágico</option><option value="any">Qualquer dano</option></select></label>}
           {effectType === "damage_reduction" && <>
             <label className="col-span-2 space-y-1 text-xs font-medium"><span>Categoria a mitigar</span><select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={reductionScope} onChange={e => setReductionScope(e.target.value as "physical" | "magical")}><option value="physical">Físico</option><option value="magical">Mágico</option></select></label>
