@@ -179,7 +179,7 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="grimorio-section-header flex flex-wrap items-center justify-between gap-3">
         <Link to="/painel" className="flex items-center gap-1 text-sm text-muted-foreground hover:text-gold">
           <ArrowLeft className="h-4 w-4" /> Todas as fichas
         </Link>
@@ -214,7 +214,7 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
         </>
       ) : (
         <>
-          <section className="panel grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6 p-4 sm:p-5 md:grid-cols-[200px_minmax(0,1fr)]">
+          <section className="panel grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6 border-gold/35 p-4 sm:p-6 md:grid-cols-[200px_minmax(0,1fr)]">
             <div className="min-w-0 space-y-2">
               <Portrait path={character.photo_path} name={character.name} className="mx-auto aspect-[3/4] w-full max-w-[200px]" />
               <input ref={fileRef} type="file" accept="image/*" className="hidden"
