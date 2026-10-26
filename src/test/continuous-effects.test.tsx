@@ -40,6 +40,32 @@ describe("Efeitos contínuos", () => {
     expect(parsed[1].actions[0].kind).toBe("damage");
   });
 
+  it("permite limitar alvos e exigir escolha sem alterar configurações antigas", () => {
+    const [rule] = parseContinuousRules([{
+      name: "Agarrão", trigger: "target", linger_turns: 3,
+      max_targets: 1, on_limit: "choose",
+      stop_on_caster_leave: true, stop_on_caster_death: true, stop_on_caster_stun: true,
+      actions: [{ kind: "status", polarity: "debuff", attributes: [
+        { key: "strength", mode: "percent", step: 5, cap: 100 },
+      ] }],
+    }]);
+    expect(rule.max_targets).toBe(1);
+    expect(rule.on_limit).toBe("choose");
+    expect(rule.stop_on_caster_death).toBe(true);
+    expect(rule.stop_on_caster_stun).toBe(true);
+    expect(rule.linger_turns).toBe(3);
+    const [legacy] = parseContinuousRules([{
+      ...rule, max_targets: undefined, on_limit: undefined,
+      stop_on_caster_leave: undefined, stop_on_caster_death: undefined,
+      stop_on_caster_stun: undefined,
+    }]);
+    expect(legacy.max_targets).toBeNull();
+    expect(legacy.on_limit).toBe("replace_oldest");
+    expect(legacy.stop_on_caster_leave).toBe(true);
+    expect(legacy.stop_on_caster_death).toBe(false);
+    expect(legacy.stop_on_caster_stun).toBe(false);
+  });
+
   it("aceita DoTs registrados e efeitos secundários opcionais", () => {
     const parsed = parseContinuousRules([{
       name: "Efeitos diversos", trigger: "global", linger_turns: 0,
