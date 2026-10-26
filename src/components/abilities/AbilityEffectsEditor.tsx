@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { activationEffectValueFields } from "@/lib/activation-effect-values";
+import { parseAttributeStatusModifiers, type AttributeStatusModifier } from "@/lib/multi-attribute-effects";
 import { useRaces, type AttributeDef } from "@/lib/sheets";
 import { useDamageTypes, useDotTemplates, type AbilityEffectDefinition, type AbilityEffectType, type DamageScope, type DamageReductionScope, type DamageReceivedScope, type DamageMagicLevel } from "@/lib/abilities";
 
@@ -91,11 +92,32 @@ export function AbilityEffectsEditor({
     return defs.find((d) => d.key !== "hp" && d.key !== "mana")?.key ?? "hp";
   }
 
+  function selectedStatusModifiers(effect: AbilityEffectDefinition): AttributeStatusModifier[] {
+    const rows = parseAttributeStatusModifiers(effect.attribute_modifiers, new Set(defs.map((def) => def.key)));
+    return rows.length ? rows : [{
+      attribute_key: effect.attribute_key ?? firstStatusKey(),
+      value_mode: effect.value_mode,
+      amount: effect.amount,
+    }];
+  }
+
+  function changeStatusModifiers(index: number, rows: AttributeStatusModifier[]) {
+    if (!rows.length) return; // At least one attribute must remain selected.
+    const first = rows[0];
+    patch(index, {
+      attribute_modifiers: rows,
+      attribute_key: first.attribute_key,
+      value_mode: first.value_mode,
+      amount: first.amount,
+    });
+  }
+
   function add() {
     onChange([...effects, {
       name: "Novo efeito",
       effect_type: "status",
       attribute_key: firstStatusKey(),
+      attribute_modifiers: [{ attribute_key: firstStatusKey(), amount: 10, value_mode: "fixed" }],
       polarity: "buff",
       value_mode: "fixed",
       amount: 10,
@@ -228,7 +250,8 @@ export function AbilityEffectsEditor({
         const selectedMagicHealLevels = effect.magic_healing_magic_levels ?? [];
         const selectedMagicHealWhitelistTypeIds = effect.magic_healing_whitelist_type_ids ?? [];
         const selectedVulnerabilityEffects = effect.damage_vulnerability_effects ?? [];
-        const needsAttribute = effect.effect_type === "status" || effect.effect_type === "regeneration";
+        const isMultiStatus = effect.effect_type === "status";
+        const needsAttribute = effect.effect_type === "regeneration";
         const needsValue = needsAttribute || effect.effect_type === "mana_regeneration" || effect.effect_type === "mana_used" || effect.effect_type === "damage_dealt" || isDamageReduction || isDamageReceived || isMentalControlModifier;
         function patchHealingOption(
           resourceKey: "hp" | "mana" | "body" | "sanity",
@@ -264,6 +287,7 @@ export function AbilityEffectsEditor({
                     healing_damage_type_id: type === "healing" ? (effect.healing_damage_type_id ?? damageTypes[0]?.id ?? null) : effect.healing_damage_type_id,
                     healing_magic_level: type === "healing" ? (effect.healing_magic_level ?? "baixa") : effect.healing_magic_level,
                     attribute_key: type === "mana_regeneration" ? "mana" : type === "regeneration" ? "hp" : type === "status" || type === "damage_vulnerability" ? firstStatusKey() : null,
+                    attribute_modifiers: type === "status" ? [{ attribute_key: firstStatusKey(), amount: 10, value_mode: "fixed" }] : [],
                     damage_vulnerability_effects: type === "damage_vulnerability"
                       ? (effect.damage_vulnerability_effects?.length ? effect.damage_vulnerability_effects : [{
                           name: "Efeito ao receber dano",
@@ -1116,6 +1140,69 @@ export function AbilityEffectsEditor({
                   {" "}Valores fixos ajustam diretamente o modificador do dado.
                 </p>
               )}
+              {isMultiStatus && (() => {
+                const selected = selectedStatusModifiers(effect);
+                const ids = new Set(selected.map((item) => item.attribute_key));
+                return (
+                  <div className="space-y-3 rounded-lg border border-gold/35 bg-gold/5 p-3 sm:col-span-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-semibold text-gold">Atributos afetados ({selected.length})</p>
+                        <p className="text-xs text-muted-foreground">Um único buff/debuff com valor e modo individuais para cada atributo.</p>
+                      </div>
+                      <select aria-label="Tipo de alteração dos atributos" className="min-h-11 rounded-md border border-input bg-background px-3 text-sm"
+                        value={effect.polarity} onChange={(event) => patch(index, { polarity: event.target.value as "buff" | "debuff" })}>
+                        <option value="buff">Buff (+)</option><option value="debuff">Debuff (−)</option>
+                      </select>
+                    </div>
+                    <div className="grid gap-2 md:grid-cols-2">
+                      {selected.map((row) => (
+                        <div key={row.attribute_key} className="min-w-0 space-y-2 rounded-lg border border-gold/20 bg-background/50 p-2.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="break-words text-xs font-semibold">{defs.find((d) => d.key === row.attribute_key)?.label ?? row.attribute_key}</span>
+                            <Button type="button" variant="ghost" size="icon" className="h-9 w-9 text-red-300"
+                              disabled={selected.length <= 1} aria-label={"Remover " + row.attribute_key}
+                              onClick={() => changeStatusModifiers(index, selected.filter((item) => item.attribute_key !== row.attribute_key))}>
+                              <Minus className="h-4 w-4" />
+                            </Button>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <select aria-label={"Modo para " + row.attribute_key} className="min-h-11 min-w-0 rounded-md border border-input bg-background px-2 text-xs"
+                              value={row.value_mode} onChange={(event) => changeStatusModifiers(index, selected.map((item) =>
+                                item.attribute_key === row.attribute_key ? { ...item, value_mode: event.target.value as "fixed" | "percent" } : item))}>
+                              <option value="fixed">Valor fixo</option><option value="percent">%</option>
+                            </select>
+                            <Input type="number" min={0} max={1_000_000} step="any" inputMode="decimal"
+                              aria-label={"Valor de " + row.attribute_key} value={row.amount}
+                              onChange={(event) => changeStatusModifiers(index, selected.map((item) =>
+                                item.attribute_key === row.attribute_key ? { ...item, amount: Math.max(0, Math.min(1_000_000, Number(event.target.value) || 0)) } : item))} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {defs.some((def) => !ids.has(def.key)) && (
+                      <select aria-label="Adicionar outro atributo" value="" className="min-h-11 w-full rounded-lg border border-gold/25 bg-background px-3 text-sm"
+                        onChange={(event) => {
+                          if (!event.target.value) return;
+                          changeStatusModifiers(index, [...selected, { attribute_key: event.target.value, value_mode: "fixed", amount: 10 }]);
+                        }}>
+                        <option value="">+ Adicionar outro atributo…</option>
+                        {defs.filter((def) => !ids.has(def.key)).map((def) =>
+                          <option key={def.key} value={def.key}>{def.label}</option>)}
+                      </select>
+                    )}
+                    {defs.some((def) => !ids.has(def.key)) && (
+                      <Button type="button" size="sm" variant="outline" className="min-h-10"
+                        onClick={() => changeStatusModifiers(index, [
+                          ...selected, ...defs.filter((def) => !ids.has(def.key))
+                            .map((def) => ({ attribute_key: def.key, amount: 10, value_mode: "fixed" as const })),
+                        ])}>
+                        <Plus className="mr-1 h-4 w-4" /> Selecionar todos os atributos
+                      </Button>
+                    )}
+                  </div>
+                );
+              })()}
               {needsAttribute && (
                 <select aria-label="Atributo afetado" className="h-9 min-w-0 rounded-md border border-input bg-background px-2 text-sm" value={effect.attribute_key ?? (effect.effect_type === "regeneration" ? "hp" : "strength")}
                   onChange={(e) => patch(index, { attribute_key: e.target.value })}>
