@@ -2,10 +2,11 @@ import type { Json } from "@/integrations/supabase/types";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient, type QueryClient, type QueryKey } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, Crosshair, Dices, Plus, Swords, Trash2, Copy, Footprints, RotateCw, Minus, Brain, Activity, Sparkles } from "lucide-react";
+import { ChevronDown, ChevronUp, Crosshair, Dices, Plus, Swords, Trash2, Copy, Footprints, RotateCw, Minus, Brain, Activity, Sparkles, Users, LayoutDashboard, ScrollText, Search, Settings2, Zap, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { supabase } from "@/integrations/supabase/client";
 import { dispatchCustomAbilityScriptEvents } from "@/lib/ability-script-runtime";
 
@@ -323,17 +324,6 @@ function CombatPage() {
         <h1 className="flex items-center gap-2 text-3xl text-gold"><Swords className="h-7 w-7" /> Modo de Combate</h1>
         {isMaster && <Button onClick={create}><Plus className="mr-1 h-4 w-4" /> Nova batalha</Button>}
       </div>
-      {isMaster && (
-        <DamageOverTimeManager
-          mode="combat"
-          battleId={battle?.active ? battle.id : null}
-          fighters={(battle?.battle_participants ?? []).flatMap((participant) => {
-            const character = participant.characters as { id?: string; name?: string } | null;
-            return character?.id && character.name ? [{ id: character.id, name: character.name }] : [];
-          })}
-          active={!!battle?.active}
-        />
-      )}
       {list.length === 0 ? (
         <p className="text-muted-foreground">{isMaster ? "Nenhuma batalha criada." : "Seu personagem não está em nenhuma batalha agora."}</p>
       ) : (
@@ -357,12 +347,59 @@ function CombatPage() {
 type BattlesData = NonNullable<ReturnType<typeof useLiveBattles>["data"]>;
 type BattleRow = BattlesData[number];
 
+
+type CombatTab = "fighters" | "actions" | "summary" | "activity";
+type CombatActivityKind = "turn" | "damage" | "effect" | "transformation";
+type CombatActivity = { id: number; kind: CombatActivityKind; label: string; at: string };
+
+const combatTabs = [
+  { key: "fighters", label: "Combatentes", icon: Users },
+  { key: "actions", label: "Ações", icon: Zap },
+  { key: "summary", label: "Resumo", icon: LayoutDashboard },
+  { key: "activity", label: "Atividade", icon: ScrollText },
+] as const;
+
+function CombatNavigation({ active, onSelect, mobile = false }: {
+  active: CombatTab;
+  onSelect: (tab: CombatTab) => void;
+  mobile?: boolean;
+}) {
+  return (
+    <nav aria-label="Seções do combate" className={mobile
+      ? "fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-border bg-background/95 px-1 pt-2 pb-[max(.75rem,env(safe-area-inset-bottom))] shadow-2xl backdrop-blur md:hidden"
+      : "hidden grid-cols-4 gap-2 rounded-xl border border-border bg-card/70 p-1.5 md:grid"}>
+      {combatTabs.map(({ key, label, icon: Icon }) => (
+        <button key={key} type="button" aria-current={active === key ? "page" : undefined}
+          onClick={() => onSelect(key)}
+          className={cn(
+            "flex min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 text-[11px] font-semibold transition-colors md:flex-row md:gap-2 md:text-sm",
+            active === key ? "bg-gold/15 text-gold ring-1 ring-gold/40" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+          )}>
+          <Icon className="h-5 w-5 shrink-0 md:h-4 md:w-4" aria-hidden="true" />
+          <span className="truncate">{label}</span>
+        </button>
+      ))}
+    </nav>
+  );
+}
+
 function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster: boolean; userId: string }) {
   const { data: defs } = useDefs();
   const { data: races } = useRaces();
   const { data: virtues } = useVirtues();
   const { data: classes } = useClasses();
   const qc = useQueryClient();
+  const [combatTab, setCombatTab] = useState<CombatTab>("fighters");
+  const [fighterSearch, setFighterSearch] = useState("");
+  const [fighterFilter, setFighterFilter] = useState<"all" | "targets" | "effects" | "critical">("all");
+  const [combatActivity, setCombatActivity] = useState<CombatActivity[]>([]);
+  function noteActivity(kind: CombatActivityKind, label: string) {
+    setCombatActivity((current) => [{
+      id: Date.now() + Math.random(),
+      kind, label,
+      at: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+    }, ...current].slice(0, 80));
+  }
   const [selectedTargetIds, setSelectedTargetIds] = useState<string[]>(() => battle.target_character_id ? [battle.target_character_id] : []);
   const [manaRegenSettings, setManaRegenSettings] = useState<Record<string, { mode: "percent" | "fixed"; amount: string }>>({});
   const [advancingTurnKeys, setAdvancingTurnKeys] = useState<Set<string>>(() => new Set());
@@ -475,6 +512,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
       }
       const result = data && typeof data === "object" ? data as Record<string, unknown> : {};
       toast.success("Transformação ativada");
+      noteActivity("transformation", "Transformação ativada: " + (transformationCatalog.find((item) => item.id === transformationId)?.name ?? "transformação") + ".");
       const configuredTransformation = transformationCatalog.find((item) => item.id === transformationId);
       const activeDuration = configuredTransformation?.duration_turns
         ?? (typeof result.duration_remaining === "number" ? result.duration_remaining : undefined)
@@ -657,8 +695,10 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
       if (characterId) {
         const fighter = turnFighters[0];
         toast.success("Turno individual de " + fighter.name + " avançado para " + nextTurn + "; regeneração configurada aplicada.");
+        noteActivity("turn", "Turno individual de " + fighter.name + " avançado para " + nextTurn + ".");
       } else {
         toast.success("Turno " + nextTurn + ": regeneração configurada aplicada.");
+        noteActivity("turn", "Turno geral avançado para " + nextTurn + ".");
       }
 
       // Share a debounced batch with Realtime. The local counter is instant; this background
@@ -685,6 +725,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
     const { error } = await supabase.from("battle_effects").insert({ ...effect, battle_id: battle.id, character_id: characterId });
     if (error) { toast.error(error.message); return; }
     toast.success("Efeito aplicado: " + effect.name);
+    noteActivity("effect", "Efeito " + effect.name + " aplicado a " + (fighters.find((fighter) => fighter.id === characterId)?.name ?? "personagem") + ".");
     await qc.invalidateQueries({ queryKey: ["battle-effects", battle.id] });
     await qc.invalidateQueries({ queryKey: ["character-active-effects"] });
   }
@@ -729,25 +770,76 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
     void update({ target_character_id: next[0] ?? null });
   }
 
+  const visibleFighters = fighters.filter((fighter) => {
+    const nameMatch = (fighter.name + " " + (fighter.player_name ?? "")).toLocaleLowerCase("pt-BR")
+      .includes(fighterSearch.trim().toLocaleLowerCase("pt-BR"));
+    if (!nameMatch) return false;
+    if (fighterFilter === "targets") return selectedTargetIds.includes(fighter.id);
+    if (fighterFilter === "effects") return effects.some((effect) => effect.character_id === fighter.id);
+    if (fighterFilter === "critical") {
+      if (!isMaster && fighter.owner_id !== userId) return false;
+      const hp = fighter.character_attributes.find((attr) => attr.attribute_key === "hp")?.current_value ?? 0;
+      return hp / Math.max(1, val(fighter, "hp")) <= 0.25;
+    }
+    return true;
+  });
+  const visibleToUser = fighters.filter((fighter) => isMaster || fighter.owner_id === userId);
+  const criticalFighters = visibleToUser.filter((fighter) => {
+    const hp = fighter.character_attributes.find((attr) => attr.attribute_key === "hp")?.current_value ?? 0;
+    return hp / Math.max(1, val(fighter, "hp")) <= 0.25;
+  });
+  const dotEffects = effects.filter((effect) => effect.effect_type === "damage_over_time");
+  const mindControlEffects = effects.filter((effect) => effect.effect_type === "mind_control");
+
   if (!defs) return null;
   return (
-    <div className="space-y-6">
-      {isMaster && <BattleAdmin battle={battle} fighters={fighters} onUpdate={update} />}
-      <div className="panel space-y-3 p-4">
+    <div className="relative space-y-4 pb-28 md:pb-8">
+      <header className="panel sticky top-2 z-20 space-y-3 border-gold/25 bg-background/95 p-3 shadow-md backdrop-blur sm:p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div><div className="text-sm text-muted-foreground">Turnos transcorridos</div><div className="font-display text-2xl text-gold">{battle.turn_count ?? 0}</div></div>
-          {isMaster && <Button disabled={!battle.active || advancingTurnKeys.has("__global__")} onClick={() => void advanceCombatTurn(null)}><RotateCw className="mr-2 h-4 w-4" /> {advancingTurnKeys.has("__global__") ? "Avançando..." : "Avançar turno geral"}</Button>}
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Combate {battle.active ? "em andamento" : "encerrado"}</p>
+            <h2 className="truncate font-display text-xl text-gold sm:text-2xl">{battle.name}</h2>
+            <p className="text-xs text-muted-foreground">Turno {battle.turn_count ?? 0} · {fighters.length} combatentes{actor ? " · Vez: " + actor.name : ""}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            {isMaster && <Button size="sm" variant="outline" onClick={() => setCombatTab("summary")} aria-label="Gerenciar batalha no resumo"><Settings2 className="mr-1 h-4 w-4" /> Gerenciar</Button>}
+            {isMaster && <Button size="sm" disabled={!battle.active || advancingTurnKeys.has("__global__")} onClick={() => void advanceCombatTurn(null)}>
+              <RotateCw className="mr-1 h-4 w-4" /> {advancingTurnKeys.has("__global__") ? "Avançando..." : "Turno geral"}
+            </Button>}
+          </div>
         </div>
-
-      </div>
-      {!isMaster && <h2 className="text-xl text-gold">{battle.name}</h2>}
-
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {fighters.map((f) => {
+        <div className="flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+          <span className="rounded-full border border-border px-2 py-1">{effects.length} efeito(s) visíveis</span>
+          <span className="rounded-full border border-border px-2 py-1">{dotEffects.length} DoT(s)</span>
+          {mindControlEffects.length > 0 && <span className="rounded-full border border-violet-500/50 px-2 py-1 text-violet-400">{mindControlEffects.length} controlado(s)</span>}
+        </div>
+      </header>
+      <CombatNavigation active={combatTab} onSelect={setCombatTab} />
+      {combatTab === "fighters" && <section className="space-y-3" aria-label="Combatentes da batalha">
+        <div className="panel flex flex-col gap-3 p-3 sm:flex-row sm:items-center">
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input aria-label="Buscar combatente" placeholder="Buscar personagem ou jogador..." value={fighterSearch} onChange={(event) => setFighterSearch(event.target.value)} className="pl-9" />
+          </div>
+          <select aria-label="Filtrar combatentes" className="h-10 rounded-md border border-input bg-background px-3 text-sm" value={fighterFilter} onChange={(event) => setFighterFilter(event.target.value as typeof fighterFilter)}>
+            <option value="all">Todos</option>
+            <option value="targets">Alvos marcados</option>
+            <option value="effects">Com efeitos visíveis</option>
+            <option value="critical">HP crítico (até 25%)</option>
+          </select>
+          {isMaster && <Button size="sm" className="min-h-10" onClick={() => setCombatTab("actions")}><Zap className="mr-1 h-4 w-4" /> Ações rápidas</Button>}
+        </div>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {visibleFighters.map((f) => {
           const isActor = f.id === actor?.id;
           const isTarget = selectedTargetIds.includes(f.id) && f.id !== actor?.id;
           const isOwnFighter = isMaster || f.owner_id === userId;
           const isExpanded = expandedFighterIds.has(f.id);
+          const fighterEffects = effects.filter((effect) => effect.character_id === f.id);
+          const fighterDots = fighterEffects.filter((effect) => effect.effect_type === "damage_over_time").length;
+          const fighterDebuffs = fighterEffects.filter((effect) => effect.polarity === "debuff").length;
+          const fighterBuffs = fighterEffects.filter((effect) => effect.polarity === "buff").length;
+          const fighterSpecial = fighterEffects.filter((effect) => ["stun", "invincible", "magic_prohibition", "no_mana", "mind_control", "invisibility"].includes(effect.effect_type));
           const hp = f.character_attributes.find((a) => a.attribute_key === "hp");
           const mana = f.character_attributes.find((a) => a.attribute_key === "mana");
           const hpMaximum = isOwnFighter ? val(f, "hp") : 0;
@@ -766,7 +858,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
           const transformationImage = activeTransformationState?.image_path || f.photo_path;
           const availableTransformations = availableTransformationsFor(f);
           return (
-            <div key={f.id} className={cn("panel space-y-2 p-3", isActor && "border-gold ring-1 ring-gold", isTarget && "border-blood ring-1 ring-blood")}>
+            <article key={f.id} className={cn("panel min-w-0 space-y-3 p-3", isActor && "border-gold ring-1 ring-gold", isTarget && "border-blood ring-1 ring-blood")}>
               <div className="flex items-center gap-2">
                 <Portrait path={transformationImage} name={f.name} className="h-12 w-10 shrink-0" />
                 <div className="min-w-0 flex-1 space-y-0.5">
@@ -790,7 +882,26 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                   <div className="text-[11px] text-muted-foreground">Termina em {activeTransformationRemaining} turno(s)</div>
                 </div>
               )}
-              {(isOwnFighter || (isMaster && isExpanded)) && availableTransformations.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 text-[11px]">
+                {isOwnFighter && <span className="rounded-md bg-emerald-500/10 px-2 py-1 text-emerald-400">Buffs {fighterBuffs}</span>}
+                {isOwnFighter && <span className="rounded-md bg-red-500/10 px-2 py-1 text-red-400">Debuffs {fighterDebuffs}</span>}
+                {isOwnFighter && fighterDots > 0 && <span className="rounded-md bg-orange-500/10 px-2 py-1 text-orange-400">DoTs {fighterDots}</span>}
+                {fighterSpecial.map((effect) => <span key={effect.id} className="rounded-md border border-border px-2 py-1 text-muted-foreground">
+                  {effect.effect_type === "invincible" ? "Invencível" : effect.effect_type === "magic_prohibition" ? "Sem magia" : effect.effect_type === "no_mana" ? "Sem mana" : effect.effect_type === "mind_control" ? "Controle mental" : effect.effect_type === "invisibility" ? "Invisível" : "Stun"}
+                </span>)}
+              </div>
+              <Sheet open={isExpanded} onOpenChange={(open) => setExpandedFighterIds((current) => {
+                const next = new Set(current);
+                if (open) next.add(f.id); else next.delete(f.id);
+                return next;
+              })}>
+                <SheetContent side="bottom" className="h-[93dvh] max-h-[93dvh] rounded-t-2xl border-gold/40 px-4 pb-3 pt-6 sm:mx-auto sm:max-w-5xl sm:px-6">
+                  <SheetHeader className="pr-8 text-left">
+                    <SheetTitle className="font-display text-xl text-gold">{f.name}</SheetTitle>
+                    <SheetDescription>{f.player_name || "NPC"} · Atributos, habilidades, efeitos, transformações e recursos</SheetDescription>
+                  </SheetHeader>
+                  <div className="mt-4 h-[calc(93dvh-7rem)] space-y-4 overflow-y-auto overscroll-contain pb-10 pr-1">
+              {(isOwnFighter || isMaster) && availableTransformations.length > 0 && (
                 <div className="space-y-2 rounded-md border border-border p-2">
                   <div className="text-xs font-semibold text-gold">Transformações</div>
                   <div className="space-y-2">
@@ -911,7 +1022,10 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                 </>
               )}
 
-              <div className="flex flex-wrap items-center gap-2 pt-1">
+                  </div>
+                </SheetContent>
+              </Sheet>
+              <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
                 {isMaster && (
                   <>
                     <Button size="sm" className="flex-1" variant={isActor ? "default" : "outline"} onClick={() => {
@@ -933,19 +1047,120 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                   return next;
                 })}>
                   {isExpanded ? <ChevronUp className="mr-1 h-3.5 w-3.5" /> : <ChevronDown className="mr-1 h-3.5 w-3.5" />}
-                  {isExpanded ? "Recolher" : "Ver mais detalhes"}
+                  {isExpanded ? "Fechar" : "Detalhes"}
                 </Button>
               </div>
-            </div>
+            </article>
           );
         })}
-      </div>
-
-            {isMaster && (actor ? (
-        <Actions battleId={battle.id} actor={actor} targets={targets} fighters={fighters} defs={defs} val={val} effects={effects} abilitiesOf={abilitiesOf} />
-      ) : (
-        <p className="text-sm text-muted-foreground">Selecione a opção "Vez" de um personagem para abrir as ações e o teste de esquiva.</p>
-      ))}
+        </div>
+        {visibleFighters.length === 0 && <p className="panel p-6 text-center text-sm text-muted-foreground">Nenhum combatente encontrado com esses filtros.</p>}
+      </section>}
+      {combatTab === "actions" && <section className="space-y-4" aria-label="Ações de combate">
+        {isMaster ? <>
+          <div className="panel space-y-3 p-4">
+            <div className="flex items-center gap-2"><Zap className="h-5 w-5 text-gold" /><h3 className="font-display text-lg text-gold">Central de ações</h3></div>
+            <label className="block space-y-1 text-sm">
+              <span className="text-muted-foreground">Quem está agindo?</span>
+              <select className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm"
+                value={actor?.id ?? ""} onChange={(event) => {
+                  const id = event.target.value || null;
+                  const next = selectedTargetIds.filter((targetId) => targetId !== id);
+                  setSelectedTargetIds(next);
+                  void update({ current_character_id: id, target_character_id: next[0] ?? null });
+                }}>
+                <option value="">Selecione um combatente</option>
+                {fighters.map((fighter) => <option key={fighter.id} value={fighter.id}>{fighter.name}</option>)}
+              </select>
+            </label>
+            <div>
+              <p className="mb-2 text-sm text-muted-foreground">Alvos do ataque ({targets.length})</p>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
+                {fighters.filter((fighter) => fighter.id !== actor?.id).map((fighter) => (
+                  <button key={fighter.id} type="button" disabled={!actor} aria-pressed={selectedTargetIds.includes(fighter.id)}
+                    onClick={() => toggleTarget(fighter.id)}
+                    className={cn("min-h-11 truncate rounded-md border p-2 text-left text-sm transition-colors disabled:opacity-50",
+                      selectedTargetIds.includes(fighter.id) ? "border-blood bg-blood/10 text-foreground" : "border-border hover:border-gold/50")}>
+                    <Crosshair className="mr-1 inline h-3.5 w-3.5" /> {fighter.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          {actor ? <>
+            <div className="panel space-y-3 p-4">
+              <h3 className="font-display text-lg text-gold">Habilidades de {actor.name}</h3>
+              <CharacterAbilitiesPanel characterId={actor.id} characterName={actor.name} mode="combat"
+                canUse={battle.active} showActiveEffects battleId={battle.id}
+                individualTurn={actor.participant_turn_count ?? 0}
+                targets={fighters.map((fighter) => ({ id: fighter.id, name: fighter.name }))}
+                stunnedTargetIds={effects.filter((effect) => effect.effect_type === "stun" && Number(effect.duration) > 0).map((effect) => effect.character_id)}
+                getAttributeValue={(characterId, attributeKey) => {
+                  const fighter = fighters.find((item) => item.id === characterId);
+                  return fighter ? val(fighter, attributeKey) : 0;
+                }} />
+            </div>
+            <Actions battleId={battle.id} actor={actor} targets={targets} fighters={fighters} defs={defs}
+              val={val} effects={effects} abilitiesOf={abilitiesOf}
+              onDamageApplied={(targetName, total) => noteActivity("damage", targetName + " recebeu " + total + " de dano manual.")} />
+          </> : <p className="panel p-5 text-sm text-muted-foreground">Escolha quem está agindo para habilitar ataques, testes, habilidades e controle mental.</p>}
+          <details className="panel p-4">
+            <summary className="cursor-pointer font-semibold text-gold">Gerenciar e aplicar DoTs cadastrados</summary>
+            <div className="mt-4"><DamageOverTimeManager mode="combat" battleId={battle.active ? battle.id : null}
+              fighters={fighters.map((fighter) => ({ id: fighter.id, name: fighter.name }))} active={!!battle.active} /></div>
+          </details>
+        </> : <p className="panel p-5 text-sm text-muted-foreground">As ações de combate são controladas pelo mestre. Abra Detalhes em Combatentes para consultar sua ficha, seus efeitos e habilidades.</p>}
+      </section>}
+      {combatTab === "summary" && <section className="space-y-4" aria-label="Resumo da batalha">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {([
+            ["Combatentes", String(fighters.length)],
+            ["HP crítico", String(criticalFighters.length)],
+            ["DoTs visíveis", String(dotEffects.length)],
+            ["Controles mentais", String(mindControlEffects.length)],
+          ] as const).map(([label, value]) => (
+            <div key={label} className="panel p-4"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-2 font-display text-3xl text-gold tabular-nums">{value}</p></div>
+          ))}
+        </div>
+        <div className="panel space-y-3 p-4">
+          <div className="flex items-center gap-2"><ShieldAlert className="h-5 w-5 text-gold" /><h3 className="font-display text-lg text-gold">Visão tática</h3></div>
+          <p className="text-xs text-muted-foreground">Os jogadores só veem os valores numéricos e efeitos de suas próprias fichas.</p>
+          {fighters.map((fighter) => {
+            const isOwn = isMaster || fighter.owner_id === userId;
+            const hp = fighter.character_attributes.find((attr) => attr.attribute_key === "hp")?.current_value ?? 0;
+            const hpMax = isOwn ? val(fighter, "hp") : 0;
+            const fighterDots = effects.filter((effect) => effect.character_id === fighter.id && effect.effect_type === "damage_over_time").length;
+            return <div key={fighter.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border p-3 text-sm">
+              <div className="min-w-0"><p className="truncate font-semibold">{fighter.name}{actor?.id === fighter.id ? " · Na vez" : ""}</p>
+                <p className="text-xs text-muted-foreground">{isOwn ? "HP " + hp + " / " + hpMax : "HP " + (publicStateByCharacter.get(fighter.id)?.hp_state ?? "Indisponível")}{fighterDots > 0 ? " · " + fighterDots + " DoT(s)" : ""}</p></div>
+              <Button size="sm" variant="outline" onClick={() => {
+                setFighterSearch("");
+                setFighterFilter("all");
+                setCombatTab("fighters");
+                setExpandedFighterIds(new Set([fighter.id]));
+              }}>Detalhes</Button>
+            </div>;
+          })}
+          {fighters.length === 0 && <p className="text-sm text-muted-foreground">Não há combatentes nesta batalha.</p>}
+        </div>
+        {isMaster && <details className="panel p-4">
+          <summary className="cursor-pointer font-semibold text-gold"><Settings2 className="mr-2 inline h-4 w-4" /> Configurar batalha, participantes e encerramento</summary>
+          <div className="mt-4"><BattleAdmin battle={battle} fighters={fighters} onUpdate={update} /></div>
+        </details>}
+      </section>}
+      {combatTab === "activity" && <section className="panel space-y-3 p-4" aria-label="Atividade recente deste dispositivo">
+        <h3 className="font-display text-lg text-gold"><ScrollText className="mr-2 inline h-5 w-5" /> Atividade nesta sessão</h3>
+        <p className="text-xs text-muted-foreground">Registro local dos danos manuais, turnos, efeitos adicionados e transformações executados aqui. Não é um histórico completo nem fica salvo no banco de dados.</p>
+        {combatActivity.length === 0 ? <p className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">Ainda não há ações registradas neste dispositivo.</p> : (
+          <ol className="space-y-2">
+            {combatActivity.map((entry) => <li key={entry.id} className="flex gap-3 rounded-md border border-border p-3 text-sm">
+              <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{entry.at}</span>
+              <span>{entry.label}</span>
+            </li>)}
+          </ol>
+        )}
+      </section>}
+      <CombatNavigation active={combatTab} onSelect={setCombatTab} mobile />
     </div>
   );
 }
@@ -1567,7 +1782,7 @@ function MindControlPanel({ battleId, actor, fighters, selectedTargets, effects,
   );
 }
 
-function Actions({ battleId, actor, targets, fighters, defs, val, effects, abilitiesOf }: {
+function Actions({ battleId, actor, targets, fighters, defs, val, effects, abilitiesOf, onDamageApplied }: {
   battleId: string;
   actor: Fighter;
   targets: Fighter[];
@@ -1576,6 +1791,7 @@ function Actions({ battleId, actor, targets, fighters, defs, val, effects, abili
   val: (f: Fighter, k: string) => number;
   effects: BattleEffect[];
   abilitiesOf: (fighterId: string) => Array<{ passive_effects?: Array<{ effect_type: string; polarity: string; value_mode: string; amount: number }> }>;
+  onDamageApplied?: (targetName: string, damage: number) => void;
 }) {
   const [roll, setRoll] = useState<Roll | null>(null);
   const [testKey, setTestKey] = useState("strength");
@@ -1708,7 +1924,8 @@ function Actions({ battleId, actor, targets, fighters, defs, val, effects, abili
           <p className="text-sm text-muted-foreground">Cada alvo tem campos próprios para quantidade e valores de dano; aplicar em um alvo não altera os outros.</p>
           {targets.map((target) => <DamageApplier key={target.id} target={target} battleId={battleId}
             sources={fighters.filter((fighter) => fighter.id !== target.id).map((fighter) => ({ id: fighter.id, name: fighter.name }))}
-            defaultSourceCharacterId={actor.id} />)}
+            defaultSourceCharacterId={actor.id}
+            onDamageApplied={(result) => onDamageApplied?.(target.name, result.totalDamage)} />)}
         </div>
       )}
     </div>
