@@ -1,9 +1,10 @@
 import { Plus, Trash2, Repeat2, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useDotTemplates } from "@/lib/abilities";
 import {
   defaultContinuousRule, type ContinuousAction, type ContinuousRule,
-  type ContinuousStatusAction, type ContinuousDamageAction,
+  type ContinuousStatusAction, type ContinuousDamageAction, type ContinuousDotAction, type ContinuousEffectAction,
 } from "@/lib/continuous-effects";
 
 type Def = { key: string; label: string };
@@ -11,6 +12,7 @@ export function ContinuousRulesEditor({ rules, onChange, defs, disabled = false 
   rules: ContinuousRule[]; onChange: (next: ContinuousRule[]) => void;
   defs: Def[]; disabled?: boolean;
 }) {
+  const {data:registeredDots=[]}=useDotTemplates();
   function changeRule(i: number, patch: Partial<ContinuousRule>) {
     onChange(rules.map((rule, index) => index === i ? { ...rule, ...patch } : rule));
   }
@@ -39,7 +41,7 @@ export function ContinuousRulesEditor({ rules, onChange, defs, disabled = false 
       </p>}
       <div className="space-y-3">
         {rules.map((rule, i) => (
-          <details key={i} className="rounded-xl border border-gold/35 bg-[#0f0b09]/80 p-3" open={i === rules.length - 1 ? undefined : undefined}>
+          <details key={i} className="rounded-xl border border-gold/35 bg-[#0f0b09]/80 p-3">
             <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-2 font-semibold text-gold">
               <span className="flex min-w-0 items-center gap-2"><GripVertical className="h-4 w-4 shrink-0" /><span className="truncate">{rule.name}</span></span>
               <span className="shrink-0 rounded-full bg-gold/10 px-2 py-1 text-xs">{rule.actions.length} ação(ões)</span>
@@ -68,7 +70,7 @@ export function ContinuousRulesEditor({ rules, onChange, defs, disabled = false 
               {rule.actions.map((action, j) => (
                 <div key={j} className="space-y-3 rounded-lg border border-gold/20 bg-background/40 p-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-sm font-bold text-gold">{action.kind === "status" ? "Acumular Buff/Debuff" : "Dano periódico"}</span>
+                    <span className="text-sm font-bold text-gold">{action.kind === "status" ? "Acumular Buff/Debuff" : action.kind === "damage" ? "Dano periódico" : action.kind === "dot" ? "Aplicar DoT cadastrado" : "Efeito por turno"}</span>
                     <Button variant="ghost" size="sm" className="min-h-10 text-red-300" disabled={disabled || rule.actions.length===1}
                       onClick={() => changeRule(i, { actions: rule.actions.filter((_, id) => id !== j) })}>
                       <Trash2 className="mr-1 h-4 w-4" /> Remover ação
@@ -117,7 +119,7 @@ export function ContinuousRulesEditor({ rules, onChange, defs, disabled = false 
                       <option value="">+ Adicionar outro atributo…</option>
                       {defs.filter(d=>!action.attributes.some(a=>a.key===d.key)).map(d=><option key={d.key} value={d.key}>{d.label}</option>)}
                     </select>
-                  </> : <div className="space-y-3">
+                  </> : action.kind === "damage" ? <div className="space-y-3">
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                       {([
                         ["Dados", "dice_count", 20], ["Faces", "dice_sides", 1000], ["Bônus fixo", "flat", 1000000],
@@ -142,17 +144,83 @@ export function ContinuousRulesEditor({ rules, onChange, defs, disabled = false 
                         onChange={e=>changeAction(i,j,{...action,neutralizable:e.target.checked})}/>
                       Pode neutralizar o dano neste turno (ex.: Luz/Divino)
                     </label>
+                  </div> : action.kind === "dot" ? <div className="space-y-3">
+                    <label className="block space-y-1 text-xs">DoT já cadastrado
+                      <select value={action.template_id} disabled={disabled} className="min-h-11 w-full rounded-lg border border-input bg-background px-3 text-sm"
+                        onChange={e=>changeAction(i,j,{...action,template_id:e.target.value})}>
+                        <option value="">Selecione um DoT…</option>
+                        {registeredDots.map(dot=><option key={dot.id} value={dot.id}>{dot.name}</option>)}
+                      </select>
+                    </label>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      <label className="space-y-1 text-xs">Dano por turno
+                        <Input type="number" min={1} max={1000000} className="min-h-11" disabled={disabled}
+                          value={action.damage_amount} onChange={e=>changeAction(i,j,{...action,damage_amount:numberValue(e.target.value)})}/>
+                      </label>
+                      <label className="space-y-1 text-xs">Duração do DoT
+                        <Input type="number" min={1} max={1000} className="min-h-11" disabled={disabled}
+                          value={action.duration} onChange={e=>changeAction(i,j,{...action,duration:numberValue(e.target.value,1000)})}/>
+                      </label>
+                      <label className="space-y-1 text-xs">Modo
+                        <select className="min-h-11 w-full rounded-lg border border-input bg-background px-2" value={action.damage_mode} disabled={disabled}
+                          onChange={e=>changeAction(i,j,{...action,damage_mode:e.target.value as ContinuousDotAction["damage_mode"]})}>
+                          <option value="fixed">Dano fixo</option><option value="percent">% do HP máximo</option>
+                        </select>
+                      </label>
+                    </div>
+                    <label className="flex min-h-11 items-center gap-2 text-xs">
+                      <input type="checkbox" checked={action.repeat} disabled={disabled}
+                        onChange={e=>changeAction(i,j,{...action,repeat:e.target.checked})}/>
+                      Aplicar um novo DoT a cada turno (pode acumular)
+                    </label>
+                  </div> : <div className="space-y-3">
+                    <label className="block space-y-1 text-xs">Efeito adicional
+                      <select className="min-h-11 w-full rounded-lg border border-input bg-background px-3 text-sm" disabled={disabled}
+                        value={action.effect_type} onChange={e=>changeAction(i,j,{...action,effect_type:e.target.value as ContinuousEffectAction["effect_type"]})}>
+                        <option value="stun">Stun</option><option value="no_regen_hp">Bloquear regeneração de HP</option>
+                        <option value="no_regen_mana">Bloquear regeneração de Mana</option>
+                        <option value="magic_prohibition">Proibição de magia</option><option value="no_mana">Sem Mana</option>
+                        <option value="invincible">Invencível</option>
+                      </select>
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="space-y-1 text-xs">Nome exibido
+                        <Input className="min-h-11" value={action.name} disabled={disabled} maxLength={120}
+                          onChange={e=>changeAction(i,j,{...action,name:e.target.value})}/>
+                      </label>
+                      <label className="space-y-1 text-xs">Duração
+                        <Input type="number" className="min-h-11" min={1} max={1000} value={action.duration} disabled={disabled}
+                          onChange={e=>changeAction(i,j,{...action,duration:numberValue(e.target.value,1000)})}/>
+                      </label>
+                    </div>
+                    <label className="flex min-h-11 items-center gap-2 text-xs">
+                      <input type="checkbox" checked={action.repeat} disabled={disabled}
+                        onChange={e=>changeAction(i,j,{...action,repeat:e.target.checked})}/>
+                      Reaplicar mesmo que o efeito ainda esteja ativo
+                    </label>
                   </div>}
                 </div>
               ))}
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <Button variant="outline" className="min-h-11" disabled={disabled || rule.actions.length>=12}
-                  onClick={()=>changeRule(i,{actions:[...rule.actions,{kind:"status",polarity:"debuff",attributes:[{key:defs[0]?.key??"strength",mode:"percent",step:5,cap:100}]}]})}>
+                  onClick={()=>changeRule(i,{actions:[...rule.actions,{kind:"status",polarity:"debuff",attributes:[{key:defs.find(d=>d.key==="strength")?.key??defs.find(d=>d.key!=="hp"&&d.key!=="mana")?.key??"strength",mode:"percent",step:5,cap:100}]}]})}>
                   <Plus className="mr-1 h-4 w-4"/> Acúmulo de atributos
                 </Button>
                 <Button variant="outline" className="min-h-11" disabled={disabled || rule.actions.length>=12}
                   onClick={()=>changeRule(i,{actions:[...rule.actions,{kind:"damage",dice_count:1,dice_sides:50,flat:0,damage_kind:"true",neutralizable:false}]})}>
                   <Plus className="mr-1 h-4 w-4"/> Dano por turno
+                </Button>
+                <Button variant="outline" className="min-h-11" disabled={disabled||rule.actions.length>=12||registeredDots.length===0}
+                  onClick={()=>changeRule(i,{actions:[...rule.actions,{
+                    kind:"dot",template_id:registeredDots[0]?.id??"",damage_mode:"fixed",damage_amount:5,duration:2,repeat:false,
+                  }]})}>
+                  <Plus className="mr-1 h-4 w-4"/> DoT registrado
+                </Button>
+                <Button variant="outline" className="min-h-11" disabled={disabled||rule.actions.length>=12}
+                  onClick={()=>changeRule(i,{actions:[...rule.actions,{
+                    kind:"effect",effect_type:"stun",name:"Atordoamento",duration:1,repeat:false,
+                  }]})}>
+                  <Plus className="mr-1 h-4 w-4"/> Outro efeito
                 </Button>
               </div>
               <Button variant="ghost" size="sm" className="min-h-10 text-red-300" disabled={disabled}
