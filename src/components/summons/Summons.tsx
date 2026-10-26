@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Ghost, Plus, Trash2, Shield, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { SearchableGrantPicker } from "@/components/ui/searchable-grant-picker";
 import { Input } from "@/components/ui/input";
 import { useDefs } from "@/lib/sheets";
 import { supabase } from "@/integrations/supabase/client";
@@ -154,14 +155,17 @@ function SummonGrantCard({ grant, master, templateOptions, onRefresh }: {
             <div className="space-y-2 rounded-md border border-border p-3">
               <p className="text-sm font-semibold">Habilidades disponíveis sem invocar</p>
               <p className="text-xs text-muted-foreground">Selecione habilidades da criatura para conceder diretamente à ficha do invocador.</p>
-              {options.map((option) => (
-                <label key={option.id} className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" checked={borrowedIds.includes(option.id)}
-                    onChange={(event) => setBorrowedIds((current) => event.target.checked
-                      ? [...current, option.id] : current.filter((id) => id !== option.id))} />
-                  {option.name}
-                </label>
-              ))}
+              <SearchableGrantPicker
+                options={options}
+                selectedIds={new Set(borrowedIds)}
+                selectedLabel="Habilidades emprestadas"
+                emptyLabel="Nenhuma habilidade da criatura foi emprestada."
+                addLabel="Emprestar habilidade"
+                searchPlaceholder="Buscar habilidade da criatura…"
+                onToggle={(id, checked) => setBorrowedIds((current) => checked
+                  ? current.includes(id) ? current : [...current, id]
+                  : current.filter((item) => item !== id))}
+              />
               {!options.length && <p className="text-xs text-muted-foreground">Esta ficha não tem habilidades atribuídas.</p>}
             </div>
           )}
