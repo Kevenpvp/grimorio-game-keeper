@@ -622,7 +622,17 @@ async function runDamageScriptHooks(
     try {
       const context = await buildContext(service, event);
       const api = makeApi(service, context, eventType === "causou_dano" ? async (values) => {
-        const normalizedValues = values.map((value) => Math.round(value));
+        // Database critical damage already doubles the post-defense base hits.
+        // Custom scripts may add or subtract damage *after* that calculation.
+        // Apply the same x2 multiplier to those later adjustments, otherwise
+        // the final attack is not a true critical when a script modifies damage.
+        const normalizedValues = values.map((value, index) => {
+          const requested = Math.round(value);
+          if (!tracker.call.critical) return requested;
+          const previous = tracker.finalValues[index] ?? 0;
+          const adjustment = requested - previous;
+          return Math.max(0, Math.min(2_000_000, previous + adjustment * 2));
+        });
         const total = normalizedValues.reduce((sum, value) => sum + value, 0);
         // Recalculate HP from the pre-hit value, rather than applying a delta to
         // zero-clamped HP. This also handles critical hits and overkill correctly.
