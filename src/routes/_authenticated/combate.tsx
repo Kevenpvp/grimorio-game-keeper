@@ -391,7 +391,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
   const qc = useQueryClient();
   const [combatTab, setCombatTab] = useState<CombatTab>("fighters");
   const [actionMode, setActionMode] = useState<"combat" | "abilities" | "dots">("combat");
-  const [detailTab, setDetailTab] = useState<"status" | "abilities" | "transformations" | "effects">("status");
+  const [detailTab, setDetailTab] = useState<"status" | "abilities" | "summons" | "transformations" | "effects">("status");
   const [battleAdminOpen, setBattleAdminOpen] = useState(false);
   const [fighterSearch, setFighterSearch] = useState("");
   const [fighterFilter, setFighterFilter] = useState<"all" | "targets" | "effects" | "critical">("all");
@@ -907,9 +907,10 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                     {([
                       ["status", "Status"],
                       ["abilities", "Habilidades"],
+                      ...((isMaster || isOwnFighter) ? [["summons", "Invocações"]] : []),
                       ["transformations", "Transformações"],
                       ...(isMaster ? [["effects", "Recursos e efeitos"]] : []),
-                    ] as Array<["status" | "abilities" | "transformations" | "effects", string]>).map(([key, label]) =>
+                    ] as Array<["status" | "abilities" | "summons" | "transformations" | "effects", string]>).map(([key, label]) =>
                       <button key={key} type="button" role="tab" aria-selected={detailTab === key}
                         onClick={() => setDetailTab(key)}
                         className={cn("shrink-0 rounded-md px-3 py-2 text-xs font-medium", detailTab === key ? "bg-gold/15 text-gold" : "text-muted-foreground hover:bg-muted")}>{label}</button>)}
@@ -1016,14 +1017,17 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                       const target = fighters.find((fighter) => fighter.id === characterId);
                       return target ? val(target, attributeKey) : 0;
                     }} />
-                  <SummonCombatPanel
-                    characterId={f.id}
-                    characterName={f.name}
-                    battleId={battle.id}
-                    master={isMaster && battle.active}
-                    visible={isMaster || isOwnFighter}
-                  />
                   </>}
+                  {detailTab === "summons" && (isMaster || isOwnFighter) && (
+                    <SummonCombatPanel
+                      characterId={f.id}
+                      characterName={f.name}
+                      battleId={battle.id}
+                      master={isMaster && battle.active}
+                      visible={isMaster || isOwnFighter}
+                      showEmptyState
+                    />
+                  )}
                   {detailTab === "status" && <>
                   {isOwnFighter && <div className="grid grid-cols-2 gap-2 text-xs">
                     <div className="rounded border border-border p-2"><span className="text-muted-foreground">Corpo</span><div className="font-semibold">{f.body}%</div></div>
