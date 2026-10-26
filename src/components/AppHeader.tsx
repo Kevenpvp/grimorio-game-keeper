@@ -1,16 +1,34 @@
 import { useState } from "react";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { Flame, LogOut, Menu, Sparkles, Swords, X } from "lucide-react";
+import {
+  BookOpenText, BookUser, ChevronRight, Compass, Flame, Gem, LogOut,
+  Menu, ScrollText, Shield, Sparkles, Swords, UserRound, WandSparkles, X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useMe } from "@/lib/sheets";
 
+const navigation = [
+  { to: "/combate", label: "Combate", icon: Swords, masterOnly: false },
+  { to: "/painel", label: "Fichas", icon: BookUser, masterOnly: false },
+  { to: "/racas", label: "Raças", icon: Compass, masterOnly: true },
+  { to: "/classes", label: "Classes", icon: Shield, masterOnly: true },
+  { to: "/virtudes", label: "Virtudes", icon: Gem, masterOnly: true },
+  { to: "/habilidades", label: "Habilidades", icon: WandSparkles, masterOnly: true },
+  { to: "/tipos-dano", label: "Tipos de dano", icon: Sparkles, masterOnly: true },
+  { to: "/dots", label: "DoTs", icon: Flame, masterOnly: true },
+  { to: "/transformacoes", label: "Transformações", icon: ScrollText, masterOnly: true },
+] as const;
+
 export function AppHeader() {
   const { data: me } = useMe();
+  const { pathname } = useLocation();
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const links = navigation.filter((item) => !item.masterOnly || me?.isMaster);
 
   async function signOut() {
     setMobileOpen(false);
@@ -20,97 +38,81 @@ export function AppHeader() {
     navigate({ to: "/auth", replace: true });
   }
 
-  const navClass =
-    "rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-gold";
-
   return (
-    <header className="border-b border-border/60 bg-background/90 backdrop-blur">
-      <div className="mx-auto max-w-6xl px-4 py-3">
-        <div className="flex min-w-0 items-center justify-between gap-3">
-          <Link
-            to="/painel"
-            onClick={() => setMobileOpen(false)}
-            className="flex shrink-0 items-center gap-2 font-display text-lg text-gold"
-          >
-            <Swords className="h-5 w-5" /> Grimório
+    <header className="grimorio-header">
+      <div className="grimorio-shell">
+        <div className="grimorio-header-inner flex min-w-0 items-center justify-between gap-3">
+          <Link to="/painel" className="grimorio-brand group" onClick={() => setMobileOpen(false)}
+            aria-label="Grimório Game Keeper — abrir fichas">
+            <span className="grimorio-brand-mark transition-colors group-hover:border-gold">
+              <BookOpenText className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <span className="grimorio-brand-text">Grimório
+              <span className="grimorio-brand-subtitle">GAME KEEPER</span>
+            </span>
           </Link>
 
-          {/* Desktop navigation keeps its single-row layout only when there is room. */}
-          <nav aria-label="Navegação principal" className="hidden min-w-0 items-center gap-3 text-sm lg:flex">
-            {me && <Link to="/combate" className="whitespace-nowrap text-muted-foreground hover:text-gold">Combate</Link>}
-            {me?.isMaster && (
-              <>
-                <Link to="/racas" className="whitespace-nowrap text-muted-foreground hover:text-gold">Raças</Link>
-                <Link to="/classes" className="whitespace-nowrap text-muted-foreground hover:text-gold">Classes</Link>
-                <Link to="/virtudes" className="whitespace-nowrap text-muted-foreground hover:text-gold">Virtudes</Link>
-                <Link to="/habilidades" className="whitespace-nowrap text-muted-foreground hover:text-gold">Habilidades</Link>
-                <Link to="/tipos-dano" className="flex whitespace-nowrap items-center gap-1 text-muted-foreground hover:text-gold">
-                  <Sparkles className="h-3.5 w-3.5" /> Tipos de dano
-                </Link>
-                <Link to="/dots" className="flex whitespace-nowrap items-center gap-1 text-muted-foreground hover:text-gold">
-                  <Flame className="h-3.5 w-3.5" /> Dano por turno
-                </Link>
-                <Link to="/transformacoes" className="flex whitespace-nowrap items-center gap-1 text-muted-foreground hover:text-gold">
-                  <Sparkles className="h-3.5 w-3.5" /> Transformações
-                </Link>
-              </>
-            )}
-            {me && (
-              <span className="whitespace-nowrap text-muted-foreground">
-                {me.profile?.display_name} · <span className="text-gold">{me.isMaster ? "Mestre" : "Jogador"}</span>
-              </span>
-            )}
-            <Button variant="ghost" size="sm" onClick={() => void signOut()} className="shrink-0">
-              <LogOut className="mr-1 h-4 w-4" /> Sair
-            </Button>
+          <nav aria-label="Navegação principal" className="hidden min-w-0 items-center justify-center gap-0.5 xl:flex">
+            {links.map(({ to, label, icon: Icon }) => (
+              <Link key={to} to={to} title={label} aria-current={pathname === to ? "page" : undefined}
+                className={cn("grimorio-nav-link", pathname === to && "is-active")}>
+                <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <span>{label}</span>
+              </Link>
+            ))}
           </nav>
 
-          {/* Mobile gets a dedicated menu instead of squeezing every link into the header. */}
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            className="h-9 w-9 shrink-0 lg:hidden"
-            aria-label={mobileOpen ? "Fechar menu" : "Abrir menu"}
-            aria-expanded={mobileOpen}
-            onClick={() => setMobileOpen((open) => !open)}
-          >
-            {mobileOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
-          </Button>
+          <div className="hidden shrink-0 items-center gap-2 xl:flex">
+            {me && (
+              <div className="grimorio-user-pill">
+                <span className="grimorio-user-avatar"><UserRound className="h-4 w-4" aria-hidden="true" /></span>
+                <span className="min-w-0 text-left">
+                  <span className="block max-w-28 truncate text-xs font-semibold text-foreground">
+                    {me.profile?.display_name || (me.isMaster ? "Mestre" : "Jogador")}
+                  </span>
+                  <span className="block text-[11px] text-gold">{me.isMaster ? "Mestre" : "Jogador"}</span>
+                </span>
+              </div>
+            )}
+            <Button variant="outline" size="sm" onClick={() => void signOut()} className="border-gold/25"
+              title="Sair da conta">
+              <LogOut className="h-4 w-4" /> <span className="sr-only">Sair</span>
+            </Button>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-2 xl:hidden">
+            {me && <span className="hidden max-w-32 truncate text-xs font-semibold text-gold sm:block">{me.isMaster ? "Mestre" : "Jogador"}</span>}
+            <Button type="button" variant="outline" size="icon"
+              className="h-11 w-11 border-gold/40"
+              aria-label={mobileOpen ? "Fechar menu de navegação" : "Abrir menu de navegação"}
+              aria-controls="grimorio-mobile-navigation" aria-expanded={mobileOpen}
+              onClick={() => setMobileOpen((open) => !open)}>
+              {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </Button>
+          </div>
         </div>
 
         {mobileOpen && (
-          <nav aria-label="Navegação móvel" className="mt-3 grid gap-1 border-t border-border/60 pt-3 lg:hidden">
-            {me && (
-              <Link to="/combate" className={navClass} onClick={() => setMobileOpen(false)}>
-                Combate
+          <nav id="grimorio-mobile-navigation" aria-label="Navegação móvel"
+            className="grimorio-mobile-menu grid grid-cols-1 gap-0.5 sm:grid-cols-2 xl:hidden">
+            {links.map(({ to, label, icon: Icon }) => (
+              <Link key={to} to={to}
+                aria-current={pathname === to ? "page" : undefined}
+                className={cn("grimorio-mobile-link", pathname === to && "is-active")}
+                onClick={() => setMobileOpen(false)}>
+                <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <span className="min-w-0 flex-1">{label}</span>
+                {pathname === to && <ChevronRight className="h-4 w-4" aria-hidden="true" />}
               </Link>
-            )}
-            {me?.isMaster && (
-              <>
-                <Link to="/racas" className={navClass} onClick={() => setMobileOpen(false)}>Raças</Link>
-                <Link to="/classes" className={navClass} onClick={() => setMobileOpen(false)}>Classes</Link>
-                <Link to="/virtudes" className={navClass} onClick={() => setMobileOpen(false)}>Virtudes</Link>
-                <Link to="/habilidades" className={navClass} onClick={() => setMobileOpen(false)}>Habilidades</Link>
-                <Link to="/tipos-dano" className={navClass} onClick={() => setMobileOpen(false)}>
-                  <span className="flex items-center gap-2"><Sparkles className="h-4 w-4" /> Tipos de dano</span>
-                </Link>
-                <Link to="/dots" className={navClass} onClick={() => setMobileOpen(false)}>
-                  <span className="flex items-center gap-2"><Flame className="h-4 w-4" /> Dano por turno</span>
-                </Link>
-                <Link to="/transformacoes" className={navClass} onClick={() => setMobileOpen(false)}>
-                  <span className="flex items-center gap-2"><Sparkles className="h-4 w-4" /> Transformações</span>
-                </Link>
-              </>
-            )}
-            {me && (
-              <div className="px-3 py-2 text-xs text-muted-foreground">
-                {me.profile?.display_name} · <span className="text-gold">{me.isMaster ? "Mestre" : "Jogador"}</span>
-              </div>
-            )}
-            <Button variant="ghost" size="sm" onClick={() => void signOut()} className="mt-1 w-full justify-start px-3">
-              <LogOut className="mr-2 h-4 w-4" /> Sair
-            </Button>
+            ))}
+            <div className="col-span-full mt-1 flex items-center justify-between gap-3 border-t border-gold/20 px-3 pt-3">
+              <span className="min-w-0 truncate text-xs text-muted-foreground">
+                {me?.profile?.display_name || "Grimório"} · <strong className="text-gold">{me?.isMaster ? "Mestre" : "Jogador"}</strong>
+              </span>
+              <Button size="sm" variant="outline" onClick={() => void signOut()} className="min-h-10">
+                <LogOut className="mr-1 h-4 w-4" /> Sair
+              </Button>
+            </div>
           </nav>
         )}
       </div>
