@@ -14,7 +14,7 @@ export type ContinuousRule = {
 export type ContinuousInstance = {
   id: string; battle_id: string; character_ability_id: string;
   caster_character_id: string; target_character_id: string; name: string;
-  active: boolean; ticks: number; rule: ContinuousRule;
+  rule_index: number; active: boolean; ticks: number; rule: ContinuousRule;
 };
 export type ContinuousActionDecision = { skip?: boolean; damage_amount?: number; duration?: number; attributes?: Record<string,number> };
 export type ContinuousDecision = {
