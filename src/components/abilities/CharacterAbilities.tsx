@@ -16,6 +16,8 @@ import { sedentoInvincibilityCooldown } from "@/lib/sedento-invincibility";
 import { useDefs, useMe, useRaces, useClasses, useVirtues } from "@/lib/sheets";
 import { parseAbilityEffects, parseAbilityAttackDamage, parseAbilityAttackEffectGroups, parseAbilityDotEffects, useAbilities, useCharacterAbilities, useCharacterActiveEffects, useDamageTypes, useDotTemplates, type Ability, type AbilityEffectDefinition, type CharacterAbility, type AbilityDotEffect, type AbilityAttackDamageConfig, type AbilityAttackEffectGroup } from "@/lib/abilities";
 import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
+import { ActivationEffectValuesDialog, type ActivationEffectOverrides } from "@/components/abilities/ActivationEffectValuesDialog";
+import { customizableActivationEffects } from "@/lib/activation-effect-values";
 import { SheetAbilityAttackEditor } from "@/components/abilities/SheetAbilityAttackEditor";
 import { TemporaryAttackCategoryEditor } from "@/components/abilities/TemporaryAttackCategoryEditor";
 import { findRegisteredDotTemplate, registerAbilityDotTemplates } from "@/lib/ability-dot-templates";
@@ -459,6 +461,12 @@ export function CharacterAbilitiesPanel({
     : null;
   const [targetId, setTargetId] = useState(characterId);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [activationPreparingId, setActivationPreparingId] = useState<string | null>(null);
+  const [activationSetup, setActivationSetup] = useState<{
+    ability: CharacterAbility;
+    targetId: string;
+    effects: AbilityEffectDefinition[];
+  } | null>(null);
   const [extraManaCosts, setExtraManaCosts] = useState<Record<string, string>>({});
   const [expanded, setExpanded] = useState(true);
   const [attackDialogAbilityId, setAttackDialogAbilityId] = useState<string | null>(null);
@@ -802,7 +810,47 @@ export function CharacterAbilitiesPanel({
     });
   }
 
-  async function activate(ability: CharacterAbility) {
+  async function requestActivation(ability: CharacterAbility) {
+    if (!canUse || mode !== "combat" || busyId || activationPreparingId || activationSetup) return;
+    if (ability.cooldown_remaining > 0 || ability.active_duration_remaining > 0 || ability.toggle_active) return;
+    if (!me?.isMaster || !battleId) {
+      await activate(ability);
+      return;
+    }
+    setActivationPreparingId(ability.id);
+    try {
+      // Respect temporary per-battle effect choices already configured by the
+      // GM, so the popup edits exactly what the next activation will use.
+      const { data, error } = await db.from("battle_ability_overrides")
+        .select("override_values")
+        .eq("battle_id", battleId)
+        .eq("character_ability_id", ability.id)
+        .maybeSingle();
+      if (error) throw error;
+      const values = data?.override_values;
+      const effectiveEffects = parseAbilityEffects(
+        values && typeof values === "object" && !Array.isArray(values) && Array.isArray(values.effects)
+          ? values.effects
+          : ability.effects
+      );
+      const chosenTargetId = ability.self_target_only ? characterId : (targetId || characterId);
+      if (customizableActivationEffects(effectiveEffects).length > 0) {
+        setActivationSetup({ ability, targetId: chosenTargetId, effects: effectiveEffects });
+      } else {
+        await activate(ability, undefined, chosenTargetId);
+      }
+    } catch (error) {
+      toast.error("Não foi possível preparar os efeitos: " + (error instanceof Error ? error.message : String(error)));
+    } finally {
+      setActivationPreparingId(null);
+    }
+  }
+
+  async function activate(
+    ability: CharacterAbility,
+    activationOverrides?: ActivationEffectOverrides,
+    fixedTargetId?: string,
+  ) {
     if (!canUse || mode !== "combat" || !ability.can_activate || ability.cooldown_turns < 0 || ability.cooldown_remaining > 0 || ability.active_duration_remaining > 0 || busyId || ability.toggle_active) return;
     if ((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle && mode === "combat" && usedOnceAbilityIds.includes(ability.id)) {
       toast.error("Esta habilidade já foi usada neste combate.");
@@ -810,7 +858,7 @@ export function CharacterAbilitiesPanel({
     }
     const catalogEntry = abilityCatalog.find((candidate) => candidate.id === ability.ability_id);
     const guaranteedDots = parseAbilityDotEffects(ability.ability_id ? catalogEntry?.dot_effects : ability.dot_effects);
-    const actualTargetId = ability.self_target_only ? characterId : (targetId || characterId);
+    const actualTargetId = ability.self_target_only ? characterId : (fixedTargetId ?? targetId ?? characterId);
     if (guaranteedDots.length > 0 && (mode !== "combat" || !battleId)) {
       toast.error("DoTs de habilidades só podem ser aplicados durante um combate ativo.");
       return;
@@ -826,7 +874,9 @@ export function CharacterAbilitiesPanel({
         ? Math.max(0, Math.min(1000000, Math.floor(Number(extraManaCosts[ability.id] ?? 0) || 0)))
         : 0,
       _dot_target_selections: guaranteedDots.length > 0 ? [{ target_id: actualTargetId, hit: true, group_ids: [] }] : null,
-      _dot_attribute_values: dotAttributeValues,
+      _dot_attribute_values: activationOverrides
+        ? { ...dotAttributeValues, __activation_effect_overrides: activationOverrides }
+        : dotAttributeValues,
     });
     setBusyId(null);
     if (error) { toast.error(error.message); return; }
@@ -846,6 +896,7 @@ export function CharacterAbilitiesPanel({
       qc.invalidateQueries({ queryKey: ["character", characterId] }),
       qc.invalidateQueries({ queryKey: ["battle-character-public-states"] }),
     ]);
+    return true;
   }
 
   async function deactivate(ability: CharacterAbility) {
@@ -956,8 +1007,8 @@ export function CharacterAbilitiesPanel({
                           <Zap className="mr-1 h-3.5 w-3.5" /> {busyId === ability.id ? "Desativando..." : "Desativar"}
                         </Button>
                       ) : (
-                        <Button size="sm" disabled={busyId !== null || attackBusy || ability.cooldown_turns < 0 || ability.cooldown_remaining > 0 || ability.active_duration_remaining > 0 || (Boolean((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle) && mode === "combat" && usedOnceAbilityIds.includes(ability.id))} onClick={() => void activate(ability)}>
-                          <Zap className="mr-1 h-3.5 w-3.5" /> {busyId === ability.id ? "Ativando..." : ability.toggle_mode ? "Ligar" : "Ativar"}
+                        <Button size="sm" disabled={busyId !== null || activationPreparingId !== null || activationSetup !== null || attackBusy || ability.cooldown_turns < 0 || ability.cooldown_remaining > 0 || ability.active_duration_remaining > 0 || (Boolean((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle) && mode === "combat" && usedOnceAbilityIds.includes(ability.id))} onClick={() => void requestActivation(ability)}>
+                          <Zap className="mr-1 h-3.5 w-3.5" /> {busyId === ability.id ? "Ativando..." : activationPreparingId === ability.id ? "Preparando..." : ability.toggle_mode ? "Ligar" : "Ativar"}
                         </Button>
                       )}
                       {mode === "combat" && me?.isMaster && ability.cooldown_remaining > 0 && (
@@ -1367,6 +1418,19 @@ export function CharacterAbilitiesPanel({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {activationSetup && (
+        <ActivationEffectValuesDialog
+          key={`${activationSetup.ability.id}:${activationSetup.targetId}`}
+          abilityName={activationSetup.ability.name}
+          targetName={targetOptions.find((target) => target.id === activationSetup.targetId)?.name ?? characterName}
+          effects={activationSetup.effects}
+          onCancel={() => setActivationSetup(null)}
+          onConfirm={async (values) => {
+            const result = await activate(activationSetup.ability, values, activationSetup.targetId);
+            return result === true;
+          }}
+        />
+      )}
     </section>
   );
 }
