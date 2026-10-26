@@ -64,8 +64,8 @@ function ClassesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl text-gold">Classes</h1>
+      <div className="grimorio-section-header flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold text-gold">Classes</h1>
         <Button onClick={create}><Plus className="mr-1 h-4 w-4" /> Nova classe</Button>
       </div>
       <div className="relative">
