@@ -11,7 +11,11 @@ export type ContinuousInstance = {
   caster_character_id: string; target_character_id: string; name: string;
   active: boolean; ticks: number; rule: ContinuousRule;
 };
-export type ContinuousDecision = { damage?: number; damage_kind?: "true" | "physical" | "magical"; neutralize?: boolean };
+export type ContinuousActionDecision = { skip?: boolean; damage_amount?: number; duration?: number; attributes?: Record<string,number> };
+export type ContinuousDecision = {
+  damage?: number; damage_kind?: "true" | "physical" | "magical"; neutralize?: boolean;
+  actions?: Record<string,ContinuousActionDecision>;
+};
 
 const n = (value: unknown, fallback: number, max: number) => {
   const x = Number(value);
