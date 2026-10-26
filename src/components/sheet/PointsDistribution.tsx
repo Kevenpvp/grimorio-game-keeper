@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { allocationTotal, computeValue, conditionAdjustedValue, numberAllocation, type AttributeDef, type Character, type CharacterAttr } from "@/lib/sheets";
 import { AttrIcon } from "./icons";
