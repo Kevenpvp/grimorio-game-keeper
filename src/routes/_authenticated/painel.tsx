@@ -170,7 +170,7 @@ function MasterDashboard() {
                 key={c.id}
                 to="/ficha/$id"
                 params={{ id: c.id }}
-                className="panel flex gap-4 p-4 transition-transform hover:-translate-y-0.5 hover:border-gold/60"
+                className="grimorio-profile-card panel flex gap-4 p-4 transition-all duration-200 hover:-translate-y-0.5"
               >
                 <Portrait path={c.photo_path} name={c.name} className="h-24 w-20 shrink-0" />
                 <div className="min-w-0 flex-1 space-y-1.5">
