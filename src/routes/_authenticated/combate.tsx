@@ -1007,13 +1007,13 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                             <div className="space-y-1.5">
                               <div className="font-semibold">Efeitos ao ativar</div>
                               {activationEffects.length ? activationEffects.map((effect, index) => <p key={index} className="text-muted-foreground">
-                                {effectSummary(effect, defs ?? [], transformationDamageTypes, races ?? [])} · Destino: {effect.target_scope === "caster" ? "Caster" : effect.target_scope === "both" ? "Ambos" : "Alvo"}{effect.effect_type === "healing" && effect.healing_timing !== "per_turn" ? "" : ` · ${effect.until_combat_end ? "até o fim do combate" : `${effect.duration} turno(s)`}`}
+                                {effectSummary(effect, defs ?? [], transformationDamageTypes, races ?? [])} · Em si mesmo{effect.modify_on_activate ? " · Modificar ao ativar" : ""}{effect.effect_type === "healing" && effect.healing_timing !== "per_turn" ? "" : " · durante a transformação"}
                               </p>) : <p className="text-muted-foreground">Nenhum efeito de ativação.</p>}
                             </div>
                             <div className="space-y-1.5">
                               <div className="font-semibold">Efeitos ao terminar</div>
                               {endingEffects.length ? endingEffects.map((effect, index) => <p key={index} className="text-muted-foreground">
-                                {effectSummary(effect, defs ?? [], transformationDamageTypes, races ?? [])} · Destino: {effect.target_scope === "caster" ? "Caster" : effect.target_scope === "both" ? "Ambos" : "Alvo"}{effect.effect_type === "healing" && effect.healing_timing !== "per_turn" ? "" : ` · ${effect.until_combat_end ? "até o fim do combate" : `${effect.duration} turno(s)`}`}
+                                {effectSummary(effect, defs ?? [], transformationDamageTypes, races ?? [])} · Em si mesmo{effect.effect_type === "healing" && effect.healing_timing !== "per_turn" ? "" : ` · ${effect.until_combat_end ? "até o fim do combate" : `${effect.duration} turno(s)`}`}
                               </p>) : <p className="text-muted-foreground">Nenhum efeito de encerramento.</p>}
                             </div>
                             <div className="space-y-1.5">
