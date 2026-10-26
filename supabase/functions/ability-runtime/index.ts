@@ -622,17 +622,9 @@ async function runDamageScriptHooks(
     try {
       const context = await buildContext(service, event);
       const api = makeApi(service, context, eventType === "causou_dano" ? async (values) => {
-        // Database critical damage already doubles the post-defense base hits.
-        // Custom scripts may add or subtract damage *after* that calculation.
-        // Apply the same x2 multiplier to those later adjustments, otherwise
-        // the final attack is not a true critical when a script modifies damage.
-        const normalizedValues = values.map((value, index) => {
-          const requested = Math.round(value);
-          if (!tracker.call.critical) return requested;
-          const previous = tracker.finalValues[index] ?? 0;
-          const adjustment = requested - previous;
-          return Math.max(0, Math.min(2_000_000, previous + adjustment * 2));
-        });
+        // Critical multiplies raw damage BEFORE defense. Scripts that add
+        // damage after defense keep their own explicit bonus unchanged.
+        const normalizedValues = values.map((value) => Math.round(value));
         const total = normalizedValues.reduce((sum, value) => sum + value, 0);
         // Recalculate HP from the pre-hit value, rather than applying a delta to
         // zero-clamped HP. This also handles critical hits and overkill correctly.
@@ -724,14 +716,21 @@ async function applyDamageWithScripts(
     throw new Error("Dados de dano inválidos.");
   }
 
+  // A critical multiplies each RAW hit before the physical/magical defense,
+  // mitigation and received-damage effects are calculated.
+  // Keep base RPC damage limits intact. Reject oversized critical hits rather
+  // than silently reducing the multiplier or falling back to post-defense x2.
+  const calculatedRawValues = critical ? rawValues.map((value) => value * 2) : rawValues;
+  if (calculatedRawValues.some((value) => value > 1_000_000)) {
+    throw new Error("Dano crítico: máximo 500000 de dano bruto por golpe (1000000 após ×2).");
+  }
   const call: DamageCall = { battleId, targetId, sourceId, kind, typeId, physicalTypeId, magicLevel, rawValues, critical };
-  const damageFunction = critical ? "apply_battle_damage_critical" : "apply_battle_damage";
-  const { data, error } = await userClient.rpc(damageFunction, {
+  const { data, error } = await userClient.rpc("apply_battle_damage", {
     _battle_id: battleId,
     _character_id: targetId,
     _damage_kind: kind,
     _damage_type_id: typeId,
-    _damage_values: rawValues,
+    _damage_values: calculatedRawValues,
     _magic_level: magicLevel,
     _source_character_id: sourceId,
     _physical_damage_type_id: physicalTypeId,
@@ -812,6 +811,8 @@ async function applyDamageWithScripts(
     hp_after: tracker.hpAfter,
     final_damage_by_hit: tracker.finalValues,
     critical_damage: critical,
+    critical_before_defense: critical,
+    ...(critical ? { critical_raw_damage_by_hit: calculatedRawValues } : {}),
     custom_script_hooks: { processed: hooksProcessed, errors: hookErrors },
   };
 }
