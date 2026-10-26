@@ -666,6 +666,7 @@ export function CharacterAbilitiesPanel({
       }),
     }));
     const extraMana = Math.max(0, Math.min(1000000, Math.floor(Number(extraManaCosts[attackAbility.id] ?? 0) || 0)));
+    const continuousRuleCount = parseContinuousRules((attackAbility as CharacterAbility & { continuous_rules?: unknown }).continuous_rules).length;
     setAttackBusy(true);
     setAttackResults({});
     try {
@@ -793,7 +794,10 @@ export function CharacterAbilitiesPanel({
           ...dots.map((effect) => effect.name),
           ...otherEffects.map((effect) => effect.name),
         ];
-        results[target.id] = `${directText} DoTs aplicados: ${dots.length}. Outros efeitos aplicados: ${otherEffects.length}.${effectNames.length ? ` ${effectNames.join(" · ")}.` : ""}`;
+        const continuousNote = directlyHit && continuousRuleCount > 0
+          ? ` Vínculo contínuo iniciado (${continuousRuleCount} regra(s)). A penalidade ou o dano periódico será aplicado quando o turno configurado avançar.`
+          : "";
+        results[target.id] = `${directText} DoTs aplicados: ${dots.length}. Outros efeitos aplicados: ${otherEffects.length}.${effectNames.length ? ` ${effectNames.join(" · ")}.` : ""}${continuousNote}`;
       }
       setAttackResults(results);
       setAttackCriticalHits({}); // Each new strike must require an explicit critical selection.
@@ -811,6 +815,7 @@ export function CharacterAbilitiesPanel({
         qc.invalidateQueries({ queryKey: ["character-abilities", characterId] }),
         qc.invalidateQueries({ queryKey: ["character-abilities-battle"] }),
         qc.invalidateQueries({ queryKey: ["battle-effects"] }),
+        qc.invalidateQueries({ queryKey: ["battle-continuous-instances", battleId] }),
         qc.invalidateQueries({ queryKey: ["character-active-effects"] }),
         qc.invalidateQueries({ queryKey: ["battles"] }),
         qc.invalidateQueries({ queryKey: ["character", characterId] }),
@@ -988,6 +993,7 @@ export function CharacterAbilitiesPanel({
       qc.invalidateQueries({ queryKey: ["character-abilities", characterId] }),
       qc.invalidateQueries({ queryKey: ["character-abilities-battle"] }),
       qc.invalidateQueries({ queryKey: ["battle-effects"] }),
+      qc.invalidateQueries({ queryKey: ["battle-continuous-instances", battleId] }),
       qc.invalidateQueries({ queryKey: ["character-active-effects"] }),
       qc.invalidateQueries({ queryKey: ["battles"] }),
       qc.invalidateQueries({ queryKey: ["character", characterId] }),
