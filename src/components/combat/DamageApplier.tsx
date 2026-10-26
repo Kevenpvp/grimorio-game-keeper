@@ -38,6 +38,14 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
   const [magicLevel, setMagicLevel] = useState<MagicLevel>("baixa");
   const [sourceCharacterId, setSourceCharacterId] = useState(defaultSourceCharacterId ?? "");
   const [criticalDamage, setCriticalDamage] = useState(false);
+  const [lastDamageOutcome, setLastDamageOutcome] = useState<{
+    criticalRequested: boolean;
+    criticalConfirmed: boolean;
+    damage: number;
+    hpBefore: number;
+    hpAfter: number;
+    hits: number[];
+  } | null>(null);
   const [extraDamageFixed, setExtraDamageFixed] = useState("0");
   const [extraDamagePercent, setExtraDamagePercent] = useState("0");
   const [defenseIgnore, setDefenseIgnore] = useState<DefenseIgnore>({ ...ZERO_DEFENSE_IGNORE });
@@ -195,6 +203,7 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
     }
 
     const criticalDamageForThisHit = criticalDamage;
+    setLastDamageOutcome(null);
     const effectiveSourceCharacterId = (sourceOverride ?? sourceCharacterId) || null;
     setApplyingDamage(true);
     try {
@@ -309,7 +318,19 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
             ? reductionPart("Mitigação da metade física", physicalReductionFixed, physicalReductionPercent)
               + reductionPart(`Mitigação da metade mágica (${magicTypeName}, grau ${magicLevel})`, magicalReductionFixed, magicalReductionPercent)
             : "";
-      const criticalSummary = result.critical_damage === true ? "⚔️ DANO CRÍTICO ×2 aplicado. " : "";
+      const criticalConfirmed = result.critical_damage === true;
+      setLastDamageOutcome({
+        criticalRequested: criticalDamageForThisHit,
+        criticalConfirmed,
+        damage: Number(result.total_damage ?? 0),
+        hpBefore: Number(result.hp_before ?? 0),
+        hpAfter: Number(result.hp_after ?? 0),
+        hits: result.final_damage_by_hit ?? [],
+      });
+      if (criticalDamageForThisHit && !criticalConfirmed) {
+        toast.error("O servidor não confirmou a aplicação do crítico ×2; confira o dano final.", { duration: 10000 });
+      }
+      const criticalSummary = criticalConfirmed ? "⚔️ DANO CRÍTICO ×2 aplicado. " : "";
       const manualDamageSummary = adjustmentFixed || adjustmentPercent
         ? ` Ajuste por golpe: ${adjustmentFixed >= 0 ? "+" : ""}${adjustmentFixed} fixo, ${adjustmentPercent >= 0 ? "+" : ""}${adjustmentPercent}%.` : "";
       const penetrationSummary = damageKind !== "true" && defenseIgnoreText(defenseIgnore)
@@ -577,6 +598,21 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
           damageKind === "hybrid" ? <Swords className="mr-1 h-4 w-4" /> : <Zap className="mr-1 h-4 w-4" />}
         {applyingDamage ? "Aplicando…" : `Confirmar dano em ${target.name}`}
       </Button>
+      {lastDamageOutcome && (
+        <div role="status" className={`space-y-1.5 rounded-lg border p-3 text-sm ${lastDamageOutcome.criticalRequested ? "border-amber-500/50 bg-amber-500/10" : "border-border bg-muted/20"}`}>
+          <div className="font-semibold">
+            {lastDamageOutcome.criticalRequested
+              ? lastDamageOutcome.criticalConfirmed ? "⚔️ Crítico ×2 confirmado pelo servidor" : "Atenção: crítico não confirmado pelo servidor"
+              : "Resultado do último dano"}
+          </div>
+          <p className="text-xs text-muted-foreground">Dano final: <strong className="text-foreground">{lastDamageOutcome.damage}</strong>
+            {" · "}HP: {lastDamageOutcome.hpBefore} → {lastDamageOutcome.hpAfter}</p>
+          {lastDamageOutcome.hits.length > 0 && <p className="break-words text-xs text-muted-foreground">Dano por golpe após defesa e mitigação: {lastDamageOutcome.hits.join(", ")}</p>}
+          {lastDamageOutcome.criticalRequested && <p className="text-xs text-muted-foreground">
+            O ×2 é aplicado depois das defesas e reduções. A vida nunca desce abaixo de zero; por isso a perda visível de HP pode ser menor que o dano calculado.
+          </p>}
+        </div>
+      )}
     </section>
   );
 }
