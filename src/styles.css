@@ -52,37 +52,38 @@
 }
 
 :root {
-  --radius: 0.5rem;
-  --background: oklch(0.15 0.008 60);
-  --foreground: oklch(0.92 0.02 85);
-  --card: oklch(0.2 0.01 60);
-  --card-foreground: oklch(0.92 0.02 85);
-  --popover: oklch(0.19 0.01 60);
-  --popover-foreground: oklch(0.92 0.02 85);
-  --primary: oklch(0.76 0.12 80);
-  --primary-foreground: oklch(0.16 0.01 60);
-  --secondary: oklch(0.26 0.012 60);
-  --secondary-foreground: oklch(0.9 0.02 85);
-  --muted: oklch(0.24 0.01 60);
-  --muted-foreground: oklch(0.66 0.02 80);
-  --accent: oklch(0.3 0.03 70);
-  --accent-foreground: oklch(0.92 0.04 85);
-  --destructive: oklch(0.52 0.18 25);
-  --destructive-foreground: oklch(0.96 0.01 85);
-  --border: oklch(0.32 0.02 70);
-  --input: oklch(0.32 0.02 70);
-  --ring: oklch(0.76 0.12 80);
-  --gold: oklch(0.76 0.12 80);
-  --blood: oklch(0.5 0.17 25);
-  --arcane: oklch(0.55 0.15 300);
-  --vital: oklch(0.58 0.16 145);
-  --mind: oklch(0.6 0.12 230);
+  /* Grimório Obsidiana — one design system shared by all campaign screens. */
+  --radius: 0.625rem;
+  --background: #0a0807;
+  --foreground: #ede3d1;
+  --card: #18120f;
+  --card-foreground: #f1e8d9;
+  --popover: #17110e;
+  --popover-foreground: #f2e8d7;
+  --primary: #e2ac4a;
+  --primary-foreground: #1d1307;
+  --secondary: #292019;
+  --secondary-foreground: #f0e1c9;
+  --muted: #241c17;
+  --muted-foreground: #a99a87;
+  --accent: #3a2a1b;
+  --accent-foreground: #f9d48c;
+  --destructive: #b82d34;
+  --destructive-foreground: #fff1e8;
+  --border: #493629;
+  --input: #514033;
+  --ring: #e6b960;
+  --gold: #e7b75d;
+  --blood: #bc3943;
+  --arcane: #8b59c8;
+  --vital: #24ae76;
+  --mind: #4c9fdb;
   --chart-1: var(--blood);
   --chart-2: var(--arcane);
   --chart-3: var(--gold);
   --chart-4: var(--vital);
   --chart-5: var(--mind);
-  --sidebar: var(--card);
+  --sidebar: #160f0d;
   --sidebar-foreground: var(--foreground);
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: var(--primary-foreground);
@@ -93,37 +94,194 @@
 }
 
 @layer base {
-  * {
-    border-color: var(--color-border);
-  }
+  * { border-color: var(--color-border); }
+  html { color-scheme: dark; }
   body {
+    min-height: 100vh;
     background-color: var(--color-background);
     background-image:
-      radial-gradient(ellipse at top, oklch(0.22 0.03 40 / 0.6), transparent 60%),
-      radial-gradient(ellipse at bottom right, oklch(0.2 0.05 300 / 0.25), transparent 50%);
+      radial-gradient(ellipse 86% 50% at 50% -18%, rgba(170,112,30,.17), transparent 74%),
+      radial-gradient(ellipse 60% 65% at 103% 55%, rgba(101,46,16,.12), transparent 75%),
+      radial-gradient(ellipse 48% 55% at -10% 85%, rgba(116,66,20,.10), transparent 75%),
+      repeating-linear-gradient(115deg, transparent 0px, transparent 64px, rgba(220,162,63,.012) 65px, transparent 66px);
     background-attachment: fixed;
     color: var(--color-foreground);
     font-family: var(--font-sans);
-    min-height: 100vh;
+    font-feature-settings: "ss01" on;
   }
-  h1, h2, h3 {
-    font-family: var(--font-display);
-    letter-spacing: 0.03em;
-  }
+  h1, h2, h3 { font-family: var(--font-display); letter-spacing: .018em; }
+  ::selection { background: rgba(226,172,74,.33); color: #fff1da; }
+  :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+  button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
+  button:disabled { cursor: not-allowed; }
 }
 
 @utility panel {
-  background: linear-gradient(180deg, oklch(0.21 0.012 60), oklch(0.18 0.01 60));
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.04), 0 8px 24px oklch(0 0 0 / 0.35);
+  background: linear-gradient(150deg, rgba(31,23,17,.97) 0%, rgba(22,17,14,.98) 62%, rgba(17,13,11,.99) 100%);
+  border: 1px solid rgba(154,111,61,.38);
+  border-radius: .875rem;
+  box-shadow: inset 0 1px 0 rgba(255,224,156,.055), 0 12px 32px rgba(0,0,0,.34);
 }
 
 @utility gold-frame {
-  border: 1px solid oklch(0.76 0.12 80 / 0.55);
-  box-shadow: 0 0 0 4px oklch(0.76 0.12 80 / 0.08), 0 10px 40px oklch(0 0 0 / 0.5);
+  border: 1px solid rgba(233,181,87,.72);
+  box-shadow: inset 0 0 0 1px rgba(233,181,87,.09), 0 0 0 3px rgba(233,181,87,.065), 0 14px 35px rgba(0,0,0,.46);
 }
 
-@utility tabular {
-  font-variant-numeric: tabular-nums;
+@utility tabular { font-variant-numeric: tabular-nums; }
+
+/* Campaign surfaces. Keep data/state/permission logic in existing components. */
+@layer components {
+  .grimorio-app { isolation: isolate; }
+  .grimorio-shell {
+    width: min(100% - 2rem, 1560px);
+    margin-inline: auto;
+  }
+  .grimorio-page-content { padding-block: clamp(1rem, 2.4vw, 2rem) 4rem; }
+  .grimorio-page-content > * { min-width: 0; }
+  .grimorio-header {
+    position: sticky;
+    z-index: 45;
+    top: 0;
+    border-bottom: 1px solid rgba(209,150,65,.25);
+    background: linear-gradient(180deg, rgba(13,10,8,.985), rgba(12,9,7,.955));
+    box-shadow: 0 8px 25px rgba(0,0,0,.28);
+    backdrop-filter: blur(20px);
+  }
+  .grimorio-header-inner { min-height: 4.65rem; }
+  .grimorio-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: .7rem;
+    flex-shrink: 0;
+    min-width: 0;
+    color: var(--gold);
+  }
+  .grimorio-brand-mark {
+    display: grid;
+    place-items: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border: 1px solid rgba(233,181,87,.5);
+    border-radius: .65rem;
+    background: linear-gradient(135deg, rgba(219,156,59,.18), rgba(15,10,6,.2));
+    box-shadow: inset 0 0 13px rgba(227,166,63,.1);
+  }
+  .grimorio-brand-text { font-family: var(--font-display); font-size: 1.19rem; font-weight: 700; letter-spacing: .03em; line-height: 1.05; }
+  .grimorio-brand-subtitle { display: block; text-align: center; font-family: var(--font-display); font-size: .52rem; letter-spacing: .21em; color: #ad9162; line-height: 1.8; }
+  .grimorio-nav-link {
+    position: relative; display: inline-flex; align-items: center; justify-content: center;
+    gap: .48rem; min-height: 2.55rem; padding: .6rem .75rem;
+    border: 1px solid transparent; border-radius: .6rem;
+    color: #af9f8c; font-size: .77rem; font-weight: 600;
+    white-space: nowrap; transition: color .16s ease, border-color .16s ease, background-color .16s ease;
+  }
+  .grimorio-nav-link:hover { background: rgba(222,165,72,.07); color: #f2d293; }
+  .grimorio-nav-link.is-active { color: #efc16a; background: rgba(217,163,70,.10); border-color: rgba(225,171,78,.20); }
+  .grimorio-nav-link.is-active::after {
+    content: ""; position: absolute; left: 19%; right: 19%; bottom: -.64rem;
+    height: 2px; border-radius: 8px; background: #eab656; box-shadow: 0 0 14px rgba(236,176,76,.68);
+  }
+  .grimorio-user-pill {
+    display: flex; align-items: center; gap: .65rem; min-width: 0;
+    padding: .4rem .6rem; border: 1px solid rgba(190,140,72,.33); border-radius: .75rem;
+    background: rgba(42,29,20,.48);
+  }
+  .grimorio-user-avatar {
+    display: grid; place-items: center; width: 2.1rem; height: 2.1rem; border-radius: 50%;
+    border: 1px solid rgba(228,174,90,.65);
+    background: linear-gradient(145deg, #59402c, #20150e); color: #f7d79a;
+  }
+  .grimorio-mobile-menu {
+    border: 1px solid rgba(221,165,80,.25);
+    border-radius: .9rem;
+    padding: .55rem;
+    margin-bottom: .8rem;
+    background: linear-gradient(155deg,#201712,#120f0d);
+    box-shadow: 0 15px 36px rgba(0,0,0,.48);
+  }
+  .grimorio-mobile-link {
+    display: flex; gap: .75rem; align-items: center;
+    min-height: 2.85rem; padding: .7rem .9rem;
+    color: #c5b8a6; border-radius: .6rem; font-weight: 600; font-size: .87rem;
+  }
+  .grimorio-mobile-link.is-active { background: rgba(222,165,74,.14); color: #f1bd5c; }
+  .grimorio-mobile-link:hover { background: rgba(222,165,74,.09); }
+  .grimorio-divider { height: 1px; background: linear-gradient(90deg,transparent,rgba(231,175,82,.48),transparent); }
+  .grimorio-page-heading {
+    display: flex; align-items: center; gap: .7rem;
+    padding-bottom: .75rem;
+    border-bottom: 1px solid rgba(224,165,71,.20);
+  }
+  .grimorio-page-heading h1 { font-size: clamp(1.5rem,2.25vw,2rem); }
+  .grimorio-effects-card {
+    border-radius: .8rem;
+    border: 1px solid rgba(219,169,89,.24);
+    background: rgba(10,9,8,.30);
+    box-shadow: inset 0 1px 0 rgba(255,235,177,.045);
+  }
+  .grimorio-field-row {
+    min-height: 2.65rem;
+    border: 1px solid rgba(165,118,61,.32);
+    border-radius: .55rem;
+    background: #120d0b;
+  }
+  .grimorio-app input[type="text"]:not([type="hidden"]),
+  .grimorio-app input[type="number"],
+  .grimorio-app input[type="search"],
+  .grimorio-app input[type="email"],
+  .grimorio-app select,
+  .grimorio-app textarea {
+    background-color: rgba(11,8,7,.72);
+    border-color: rgba(164,121,67,.32);
+    color: #f0e6d6;
+  }
+  .grimorio-app input:focus-visible,
+  .grimorio-app select:focus-visible,
+  .grimorio-app textarea:focus-visible {
+    border-color: rgba(242,189,93,.75);
+    box-shadow: 0 0 0 3px rgba(226,172,74,.11);
+    outline: none;
+  }
+  .grimorio-app summary {
+    cursor: pointer;
+    accent-color: #e7b75d;
+  }
+  .grimorio-app details[open] > summary { color: var(--gold); }
+  .grimorio-app :where([role="dialog"]) { border-color: rgba(226,170,78,.35); }
+  .grimorio-app :where([role="tab"][aria-selected="true"]) {
+    border-color: rgba(234,178,79,.35);
+    background: linear-gradient(160deg,rgba(223,161,64,.21),rgba(161,105,30,.08));
+    color: #f0bf69;
+  }
+  .grimorio-app :where([role="tab"][aria-selected="false"]):hover {
+    background: rgba(219,161,68,.08);
+    color: #e9cb9d;
+  }
+  .grimorio-app :where(.panel, [role="dialog"]) :where(.rounded-md.border, .rounded-lg.border) {
+    border-color: rgba(143,104,60,.33);
+  }
+  .grimorio-app :where(.panel, [role="dialog"]) :where(.rounded-md.border, .rounded-lg.border):focus-within {
+    border-color: rgba(210,156,77,.52);
+  }
+  .grimorio-app ::-webkit-scrollbar { width: 8px; height: 8px; }
+  .grimorio-app ::-webkit-scrollbar-track { background: rgba(14,11,9,.55); }
+  .grimorio-app ::-webkit-scrollbar-thumb { background: rgba(169,125,69,.45); border: 2px solid rgba(14,11,9,.55); border-radius: 9px; }
+  .grimorio-app ::-webkit-scrollbar-thumb:hover { background: rgba(224,170,80,.65); }
+}
+
+@media (max-width: 639px) {
+  .grimorio-shell { width: min(100% - 1rem, 1560px); }
+  .grimorio-page-content { padding-block: .9rem 4.8rem; }
+  .grimorio-brand-text { font-size: 1rem; }
+  .grimorio-brand-mark { width: 2.25rem; height: 2.25rem; }
+  .grimorio-app input, .grimorio-app select, .grimorio-app textarea { font-size: 16px; }
+  .grimorio-app [role="dialog"] { max-width: calc(100vw - .75rem); }
+  .grimorio-app [role="dialog"].w-screen { max-width: 100vw; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .grimorio-app *, .grimorio-app *::before, .grimorio-app *::after {
+    transition-duration: .01ms !important;
+    animation-duration: .01ms !important;
+  }
 }
