@@ -554,7 +554,7 @@ async function runDamageScriptHooks(
 ): Promise<{ processed: number; errors: string[] }> {
   const { data: assignments, error: assignmentsError } = await service
     .from("character_abilities")
-    .select("id,ability_id,character_id,name,custom_state")
+    .select("id,ability_id,character_id,name,custom_state,custom_script_key")
     .eq("character_id", ownerCharacterId);
   if (assignmentsError) throw assignmentsError;
   // Habilidades criadas diretamente na ficha podem ter ability_id = null.
@@ -564,19 +564,19 @@ async function runDamageScriptHooks(
       .map((row) => row.ability_id)
       .filter((id): id is string => typeof id === "string" && id.length > 0),
   )];
-  if (!abilityIds.length) return { processed: 0, errors: [] };
-
-  const { data: abilityRows, error: abilitiesError } = await service
-    .from("abilities")
-    .select("id,name,custom_script_key,custom_attributes")
-    .in("id", abilityIds);
+  // Personal abilities have no global UUID, but may select a trusted
+  // built-in script in their own custom_script_key.
+  const { data: abilityRows, error: abilitiesError } = abilityIds.length
+    ? await service.from("abilities")
+        .select("id,name,custom_script_key,custom_attributes").in("id", abilityIds)
+    : { data: [], error: null };
   if (abilitiesError) throw abilitiesError;
   const scriptKeys = new Map((abilityRows ?? []).map((ability) => [ability.id, ability.custom_script_key]));
   let processed = 0;
   const errors: string[] = [];
 
   for (const assignment of assignments ?? []) {
-    const scriptKey = scriptKeys.get(assignment.ability_id);
+    const scriptKey = assignment.custom_script_key || scriptKeys.get(assignment.ability_id);
     if (!scriptKey) continue;
     const script = abilityScriptRegistry[scriptKey];
     if (!script) {
