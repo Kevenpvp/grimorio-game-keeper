@@ -314,8 +314,9 @@ function SummonInstanceEditor({ instance, name, onRefresh }: {
   );
 }
 
-export function SummonCombatPanel({ characterId, characterName, battleId, master, visible }: {
+export function SummonCombatPanel({ characterId, characterName, battleId, master, visible, showEmptyState = false }: {
   characterId: string; characterName: string; battleId: string; master: boolean; visible: boolean;
+  showEmptyState?: boolean;
 }) {
   const qc = useQueryClient();
   const { data: allGrants = [] } = useSummonGrants();
@@ -363,7 +364,16 @@ export function SummonCombatPanel({ characterId, characterName, battleId, master
   const activeGrantIds = new Set(currentInstances.map(s => s.grant_id));
   const labelFor = (s: SummonInstance) => summons.find(c => c.id===s.summoned_character_id)?.name
     ?? allGrants.find(g => g.id===s.grant_id)?.display_name ?? "Criatura invocada";
-  if (!visible || (!grants.length && !currentInstances.length)) return null;
+  if (!visible) return null;
+  if (!grants.length && !currentInstances.length) {
+    return showEmptyState ? (
+      <div className="rounded-lg border border-dashed border-border p-5 text-center">
+        <Ghost className="mx-auto mb-2 h-6 w-6 text-muted-foreground" aria-hidden="true" />
+        <p className="text-sm font-semibold">Nenhuma invocação disponível para {characterName}</p>
+        <p className="mt-1 text-xs text-muted-foreground">As invocações cadastradas para este personagem ou concedidas pelas suas habilidades aparecerão aqui.</p>
+      </div>
+    ) : null;
+  }
 
   return (
     <section className="mt-3 space-y-3 rounded-md border border-gold/30 bg-gold/5 p-3">
