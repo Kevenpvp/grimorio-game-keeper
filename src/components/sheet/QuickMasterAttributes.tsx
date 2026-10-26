@@ -89,7 +89,12 @@ export function QuickMasterAttributes({
     const status = statusModifiers[def.key] ?? { fixed: 0, percent: 0 };
     const value = noMana && def.key === "mana"
       ? 0 : effectiveAttributeValue(def, character, points, traits, attr?.bonus ?? 0, status);
-    return { def, attr, points, traits, status, value };
+    // Protected baseline: origin/allocated points and active effects with zero
+    // manual bonus. Setting a lower total would silently hide class/race rewards.
+    const minimum = noMana && def.key === "mana" ? 0 :
+      effectiveAttributeValue(def, character, points, traits, 0, status);
+    const originValue = computeValue(def, points + traits);
+    return { def, attr, points, traits, status, value, minimum, originValue };
   });
   const changed = rows.filter((row) => drafts[row.def.key] !== undefined && drafts[row.def.key] !== String(row.value));
   async function save() {
@@ -115,11 +120,16 @@ export function QuickMasterAttributes({
         toast.error("Mana está bloqueada pelo efeito Sem Mana. Remova o efeito antes de definir outro valor.");
         return;
       }
+      if (target < row.minimum) {
+        toast.error(row.def.label + ": o mínimo protegido é " + row.minimum +
+          ". Os pontos de Raça, Classe, Virtude e os pontos distribuídos não podem ser reduzidos por aqui.");
+        return;
+      }
       const bonus = findManualBonus(target, row.attr.bonus ?? 0, (candidate) =>
         effectiveAttributeValue(row.def, character, row.points, row.traits, candidate, row.status));
-      if (bonus === null) {
-        toast.error("Não é possível alcançar exatamente " + target + " em " + row.def.label +
-          " com os efeitos e percentuais atuais. Ajuste os efeitos/Corpo/Sanidade ou escolha outro valor.");
+      if (bonus === null || bonus < 0) {
+        toast.error(row.def.label + ": esse valor exigiria diminuir os atributos concedidos pelas origens. " +
+          "Use um Debuff ou altere a origem dos pontos em vez de criar bônus manual negativo.");
         return;
       }
       if (bonus === row.attr.bonus) continue;
@@ -167,27 +177,37 @@ export function QuickMasterAttributes({
         <div>
           <h2 className="flex items-center gap-2 font-display text-lg text-gold"><SlidersHorizontal className="h-5 w-5" /> Definir atributos diretamente</h2>
           <p className="mt-1 max-w-3xl text-xs leading-relaxed text-muted-foreground">
-            Digite o <strong>valor total desejado</strong> e salve. O sistema ajusta apenas o bônus manual:
-            não gasta pontos e não altera os pontos de Raça, Classe ou Virtude. Os buffs e penalidades ativos continuam valendo.
+            Digite o <strong>valor total desejado</strong> e salve. O sistema ajusta somente o bônus manual positivo.
+            Os pontos de Raça, Classe, Virtude e os já distribuídos estão protegidos: não é permitido reduzir
+            o atributo abaixo do mínimo concedido por eles. Buffs e debuffs ativos continuam sendo considerados.
           </p>
         </div>
         {changed.length > 0 && <span className="rounded-md border border-gold/30 bg-gold/10 px-2 py-1 text-xs font-medium text-gold">{changed.length} alteração(ões)</span>}
       </div>
       <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-        {rows.map(({ def, value }) => (
-          <label key={def.key} className="flex min-w-0 items-center gap-2 rounded-lg border border-gold/20 bg-[#100c0a]/55 px-3 py-2">
-            <AttrIcon name={def.icon} className="h-4 w-4 shrink-0 text-gold" />
-            <span className="min-w-0 flex-1 truncate text-xs font-semibold" title={def.label}>{def.label}</span>
-            <Input
-              type="number" step="1" inputMode="numeric"
-              aria-label={"Valor total desejado de " + def.label}
-              disabled={saving || (noMana && def.key === "mana")}
-              className="h-10 w-24 shrink-0 text-center font-semibold tabular-nums sm:w-28"
-              value={drafts[def.key] ?? String(value)}
-              onChange={(event) => setDrafts((previous) => ({ ...previous, [def.key]: event.target.value }))}
-              onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void save(); } }}
-            />
-          </label>
+        {rows.map(({ def, value, minimum, originValue, attr }) => (
+          <div key={def.key} className="min-w-0 rounded-lg border border-gold/20 bg-[#100c0a]/55 px-3 py-2.5">
+            <label className="flex min-w-0 items-center gap-2">
+              <AttrIcon name={def.icon} className="h-4 w-4 shrink-0 text-gold" />
+              <span className="min-w-0 flex-1 truncate text-xs font-semibold" title={def.label}>{def.label}</span>
+              <Input
+                type="number" step="1" inputMode="numeric" min={minimum}
+                aria-label={"Valor total desejado de " + def.label}
+                disabled={saving || (noMana && def.key === "mana")}
+                className="h-10 w-24 shrink-0 text-center font-semibold tabular-nums sm:w-28"
+                value={drafts[def.key] ?? String(value)}
+                onChange={(event) => setDrafts((previous) => ({ ...previous, [def.key]: event.target.value }))}
+                onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void save(); } }}
+              />
+            </label>
+            <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
+              Base + pontos/origens: <strong className="text-foreground">{originValue}</strong>
+              {" · "}Bônus manual: <strong className={((attr?.bonus ?? 0)<0)?"text-amber-400":"text-gold"}>
+                {(attr?.bonus ?? 0)>0?"+":""}{attr?.bonus??0}
+              </strong>
+              {" · "}Mínimo protegido com efeitos: <strong>{minimum}</strong>
+            </p>
+          </div>
         ))}
       </div>
       {noMana && <p className="text-xs text-amber-400">Mana indisponível: o efeito Sem Mana está ativo.</p>}
