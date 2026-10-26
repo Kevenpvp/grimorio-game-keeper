@@ -17,6 +17,7 @@ import { sedentoInvincibilityCooldown } from "@/lib/sedento-invincibility";
 import { useDefs, useMe, useRaces, useClasses, useVirtues } from "@/lib/sheets";
 import { parseAbilityEffects, parseAbilityAttackDamage, parseAbilityAttackEffectGroups, parseAbilityDotEffects, useAbilities, useCharacterAbilities, useCharacterActiveEffects, useDamageTypes, useDotTemplates, type Ability, type AbilityEffectDefinition, type CharacterAbility, type AbilityDotEffect, type AbilityAttackDamageConfig, type AbilityAttackEffectGroup } from "@/lib/abilities";
 import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
+import { parseAttributeStatusModifiers } from "@/lib/multi-attribute-effects";
 import { ActivationEffectValuesDialog, type ActivationEffectOverrides } from "@/components/abilities/ActivationEffectValuesDialog";
 import { customizableActivationEffects } from "@/lib/activation-effect-values";
 import { SheetAbilityAttackEditor } from "@/components/abilities/SheetAbilityAttackEditor";
@@ -257,7 +258,13 @@ export function effectSummary(effect: AbilityEffectDefinition, defs: NonNullable
   if (effect.effect_type === "temporal_freeze") return `${effect.name}: Congelamento temporal · imune a dano e a perdas de Mana/Corpo`;
   const amount = effect.value_mode === "percent" ? `${effect.amount}%` : effect.effect_type === "damage_dealt" ? String(effect.amount) : (effect.effect_type === "mana_regeneration" || effect.effect_type === "mana_used") ? `${effect.amount} Mana` : `${effect.amount} pontos`;
   const polarity = effect.polarity === "buff" ? "+" : "−";
-  if (effect.effect_type === "status") return `${effect.name}: ${polarity}${amount} em ${defs.find((d) => d.key === effect.attribute_key)?.label ?? effect.attribute_key}`;
+  if (effect.effect_type === "status") {
+    const rows = parseAttributeStatusModifiers(effect.attribute_modifiers);
+    if (rows.length) return `${effect.name}: ${rows.map((item) =>
+      `${polarity}${item.amount}${item.value_mode === "percent" ? "%" : ""} ${defs.find((def) => def.key === item.attribute_key)?.label ?? item.attribute_key}`
+    ).join(" · ")}`;
+    return `${effect.name}: ${polarity}${amount} em ${defs.find((d) => d.key === effect.attribute_key)?.label ?? effect.attribute_key}`;
+  }
   if (effect.effect_type === "regeneration") return `${effect.name}: regeneração ${polarity}${amount} de ${effect.attribute_key === "mana" ? "Mana" : "HP"}`;
   if (effect.effect_type === "mana_regeneration") return `${effect.name}: regeneração de Mana ${polarity}${amount}`;
   if (effect.effect_type === "mana_used") return `${effect.name}: Mana usada ${effect.polarity === "buff" ? "−" : "+"}${amount}`;
