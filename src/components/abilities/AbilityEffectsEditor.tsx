@@ -304,8 +304,15 @@ export function AbilityEffectsEditor({
                     damage_reduction_scope: type === "damage_reduction" ? "physical" : effect.damage_reduction_scope,
                     damage_reduction_type_id: null,
                     damage_reduction_magic_level: null,
-                    damage_reduction_type_ids: type === "damage_reduction" ? (damageTypes[0] ? [damageTypes[0].id] : []) : null,
-                    damage_reduction_magic_levels: type === "damage_reduction" ? ["baixa"] : null,
+                    // Start with all physical types and no magic-grade restriction.
+                    // The old default picked a magical type even for physical mitigation.
+                    damage_reduction_type_ids: type === "damage_reduction" ? [] : null,
+                    damage_reduction_magic_levels: type === "damage_reduction" ? null : null,
+                    damage_reduction_physical_type_ids: type === "damage_reduction" ? [] : effect.damage_reduction_physical_type_ids,
+                    damage_reduction_magic_type_ids: type === "damage_reduction" ? [] : effect.damage_reduction_magic_type_ids,
+                    damage_reduction_physical_blacklist_ids: type === "damage_reduction" ? [] : effect.damage_reduction_physical_blacklist_ids,
+                    damage_reduction_magic_blacklist_ids: type === "damage_reduction" ? [] : effect.damage_reduction_magic_blacklist_ids,
+                    damage_reduction_magic_level_blacklist: type === "damage_reduction" ? [] : effect.damage_reduction_magic_level_blacklist,
                     damage_received_scope: type === "damage_received" ? (effect.damage_received_scope ?? "any") : effect.damage_received_scope,
                     damage_received_type_ids: type === "damage_received" ? (effect.damage_received_type_ids ?? []) : effect.damage_received_type_ids,
                     damage_received_magic_levels: type === "damage_received" ? (effect.damage_received_magic_levels ?? []) : effect.damage_received_magic_levels,
