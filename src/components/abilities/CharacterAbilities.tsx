@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock3, Copy, Crosshair, Flame, HeartPulse, Minus, Plus, Sparkles, Swords, Trash2, WandSparkles, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { SearchableGrantPicker } from "@/components/ui/searchable-grant-picker";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -1789,13 +1790,22 @@ export function CharacterAbilitiesManager({ characterId, personalOnly = false }:
           {catalogLoading || assignedLoading ? <p className="text-sm text-muted-foreground">Carregando habilidades…</p> : !personalOnly && available.length > 0 ? (
             <div className="space-y-2">
               <Label>Adicionar do catálogo</Label>
-              <div className="flex flex-wrap gap-2">
-                {available.map((ability) => (
-                  <Button key={ability.id} size="sm" variant="outline" onClick={() => void give(ability)}>
-                    <Plus className="mr-1 h-3.5 w-3.5" /> {ability.name}
-                  </Button>
-                ))}
-              </div>
+              <SearchableGrantPicker
+                options={available.map((ability) => ({
+                  id: ability.id,
+                  name: ability.name,
+                  description: ability.description,
+                }))}
+                selectedIds={new Set<string>()}
+                showSelected={false}
+                addLabel="Habilidades disponíveis para esta ficha"
+                searchPlaceholder="Pesquisar habilidade do catálogo…"
+                onToggle={(id, checked) => {
+                  if (!checked) return;
+                  const ability = available.find((item) => item.id === id);
+                  if (ability) void give(ability);
+                }}
+              />
             </div>
           ) : !personalOnly ? (
             <p className="text-xs text-muted-foreground">{allAbilities.length ? "Todas as habilidades do catálogo já foram atribuídas." : "O mestre ainda não cadastrou habilidades."}</p>
