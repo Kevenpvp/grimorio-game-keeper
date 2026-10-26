@@ -101,9 +101,9 @@ function TransformationsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="grimorio-section-header flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="flex items-center gap-2 font-display text-3xl text-gold">
+          <h1 className="flex items-center gap-2 font-display text-3xl font-semibold text-gold">
             <Sparkles className="h-7 w-7" /> Transformações
           </h1>
           <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
