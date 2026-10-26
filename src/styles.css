@@ -214,6 +214,45 @@
     border-bottom: 1px solid rgba(224,165,71,.20);
   }
   .grimorio-page-heading h1 { font-size: clamp(1.5rem,2.25vw,2rem); }
+  .grimorio-section-header {
+    padding-bottom: 1rem;
+    border-bottom: 1px solid rgba(228,170,73,.25);
+    position: relative;
+  }
+  .grimorio-section-header::after {
+    content: ""; position: absolute; left: 0; bottom: -1px;
+    width: 5.5rem; height: 1px; border-radius: 3px;
+    background: linear-gradient(90deg,#e2ad4d,transparent);
+    box-shadow: 0 0 8px rgba(233,178,84,.3);
+  }
+  .grimorio-profile-card {
+    position: relative;
+    overflow: hidden;
+    border-color: rgba(176,126,62,.32);
+    background: linear-gradient(145deg,rgba(36,25,18,.97),rgba(15,11,9,.97));
+  }
+  .grimorio-profile-card::before {
+    content: ""; position: absolute; top: 0; left: 0;
+    width: 35%; height: 1px;
+    background: linear-gradient(90deg,rgba(227,175,76,.8),transparent);
+  }
+  .grimorio-profile-card:hover {
+    border-color: rgba(232,177,84,.78);
+    background: linear-gradient(145deg,rgba(47,32,21,.99),rgba(22,15,11,.99));
+    box-shadow: 0 15px 36px rgba(0,0,0,.38), inset 0 0 0 1px rgba(218,172,90,.07);
+  }
+  .grimorio-combat-hero::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse at 100% -80%,rgba(235,168,70,.20),transparent 55%);
+  }
+  .grimorio-combat-hero > * { position: relative; }
+  .grimorio-fighter-card {
+    background: linear-gradient(155deg,rgba(35,25,20,.98),rgba(18,13,11,.99));
+  }
+  .grimorio-fighter-card:hover {
+    border-color: rgba(226,168,74,.55);
+    box-shadow: inset 0 1px 0 rgba(247,212,143,.08),0 10px 28px rgba(0,0,0,.34);
+  }
   .grimorio-effects-card {
     border-radius: .8rem;
     border: 1px solid rgba(219,169,89,.24);
