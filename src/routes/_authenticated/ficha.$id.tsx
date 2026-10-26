@@ -255,7 +255,7 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
           </div>
           <CharacterSheetView character={character} attrs={attrs} defs={defs} />
           <SummonGrantsEditor characterId={character.id} master={false} />
-          <CharacterAbilitiesPanel characterId={character.id} characterName={character.name} mode="sheet" canUse={false} />
+          <CharacterAbilitiesPanel characterId={character.id} characterName={character.name} mode="sheet" canUse />
         </div>
       ) : (
         <>
@@ -350,7 +350,7 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
                 const entries = defs.filter((definition) => group.filter(definition.key));
                 if (entries.length === 0) return null;
                 return (
-                  <details key={group.key} className="panel min-w-0 p-3 sm:p-4" open={undefined} >
+                  <details key={group.key} className="panel min-w-0 p-3 sm:p-4">
                     <summary className="flex min-h-10 cursor-pointer items-center justify-between gap-3 text-sm font-semibold text-gold">
                       <span>{group.label} <span className="text-xs text-muted-foreground">({entries.length})</span></span>
                     </summary>
@@ -427,7 +427,7 @@ function NumberField({ label, icon, value, onSave }: {
     if (c !== value) onSave(c);
   };
   return (
-    <div className="panel flex items-center justify-between gap-3 p-4">
+    <div className="panel flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4">
       <span className="flex items-center gap-2 text-sm uppercase tracking-wider text-muted-foreground">
         <AttrIcon name={icon} className="h-4 w-4 text-gold" /> {label}
       </span>
@@ -449,7 +449,7 @@ function PercentEditor({ label, icon, tone, value, onSave }: {
   useEffect(() => setV(value), [value]);
   const commit = (n: number) => { const c = clampPct(n); setV(c); if (c !== value) onSave(c); };
   return (
-    <div className="panel space-y-3 p-4">
+    <div className="panel min-w-0 space-y-3 p-3 sm:p-4">
       <div className="flex items-center justify-between">
         <span className="flex items-center gap-2 text-sm uppercase tracking-wider text-muted-foreground">
           <AttrIcon name={icon} className="h-4 w-4 text-gold" /> {label}
