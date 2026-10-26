@@ -2,7 +2,7 @@ import type { Json } from "@/integrations/supabase/types";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient, type QueryClient, type QueryKey } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, Crosshair, Dices, Plus, Swords, Trash2, Copy, Footprints, RotateCw, Minus, Brain, Activity, Sparkles, Users, LayoutDashboard, ScrollText, Search, Settings2, Zap, ShieldAlert } from "lucide-react";
+import { ChevronDown, ChevronUp, Crosshair, Dices, Plus, Swords, Trash2, Copy, Footprints, RotateCw, Minus, Brain, Activity, Sparkles, Users, LayoutDashboard, ScrollText, Search, Settings2, Zap, ShieldAlert, ShieldCheck, Skull, Droplets, Hourglass, Crown } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -322,7 +322,7 @@ function CombatPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="flex items-center gap-2 text-3xl text-gold"><Swords className="h-7 w-7" /> Modo de Combate</h1>
+        <div className="grimorio-page-heading min-w-0"><span className="rounded-lg border border-gold/40 bg-gold/10 p-2"><Swords className="h-6 w-6 text-gold" /></span><div className="min-w-0"><p className="text-[10px] font-bold uppercase tracking-[.23em] text-muted-foreground">Central do mestre</p><h1 className="truncate text-2xl text-gold sm:text-3xl">Modo de Combate</h1></div></div>
         {isMaster && <Button onClick={create}><Plus className="mr-1 h-4 w-4" /> Nova batalha</Button>}
       </div>
       {list.length === 0 ? (
@@ -367,14 +367,14 @@ function CombatNavigation({ active, onSelect, mobile = false }: {
 }) {
   return (
     <nav aria-label="Seções do combate" className={mobile
-      ? "fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-border bg-background/95 px-1 pt-2 pb-[max(.75rem,env(safe-area-inset-bottom))] shadow-2xl backdrop-blur md:hidden"
-      : "hidden grid-cols-4 gap-2 rounded-xl border border-border bg-card/70 p-1.5 md:grid"}>
+      ? "fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-gold/30 bg-[#100c0a]/95 px-1 pt-2 pb-[max(.75rem,env(safe-area-inset-bottom))] shadow-2xl backdrop-blur-xl md:hidden"
+      : "panel hidden grid-cols-4 gap-2 rounded-xl p-1.5 md:grid"}>
       {combatTabs.map(({ key, label, icon: Icon }) => (
         <button key={key} type="button" aria-current={active === key ? "page" : undefined}
           onClick={() => onSelect(key)}
           className={cn(
             "flex min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 text-[11px] font-semibold transition-colors md:flex-row md:gap-2 md:text-sm",
-            active === key ? "bg-gold/15 text-gold ring-1 ring-gold/40" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+            active === key ? "bg-gradient-to-b from-gold/20 to-gold/5 text-gold ring-1 ring-gold/45 shadow-[inset_0_1px_0_rgba(245,215,149,.1)]" : "text-muted-foreground hover:bg-gold/10 hover:text-gold",
           )}>
           <Icon className="h-5 w-5 shrink-0 md:h-4 md:w-4" aria-hidden="true" />
           <span className="truncate">{label}</span>
@@ -816,13 +816,13 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
 
   if (!defs) return null;
   return (
-    <div className="relative space-y-4 pb-28 md:pb-8">
-      <header className="panel sticky top-2 z-20 space-y-3 border-gold/25 bg-background/95 p-3 shadow-md backdrop-blur sm:p-4">
+    <div className="grimorio-combat relative space-y-4 pb-28 md:pb-8">
+      <header className="grimorio-combat-hero panel relative space-y-3 overflow-hidden border-gold/45 p-3 shadow-lg sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Combate {battle.active ? "em andamento" : "encerrado"}</p>
-            <h2 className="truncate font-display text-xl text-gold sm:text-2xl">{battle.name}</h2>
-            <p className="text-xs text-muted-foreground">Turno {battle.turn_count ?? 0} · {fighters.length} combatentes{actor ? " · Vez: " + actor.name : ""}</p>
+            <p className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[.19em] text-muted-foreground"><span className={cn("h-2 w-2 rounded-full", battle.active ? "bg-emerald-400 shadow-[0_0_9px_rgba(52,211,153,.75)]" : "bg-zinc-500")} /> Combate {battle.active ? "em andamento" : "encerrado"}</p>
+            <div className="flex items-center gap-2"><Crown className="h-5 w-5 shrink-0 text-gold/80" /><h2 className="truncate font-display text-2xl text-gold sm:text-3xl">{battle.name}</h2></div>
+            <p className="text-xs text-muted-foreground">Turno <strong className="text-foreground">{battle.turn_count ?? 0}</strong><span className="mx-1.5 text-gold/50">·</span>{fighters.length} combatentes{actor ? <> <span className="mx-1.5 text-gold/50">·</span> Vez de <strong className="text-gold">{actor.name}</strong></> : ""}</p>
           </div>
           <div className="flex items-center gap-2">
             {isMaster && <Button size="sm" variant="outline" onClick={() => { setCombatTab("summary"); setBattleAdminOpen(true); }} aria-label="Gerenciar batalha no resumo"><Settings2 className="mr-1 h-4 w-4" /> Gerenciar</Button>}
@@ -832,14 +832,14 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
           </div>
         </div>
         <div className="flex flex-wrap gap-2 text-[11px] text-muted-foreground">
-          <span className="rounded-full border border-border px-2 py-1">{effects.length} efeito(s) visíveis</span>
-          <span className="rounded-full border border-border px-2 py-1">{dotEffects.length} DoT(s)</span>
+          <span className="rounded-full border border-gold/25 bg-[#100d0b] px-2.5 py-1">{effects.length} efeito(s) visíveis</span>
+          <span className="rounded-full border border-gold/25 bg-[#100d0b] px-2.5 py-1">{dotEffects.length} DoT(s)</span>
           {mindControlEffects.length > 0 && <span className="rounded-full border border-violet-500/50 px-2 py-1 text-violet-400">{mindControlEffects.length} controlado(s)</span>}
         </div>
       </header>
       <CombatNavigation active={combatTab} onSelect={setCombatTab} />
       {combatTab === "fighters" && <section className="space-y-3" aria-label="Combatentes da batalha">
-        <div className="panel flex flex-col gap-3 p-3 sm:flex-row sm:items-center">
+        <div className="panel flex flex-col gap-3 border-gold/25 p-3 sm:flex-row sm:items-center">
           <div className="relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input aria-label="Buscar combatente" placeholder="Buscar personagem ou jogador..." value={fighterSearch} onChange={(event) => setFighterSearch(event.target.value)} className="pl-9" />
@@ -852,7 +852,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
           </select>
           {isMaster && <Button size="sm" className="min-h-10" onClick={() => setCombatTab("actions")}><Zap className="mr-1 h-4 w-4" /> Ações rápidas</Button>}
         </div>
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
         {visibleFighters.map((f) => {
           const isActor = f.id === actor?.id;
           const isTarget = selectedTargetIds.includes(f.id) && f.id !== actor?.id;
@@ -881,14 +881,18 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
           const transformationImage = activeTransformationState?.image_path || f.photo_path;
           const availableTransformations = availableTransformationsFor(f);
           return (
-            <article key={f.id} className={cn("panel min-w-0 space-y-3 p-3", isActor && "border-gold ring-1 ring-gold", isTarget && "border-blood ring-1 ring-blood")}>
+            <article key={f.id} className={cn(
+              "grimorio-fighter-card panel group min-w-0 space-y-3 border-gold/25 p-3 transition-colors",
+              isActor && "!border-gold ring-1 ring-gold/75 shadow-[0_0_0_1px_rgba(231,183,93,.20),0_12px_30px_rgba(0,0,0,.35)]",
+              isTarget && "!border-blood ring-1 ring-blood shadow-[0_0_22px_rgba(188,57,67,.13)]",
+            )}>
               <div className="flex items-center gap-2">
-                <Portrait path={transformationImage} name={f.name} className="h-12 w-10 shrink-0" />
+                <Portrait path={transformationImage} name={f.name} className="h-12 w-11 shrink-0 rounded-lg border border-gold/40 shadow-[0_0_0_2px_rgba(231,183,93,.06)]" />
                 <div className="min-w-0 flex-1 space-y-0.5">
-                  <div className="truncate font-display text-base text-gold">{f.name}</div>
+                  <div className="truncate font-display text-base font-semibold text-gold">{f.name}</div>
                   <div className="truncate text-[11px] text-muted-foreground">{f.player_name || "NPC"}</div>
-                  {isActor && <div className="text-[11px] font-semibold text-gold">⚔ Na vez · primeiro da lista</div>}
-                  {isTarget && <div className="text-[11px] font-semibold text-blood">◎ Alvo selecionado</div>}
+                  {isActor && <div className="flex items-center gap-1 text-[11px] font-semibold text-gold"><Swords className="h-3 w-3" /> Na vez · primeiro da lista</div>}
+                  {isTarget && <div className="flex items-center gap-1 text-[11px] font-semibold text-red-400"><Crosshair className="h-3 w-3" /> Alvo selecionado</div>}
                 </div>
               </div>
 
@@ -906,8 +910,8 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                 </div>
               )}
               <div className="flex flex-wrap gap-1.5 text-[11px]">
-                {isOwnFighter && <span className="rounded-md bg-emerald-500/10 px-2 py-1 text-emerald-400">Buffs {fighterBuffs}</span>}
-                {isOwnFighter && <span className="rounded-md bg-red-500/10 px-2 py-1 text-red-400">Debuffs {fighterDebuffs}</span>}
+                {isOwnFighter && <span className="rounded-md border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-emerald-300">Buffs {fighterBuffs}</span>}
+                {isOwnFighter && <span className="rounded-md border border-red-500/20 bg-red-500/10 px-2 py-1 text-red-300">Debuffs {fighterDebuffs}</span>}
                 {isOwnFighter && fighterDots > 0 && <span className="rounded-md bg-orange-500/10 px-2 py-1 text-orange-400">DoTs {fighterDots}</span>}
                 {fighterSpecial.map((effect) => <span key={effect.id} className="rounded-md border border-border px-2 py-1 text-muted-foreground">
                   {effect.effect_type === "invincible" ? "Invencível" : effect.effect_type === "magic_prohibition" ? "Sem magia" : effect.effect_type === "no_mana" ? "Sem mana" : effect.effect_type === "mind_control" ? "Controle mental" : effect.effect_type === "invisibility" ? "Invisível" : "Stun"}
@@ -918,12 +922,12 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                 if (open) next.add(f.id); else next.delete(f.id);
                 return next;
               })}>
-                <SheetContent side="bottom" className="h-[93dvh] max-h-[93dvh] rounded-t-2xl border-gold/40 px-4 pb-3 pt-6 sm:mx-auto sm:max-w-5xl sm:px-6">
+                <SheetContent side="bottom" className="h-[93dvh] max-h-[93dvh] rounded-t-2xl border-gold/45 bg-[#100c0a] px-4 pb-3 pt-6 shadow-[0_-15px_60px_rgba(0,0,0,.8)] sm:mx-auto sm:max-w-5xl sm:px-6">
                   <SheetHeader className="pr-8 text-left">
                     <SheetTitle className="font-display text-xl text-gold">{f.name}</SheetTitle>
                     <SheetDescription>{f.player_name || "NPC"} · Atributos, habilidades, efeitos, transformações e recursos</SheetDescription>
                   </SheetHeader>
-                  <div role="tablist" aria-label={"Detalhes de " + f.name} className="mt-4 flex gap-2 overflow-x-auto border-b border-border pb-2">
+                  <div role="tablist" aria-label={"Detalhes de " + f.name} className="mt-4 flex gap-1.5 overflow-x-auto border-b border-gold/25 pb-2">
                     {([
                       ["status", "Status"],
                       ["abilities", "Habilidades"],
@@ -934,7 +938,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                     ] as Array<["status" | "abilities" | "summons" | "transformations" | "effects" | "activeEffects", string]>).map(([key, label]) =>
                       <button key={key} type="button" role="tab" aria-selected={detailTab === key}
                         onClick={() => setDetailTab(key)}
-                        className={cn("shrink-0 rounded-md px-3 py-2 text-xs font-medium", detailTab === key ? "bg-gold/15 text-gold" : "text-muted-foreground hover:bg-muted")}>{label}</button>)}
+                        className={cn("shrink-0 rounded-lg border border-transparent px-3 py-2.5 text-xs font-semibold transition-colors", detailTab === key ? "border-gold/35 bg-gold/15 text-gold" : "text-muted-foreground hover:border-gold/15 hover:bg-gold/5 hover:text-foreground")}>{label}</button>)}
                   </div>
                   <div className="mt-2 h-[calc(93dvh-11rem)] space-y-4 overflow-y-auto overscroll-contain pb-10 pr-1">
               {detailTab === "transformations" && (isOwnFighter || isMaster) && availableTransformations.length > 0 && (
@@ -1123,8 +1127,8 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
       </section>}
       {combatTab === "actions" && <section className="space-y-4" aria-label="Ações de combate">
         {isMaster ? <>
-          <div className="panel space-y-3 p-4">
-            <div className="flex items-center gap-2"><Zap className="h-5 w-5 text-gold" /><h3 className="font-display text-lg text-gold">Central de ações</h3></div>
+          <div className="panel space-y-3 border-gold/30 p-4">
+            <div className="flex items-center gap-2"><span className="rounded-lg border border-gold/30 bg-gold/10 p-2"><Zap className="h-5 w-5 text-gold" /></span><div><p className="text-[10px] uppercase tracking-widest text-muted-foreground">Mesa do mestre</p><h3 className="font-display text-lg text-gold">Central de ações</h3></div></div>
             <div className="grid grid-cols-3 gap-2" role="group" aria-label="Tipo de ação">
               {([["combat", "Dano / testes"], ["abilities", "Habilidades"], ["dots", "DoTs"]] as const).map(([key, label]) => (
                 <button key={key} type="button" onClick={() => setActionMode(key)}
