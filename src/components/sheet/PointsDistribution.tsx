@@ -56,6 +56,22 @@ export function PointsDistribution({
     setAlloc({ ...alloc, [key]: next });
   }
 
+  function setPendingDirectly(key: string, raw: string) {
+    if (busy || !canRemove) return; // Master-only shortcut.
+    const entered = Number(raw);
+    if (!Number.isFinite(entered)) return;
+    const requested = Math.trunc(entered);
+    const existing = byKey.get(key)?.points ?? 0;
+    const investedByOrigin = source === "race" ? raceAlloc[key] ?? 0
+      : source === "virtue" ? virtueAlloc[key] ?? 0
+        : source === "class" ? classAlloc[key] ?? 0
+          : Math.max(0, existing - (raceAlloc[key] ?? 0) - (virtueAlloc[key] ?? 0) - (classAlloc[key] ?? 0));
+    const otherPending = spent - (alloc[key] ?? 0);
+    const maxAdd = sourceAvailable - otherPending;
+    const next = Math.min(Math.max(requested, -investedByOrigin), maxAdd);
+    setAlloc((previous) => ({ ...previous, [key]: next }));
+  }
+
   async function confirm() {
     if (busy || remaining < 0) return;
     const clean = Object.fromEntries(Object.entries(alloc).filter(([, value]) => value !== 0));
@@ -84,6 +100,7 @@ export function PointsDistribution({
         <div>
           <h2 className="text-lg text-gold">Distribuição de Pontos</h2>
           <p className="mt-1 text-xs text-muted-foreground">Escolha a origem para que os pontos investidos sejam vinculados à raça, classe ou virtude correspondente.</p>
+          {canRemove && <p className="mt-1 text-xs text-gold">Mestre: digite quantos pontos deseja adicionar ou remover no campo “Ajustar pontos” de cada atributo. Para escolher o valor total diretamente sem gastar pontos, utilize o painel “Definir atributos diretamente” acima.</p>}
         </div>
         <div className="rounded-md border border-gold/50 px-4 py-2 text-center">
           <div className="text-xs uppercase tracking-wider text-muted-foreground">Pontos desta origem</div>
@@ -132,8 +149,20 @@ export function PointsDistribution({
                     </div>
                   )}
                 </div>
-                <div className="flex items-center gap-1">
-                  <Button size="icon" variant="outline" className="h-8 w-8" aria-label={`Remover ponto de ${d.label}`}
+                <div className="flex flex-wrap items-center justify-end gap-1">
+                  {canRemove && (
+                    <label className="mr-1 space-y-1">
+                      <span className="block text-[10px] text-muted-foreground">Ajustar pontos</span>
+                      <Input type="number" step="1" inputMode="numeric"
+                        aria-label={`Ajuste de pontos de ${d.label} nesta origem`}
+                        title="Digite quantos pontos deseja adicionar nesta origem; negativos removem pontos já investidos pelo mestre"
+                        disabled={busy}
+                        className="h-10 w-20 text-center tabular-nums"
+                        value={pending} onChange={(event) => setPendingDirectly(d.key, event.target.value)}
+                      />
+                    </label>
+                  )}
+                  <Button size="icon" variant="outline" className="h-9 w-9" aria-label={`Remover ponto de ${d.label}`}
                     disabled={pending <= 0 && (!canRemove || (source === "race" ? (raceAlloc[d.key] ?? 0) : source === "virtue" ? (virtueAlloc[d.key] ?? 0) : source === "class" ? (classAlloc[d.key] ?? 0) : Math.max(0, invested - (raceAlloc[d.key] ?? 0) - (virtueAlloc[d.key] ?? 0) - (classAlloc[d.key] ?? 0))) + pending <= 0)} onClick={() => change(d.key, -1)}>
                     <Minus className="h-4 w-4" />
                   </Button>
