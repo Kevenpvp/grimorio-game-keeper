@@ -3,6 +3,7 @@ import { Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { activationEffectValueFields } from "@/lib/activation-effect-values";
 import { useRaces, type AttributeDef } from "@/lib/sheets";
 import { useDamageTypes, useDotTemplates, type AbilityEffectDefinition, type AbilityEffectType, type DamageScope, type DamageReductionScope, type DamageReceivedScope, type DamageMagicLevel } from "@/lib/abilities";
 
@@ -49,6 +50,7 @@ export function AbilityEffectsEditor({
   permanentNote,
   hideDuration = false,
   hideTargeting = false,
+  allowActivationCustomization = false,
 }: {
   effects: AbilityEffectDefinition[];
   onChange: (effects: AbilityEffectDefinition[]) => void;
@@ -69,6 +71,8 @@ export function AbilityEffectsEditor({
   hideDuration?: boolean;
   /** Hide target selectors when the effect always applies to the affected character. */
   hideTargeting?: boolean;
+  /** Offer a one-time value popup when using Ativar. */
+  allowActivationCustomization?: boolean;
   /** Customize the permanent-effect note for non-ability owners such as races. */
   permanentNote?: string;
 }) {
@@ -99,6 +103,7 @@ export function AbilityEffectsEditor({
       until_combat_end: false,
       remove_on_attack: false,
       remove_on_hit: false,
+      modify_on_activate: false,
       dot_immunity_scope: "all",
       dot_immunity_template_ids: [],
       dot_resistance_scope: "all",
@@ -166,6 +171,7 @@ export function AbilityEffectsEditor({
       until_combat_end: false,
       remove_on_attack: false,
       remove_on_hit: false,
+      modify_on_activate: false,
       remove_on_hit: false,
       target_scope: "target",
     }]);
@@ -1100,6 +1106,18 @@ export function AbilityEffectsEditor({
                     </label>
                   )}
                 </>
+              )}
+              {!isPermanent && allowActivationCustomization && activationEffectValueFields(effect).length > 0 && (
+                <label className="flex items-start gap-2 rounded-md border border-gold/40 bg-gold/5 p-2 text-xs sm:col-span-2">
+                  <input type="checkbox" className="mt-0.5" checked={effect.modify_on_activate ?? false}
+                    onChange={(event) => patch(index, { modify_on_activate: event.target.checked })} />
+                  <span>
+                    <span className="font-semibold text-gold">Modificar ao ativar</span>
+                    <span className="block text-muted-foreground">
+                      Antes de ativar, o mestre escolhe os valores deste efeito. A alteração só vale para essa utilização.
+                    </span>
+                  </span>
+                </label>
               )}
               <label className="flex items-start gap-2 text-xs sm:col-span-2">
                 <input type="checkbox" className="mt-0.5" checked={effect.remove_on_hit ?? false}
