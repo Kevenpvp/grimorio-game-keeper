@@ -18,6 +18,8 @@ import {
 } from "@/lib/custom-ability-scripts";
 import { useDefs, useMe } from "@/lib/sheets";
 import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
+import { ContinuousRulesEditor } from "@/components/abilities/ContinuousRulesEditor";
+import { parseContinuousRules, type ContinuousRule } from "@/lib/continuous-effects";
 import { AbilityDotEffectsEditor } from "@/components/abilities/SheetAbilityAttackEditor";
 import { findRegisteredDotTemplate, registerAbilityDotTemplates } from "@/lib/ability-dot-templates";
 import { DefenseIgnoreInputs } from "@/components/abilities/DefenseIgnoreInputs";
@@ -120,6 +122,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
     ability.attack_mana_cost === null ? "" : String(ability.attack_mana_cost)
   );
   const [effects, setEffects] = useState<AbilityEffectDefinition[]>(() => parseAbilityEffects(ability.effects));
+  const [continuousRules,setContinuousRules] = useState<ContinuousRule[]>(() => parseContinuousRules((ability as Ability & { continuous_rules?: unknown }).continuous_rules));
   const [passiveEffects, setPassiveEffects] = useState<AbilityEffectDefinition[]>(() => parseAbilityEffects(ability.passive_effects));
   const [endEffects, setEndEffects] = useState<AbilityEffectDefinition[]>(() => parseAbilityEffects(ability.end_effects));
   const [busy, setBusy] = useState(false);
@@ -143,6 +146,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
     setManaCost(String(ability.mana_cost));
     setAttackManaCost(ability.attack_mana_cost === null ? "" : String(ability.attack_mana_cost));
     setEffects(parseAbilityEffects(ability.effects));
+    setContinuousRules(parseContinuousRules((ability as Ability & { continuous_rules?: unknown }).continuous_rules));
     setPassiveEffects(parseAbilityEffects(ability.passive_effects));
     setEndEffects(parseAbilityEffects(ability.end_effects));
   }, [ability]);
@@ -260,6 +264,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
       description: description.trim() || null,
       custom_script_key: customScriptKey || null,
       custom_attributes: customAttributes as unknown as Json,
+      continuous_rules: continuousRules as unknown as Json,
       can_activate: canActivate,
       toggle_mode: canActivate && toggleMode,
       is_magical: isMagical,
@@ -721,6 +726,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
         </div>}
         {!canActivate && <p className="text-xs text-muted-foreground">Esta habilidade não pode ser ativada. Seus efeitos passivos permanecem aplicados enquanto estiver na ficha.</p>}
       </div>
+      {canActivate && <ContinuousRulesEditor rules={continuousRules} onChange={setContinuousRules} defs={defs} disabled={busy}/>}
       {canActivate && <AbilityEffectsEditor
         allowActivationCustomization
         effects={effects}
