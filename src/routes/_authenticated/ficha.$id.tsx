@@ -19,7 +19,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { dispatchCustomAbilityScriptEvents } from "@/lib/ability-script-runtime";
 import { effectiveHpTotal } from "@/lib/hp-total";
 import {
-  clampPct, computeValue, conditionAdjustedValue, physicalAttributePoints, useCharacter, useCharacterLive, useCharacterTraitMods, useDefs, useMe,
+  clampPct, clampNonDefenseAttribute, computeValue, conditionAdjustedValue, physicalAttributePoints, useCharacter, useCharacterLive, useCharacterTraitMods, useDefs, useMe,
   type AttributeDef, type Character, type CharacterAttr,
 } from "@/lib/sheets";
 import { CharacterSheetView, Portrait } from "@/components/sheet/CharacterSheetView";
@@ -388,7 +388,7 @@ function AttrEditor({ def, characterId, body, sanity, attr, racePts, virtuePts, 
   // active modifiers, matching the limit validated by Supabase.
   const total = noMana ? 0 : def.key === "hp"
     ? effectiveHpTotal(max0, traitPts, bonus0, statusModifier.fixed, statusModifier.percent)
-    : conditionAdjustedValue({ body, sanity }, def.key, Math.max(0, adjustedTotal));
+    : conditionAdjustedValue({ body, sanity }, def.key, clampNonDefenseAttribute(def.key, adjustedTotal));
   const [cur, setCur] = useState(cur0);
   const [max, setMax] = useState(max0);
   const [bonus, setBonus] = useState(bonus0);
