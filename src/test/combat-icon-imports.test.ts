@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 import ts from "typescript";
 import * as lucide from "lucide-react";
 
-const combatSource = fileURLToPath(new URL("../routes/_authenticated/combate.tsx", import.meta.url));
+const combatSource = resolve(process.cwd(), "src/routes/_authenticated/combate.tsx");
 
 describe("Ícones e referências JSX do Combate", () => {
   it("não utiliza ícones Lucide ausentes dos imports", () => {
