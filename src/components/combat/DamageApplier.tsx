@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { HeartPulse, Shield, Sparkles, Swords, Zap, Plus, Trash2, CheckCircle2 } from "lucide-react";
+import { HeartPulse, Shield, Sparkles, Swords, Zap, Plus, Trash2, CheckCircle2, Dumbbell, WandSparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,8 +9,8 @@ import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEdito
 import { DefenseIgnoreInputs } from "@/components/abilities/DefenseIgnoreInputs";
 import { applyAbilityTargetDamage, isValidAbilityTargetAdjustment } from "@/lib/ability-attack-damage";
 import { defenseIgnoreText, ZERO_DEFENSE_IGNORE, type DefenseIgnore } from "@/lib/defense-ignore";
-import { type AbilityEffectDefinition, useDotTemplates } from "@/lib/abilities";
-import { useDefs } from "@/lib/sheets";
+import { passiveStatusModifiers, statusEffectModifiers, useCharacterAbilities, useCharacterActiveEffects, type AbilityEffectDefinition, useDotTemplates } from "@/lib/abilities";
+import { clampNonDefenseAttribute, computeValue, conditionAdjustedValue, physicalAttributePoints, useCharacter, useCharacterTraitMods, useDefs } from "@/lib/sheets";
 import type { Json } from "@/integrations/supabase/types";
 
 type DamageKind = "physical" | "magical" | "hybrid" | "true";
@@ -57,6 +57,52 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
   const [applyingEffectsOnly, setApplyingEffectsOnly] = useState(false);
   const { data: defs = [] } = useDefs();
   const { data: dotTemplates = [], isLoading: loadingDotTemplates } = useDotTemplates();
+  // Use the same attribute building blocks as the character sheet and combat
+  // cards. The selected attacker, not the target, provides these quick values.
+  const sourceId = sourceCharacterId || undefined;
+  const { data: sourceSheet, isPending: sourceSheetLoading, error: sourceSheetError } = useCharacter(sourceId);
+  const source = sourceSheet?.character;
+  const sourceAttributes = sourceSheet?.attrs ?? [];
+  const sourceTraits = useCharacterTraitMods(
+    source?.race_id, source?.virtue_id, source?.class_id, source?.class_custom_modifiers,
+  );
+  const { data: sourceAbilities, isPending: sourceAbilitiesLoading, error: sourceAbilitiesError } = useCharacterAbilities(sourceId);
+  const { data: sourceEffects, isPending: sourceEffectsLoading, error: sourceEffectsError } = useCharacterActiveEffects(sourceId);
+  const sourceStatsLoading = Boolean(sourceId) && (sourceSheetLoading || sourceAbilitiesLoading || sourceEffectsLoading);
+  const sourceStatsError = sourceSheetError ?? sourceAbilitiesError ?? sourceEffectsError;
+
+  function effectiveSourceStat(key: "strength" | "mag_dmg"): number | null {
+    if (!sourceId || !source || !sourceSheet || sourceStatsLoading || sourceStatsError) return null;
+    const def = defs.find((item) => item.key === key);
+    if (!def || !sourceAttributes.some((item) => item.attribute_key === key)) return null;
+    const attr = sourceAttributes.find((item) => item.attribute_key === key);
+    const traitPoints = sourceTraits.mods[key] ?? 0;
+    const base = def.accepts_points
+      ? computeValue(def, (attr?.points ?? 0) + traitPoints + physicalAttributePoints(source, key)) + Number(attr?.bonus ?? 0)
+      : Number(attr?.max_value ?? 0) + traitPoints + Number(attr?.bonus ?? 0);
+    const active = statusEffectModifiers(sourceEffects, key);
+    const passive = passiveStatusModifiers(sourceAbilities)[key] ?? { fixed: 0, percent: 0 };
+    const adjusted = Math.floor((base + active.fixed + passive.fixed) * (1 + (active.percent + passive.percent) / 100));
+    const effective = conditionAdjustedValue(source, key, clampNonDefenseAttribute(key, adjusted));
+    return Number.isFinite(effective) ? effective : null;
+  }
+
+  const sourceStrength = effectiveSourceStat("strength");
+  const sourceMagicDamage = effectiveSourceStat("mag_dmg");
+  function fillDamageFromStat(key: "strength" | "mag_dmg") {
+    const value = key === "strength" ? sourceStrength : sourceMagicDamage;
+    if (value === null) {
+      toast.error("Não foi possível carregar o atributo de quem está causando o dano.");
+      return;
+    }
+    if (value < 0 || value > 1_000_000) {
+      toast.error("O atributo está fora do intervalo permitido para dano bruto (0 a 1000000).");
+      return;
+    }
+    setDamageMode("repeat");
+    setDamageValue(String(value));
+    toast.success((key === "strength" ? "Força" : "Dano Mágico") + " de " + (source.name ?? "atacante") + " preenchido: " + value + ".");
+  }
   useEffect(() => {
     if (defaultSourceCharacterId) setSourceCharacterId(defaultSourceCharacterId);
   }, [defaultSourceCharacterId]);
@@ -455,9 +501,27 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
       </div>
       {damageMode === "repeat" ? (
         <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">Dano bruto por golpe</label>
-            <Input type="number" min="0" max="1000000" value={damageValue} onChange={(e) => setDamageValue(e.target.value)} />
+          <div className="space-y-2">
+            <label htmlFor={`damage-amount-${target.id}`} className="text-xs text-muted-foreground">Dano bruto por golpe</label>
+            <Input id={`damage-amount-${target.id}`} type="number" min="0" max="1000000" value={damageValue} onChange={(e) => setDamageValue(e.target.value)} />
+            <div className="grid grid-cols-2 gap-2" role="group" aria-label="Preencher dano com atributo do atacante">
+              <Button type="button" size="sm" variant="outline" className="min-h-11 min-w-0 px-2 text-xs sm:text-sm"
+                disabled={applyingDamage || !sourceId || sourceStrength === null} onClick={() => fillDamageFromStat("strength")}
+                title="Substituir o dano bruto pela Força atual do atacante selecionado">
+                <Dumbbell className="mr-1 h-4 w-4 shrink-0" /> <span className="truncate">Força{sourceStrength === null ? "" : ` · ${sourceStrength}`}</span>
+              </Button>
+              <Button type="button" size="sm" variant="outline" className="min-h-11 min-w-0 px-2 text-xs sm:text-sm"
+                disabled={applyingDamage || !sourceId || sourceMagicDamage === null} onClick={() => fillDamageFromStat("mag_dmg")}
+                title="Substituir o dano bruto pelo Dano Mágico atual do atacante selecionado">
+                <WandSparkles className="mr-1 h-4 w-4 shrink-0" /> <span className="truncate">Mágico{sourceMagicDamage === null ? "" : ` · ${sourceMagicDamage}`}</span>
+              </Button>
+            </div>
+            <p className="text-[11px] leading-relaxed text-muted-foreground" aria-live="polite">
+              {!sourceId ? "Selecione quem está causando o dano para usar os atributos." :
+                sourceStatsLoading ? "Carregando Força e Dano Mágico do atacante..." :
+                sourceStatsError ? "Não foi possível consultar os atributos deste atacante." :
+                "Toque em um atributo para preencher o dano, sem causar o ataque."}
+            </p>
           </div>
           <div className="space-y-1">
             <label className="text-xs text-muted-foreground">Quantidade de golpes (1–200)</label>
