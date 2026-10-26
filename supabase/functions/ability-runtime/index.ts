@@ -557,7 +557,13 @@ async function runDamageScriptHooks(
     .select("id,ability_id,character_id,name,custom_state")
     .eq("character_id", ownerCharacterId);
   if (assignmentsError) throw assignmentsError;
-  const abilityIds = [...new Set((assignments ?? []).map((row) => row.ability_id))];
+  // Habilidades criadas diretamente na ficha podem ter ability_id = null.
+  // Consultas .in("id", ...) em colunas UUID não aceitam esse valor.
+  const abilityIds = [...new Set(
+    (assignments ?? [])
+      .map((row) => row.ability_id)
+      .filter((id): id is string => typeof id === "string" && id.length > 0),
+  )];
   if (!abilityIds.length) return { processed: 0, errors: [] };
 
   const { data: abilityRows, error: abilitiesError } = await service
