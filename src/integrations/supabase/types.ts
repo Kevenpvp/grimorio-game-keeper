@@ -34,6 +34,7 @@ export type Database = {
           is_magical: boolean
           is_passive: boolean
           mana_cost: number
+          attack_mana_cost: number | null
           name: string
           once_per_battle: boolean
           passive_effects: Json
@@ -59,6 +60,7 @@ export type Database = {
           is_magical?: boolean
           is_passive?: boolean
           mana_cost?: number
+          attack_mana_cost?: number | null
           name: string
           once_per_battle?: boolean
           passive_effects?: Json
@@ -82,6 +84,7 @@ export type Database = {
           is_magical?: boolean
           is_passive?: boolean
           mana_cost?: number
+          attack_mana_cost?: number | null
           name?: string
           once_per_battle?: boolean
           passive_effects?: Json
@@ -536,6 +539,7 @@ export type Database = {
           linked_by_race_id: string | null
           linked_by_virtue_id: string | null
           mana_cost: number
+          attack_mana_cost: number | null
           name: string
           once_per_battle: boolean
           passive_effects: Json
@@ -579,6 +583,7 @@ export type Database = {
           linked_by_race_id?: string | null
           linked_by_virtue_id?: string | null
           mana_cost?: number
+          attack_mana_cost?: number | null
           name: string
           once_per_battle?: boolean
           passive_effects?: Json
@@ -616,6 +621,7 @@ export type Database = {
           linked_by_race_id?: string | null
           linked_by_virtue_id?: string | null
           mana_cost?: number
+          attack_mana_cost?: number | null
           name?: string
           once_per_battle?: boolean
           passive_effects?: Json
