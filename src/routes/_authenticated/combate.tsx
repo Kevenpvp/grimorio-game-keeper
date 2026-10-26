@@ -1224,15 +1224,15 @@ function activeEffectDetails(effect: BattleEffect, defs: AttributeDef[], damageT
   const value = effect.value_mode === "percent" ? amount + "%" : amount + " pontos";
   const attribute = defs.find((definition) => definition.key === effect.attribute_key)?.label ?? effect.attribute_key ?? "atributo";
   switch (effect.effect_type) {
-    case "status": return \`Modifica \${attribute}: \${sign}\${value}. O valor é considerado nos atributos do personagem enquanto o efeito estiver ativo.\`;
-    case "regeneration": return \`Modifica a regeneração de \${effect.attribute_key === "hp" ? "HP" : "Mana"} em \${sign}\${value} por turno.\`;
+    case "status": return `Modifica ${attribute}: ${sign}${value}. O valor é considerado nos atributos do personagem enquanto o efeito estiver ativo.`;
+    case "regeneration": return `Modifica a regeneração de ${effect.attribute_key === "hp" ? "HP" : "Mana"} em ${sign}${value} por turno.`;
     case "damage_over_time": return damageOverTimeSummary(effect, damageTypes);
     case "damage_reduction": return damageReductionSummary(effect, damageTypes);
     case "healing": return periodicHealingSummary(effect);
-    case "damage_dealt": return \`Modifica o dano causado (\${effect.damage_scope === "physical" ? "físico" : effect.damage_scope === "magical" ? "mágico" : "qualquer categoria"}) em \${sign}\${effect.value_mode === "percent" ? amount + "%" : amount + " fixos"}.\`;
+    case "damage_dealt": return `Modifica o dano causado (${effect.damage_scope === "physical" ? "físico" : effect.damage_scope === "magical" ? "mágico" : "qualquer categoria"}) em ${sign}${effect.value_mode === "percent" ? amount + "%" : amount + " fixos"}.`;
     case "damage_vulnerability": return "Vulnerabilidade: receber o tipo de dano configurado pode ativar outros efeitos neste personagem.";
-    case "debuff_relief": return \`Alívio de debuffs: reduz a intensidade numérica dos efeitos negativos em \${amount}%.\`;
-    case "dot_resistance": return \`Resistência a DoTs: reduz \${String((effect.effect_data as Record<string, Json> | undefined)?.dot_resistance_mode ?? "damage") === "duration" ? "a duração" : "o dano"} em \${effect.value_mode === "percent" ? amount + "%" : amount + " fixos"}.\`;
+    case "debuff_relief": return `Alívio de debuffs: reduz a intensidade numérica dos efeitos negativos em ${amount}%.`;
+    case "dot_resistance": return `Resistência a DoTs: reduz ${String((effect.effect_data as Record<string, Json> | undefined)?.dot_resistance_mode ?? "damage") === "duration" ? "a duração" : "o dano"} em ${effect.value_mode === "percent" ? amount + "%" : amount + " fixos"}.`;
     case "dot_immunity": return "Imune à aplicação de efeitos de dano por turno (DoTs) conforme a configuração.";
     case "no_regen_hp": return "Impede a regeneração de HP enquanto durar o efeito.";
     case "no_regen_mana": return "Impede a regeneração de Mana enquanto durar o efeito.";
@@ -1240,12 +1240,12 @@ function activeEffectDetails(effect: BattleEffect, defs: AttributeDef[], damageT
     case "magic_prohibition": return "Proibição de magia: impede o uso de habilidades classificadas como mágicas.";
     case "invincible": return "Invencível: bloqueia o dano recebido enquanto este efeito estiver ativo.";
     case "healing_blocked": return "Bloqueio de cura: impede receber cura de habilidades conforme as regras do efeito.";
-    case "mana_used": return \`Modifica o custo de Mana de habilidades em \${effect.polarity === "buff" ? "−" : "+"}\${effect.value_mode === "percent" ? amount + "%" : amount + " Mana"}.\`;
+    case "mana_used": return `Modifica o custo de Mana de habilidades em ${effect.polarity === "buff" ? "−" : "+"}${effect.value_mode === "percent" ? amount + "%" : amount + " Mana"}.`;
     case "stun": return "Stun: efeito de atordoamento, considerado nos testes de ataque.";
     case "mind_control": return "Controle mental: o personagem está sendo controlado pela origem indicada no efeito.";
     case "mental_control_immunity": return "Imunidade contra tentativas de controle mental.";
-    case "mental_control_chance": return \`Aumenta a potência do controle mental em \${effect.value_mode === "percent" ? amount + "%" : amount + " pontos"}.\`;
-    case "mental_control_resistance": return \`Aumenta a resistência a controle mental em \${effect.value_mode === "percent" ? amount + "%" : amount + " pontos"}.\`;
+    case "mental_control_chance": return `Aumenta a potência do controle mental em ${effect.value_mode === "percent" ? amount + "%" : amount + " pontos"}.`;
+    case "mental_control_resistance": return `Aumenta a resistência a controle mental em ${effect.value_mode === "percent" ? amount + "%" : amount + " pontos"}.`;
     case "invisibility": return "Invisibilidade: personagem marcado como invisível enquanto este efeito estiver ativo.";
     default: return "Efeito ativo neste personagem.";
   }
