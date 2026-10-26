@@ -1,11 +1,13 @@
 import type { AbilityEffectDefinition } from "@/lib/abilities";
+import { parseAttributeStatusModifiers } from "@/lib/multi-attribute-effects";
 
 export type ActivationEffectValueKey =
   | "amount" | "dot_resistance_amount"
   | "healing_hp_amount" | "healing_mana_amount"
   | "healing_body_amount" | "healing_sanity_amount"
   | "healing_reduce_debuff_turns_fixed" | "healing_reduce_debuff_turns_percent"
-  | "healing_relieve_debuff_percent" | "magic_healing_reversal_custom_damage";
+  | "healing_relieve_debuff_percent" | "magic_healing_reversal_custom_damage"
+  | `attribute_amount__${string}`;
 
 export type ActivationEffectValueField = {
   key: ActivationEffectValueKey;
@@ -21,6 +23,15 @@ const AMOUNT_TYPES = new Set([
 ]);
 
 export function activationEffectValueFields(effect: AbilityEffectDefinition): ActivationEffectValueField[] {
+  if (effect.effect_type === "status") {
+    const rows = parseAttributeStatusModifiers(effect.attribute_modifiers);
+    if (rows.length) return rows.map((row) => ({
+      key: `attribute_amount__${row.attribute_key}` as ActivationEffectValueKey,
+      label: `${row.attribute_key} (${row.value_mode === "percent" ? "%" : "pontos"})`,
+      initialValue: row.amount,
+      max: 1_000_000,
+    }));
+  }
   if (AMOUNT_TYPES.has(effect.effect_type)) {
     return [{
       key: "amount",
