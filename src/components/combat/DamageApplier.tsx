@@ -10,7 +10,7 @@ import { DefenseIgnoreInputs } from "@/components/abilities/DefenseIgnoreInputs"
 import { applyAbilityTargetDamage, isValidAbilityTargetAdjustment } from "@/lib/ability-attack-damage";
 import { defenseIgnoreText, ZERO_DEFENSE_IGNORE, type DefenseIgnore } from "@/lib/defense-ignore";
 import { passiveStatusModifiers, statusEffectModifiers, useCharacterAbilities, useCharacterActiveEffects, type AbilityEffectDefinition, useDotTemplates } from "@/lib/abilities";
-import { clampNonDefenseAttribute, computeValue, conditionAdjustedValue, physicalAttributePoints, useCharacter, useCharacterTraitMods, useDefs } from "@/lib/sheets";
+import { clampNonDefenseAttribute, computeValue, conditionAdjustedValue, physicalAttributePoints, useCharacter, useCharacterTraitMods, useClasses, useDefs, useRaces, useVirtues } from "@/lib/sheets";
 import type { Json } from "@/integrations/supabase/types";
 
 type DamageKind = "physical" | "magical" | "hybrid" | "true";
@@ -66,10 +66,22 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
   const sourceTraits = useCharacterTraitMods(
     source?.race_id, source?.virtue_id, source?.class_id, source?.class_custom_modifiers,
   );
+  const racesQuery = useRaces();
+  const virtuesQuery = useVirtues();
+  const classesQuery = useClasses();
   const { data: sourceAbilities, isPending: sourceAbilitiesLoading, error: sourceAbilitiesError } = useCharacterAbilities(sourceId);
   const { data: sourceEffects, isPending: sourceEffectsLoading, error: sourceEffectsError } = useCharacterActiveEffects(sourceId);
-  const sourceStatsLoading = Boolean(sourceId) && (sourceSheetLoading || sourceAbilitiesLoading || sourceEffectsLoading);
-  const sourceStatsError = sourceSheetError ?? sourceAbilitiesError ?? sourceEffectsError;
+  // Never show a misleading base attribute while a trait's modifiers are still loading.
+  const sourceTraitsLoading = Boolean(source && (
+    (source.race_id && racesQuery.isPending) ||
+    (source.virtue_id && virtuesQuery.isPending) ||
+    (source.class_id && classesQuery.isPending)
+  ));
+  const sourceStatsLoading = Boolean(sourceId) && (sourceSheetLoading || sourceAbilitiesLoading || sourceEffectsLoading || sourceTraitsLoading);
+  const sourceStatsError = sourceSheetError ?? sourceAbilitiesError ?? sourceEffectsError ??
+    (source?.race_id ? racesQuery.error : null) ??
+    (source?.virtue_id ? virtuesQuery.error : null) ??
+    (source?.class_id ? classesQuery.error : null);
 
   function effectiveSourceStat(key: "strength" | "mag_dmg"): number | null {
     if (!sourceId || !source || !sourceSheet || sourceStatsLoading || sourceStatsError) return null;
