@@ -2,7 +2,9 @@ export type ContinuousTrigger = "target" | "caster" | "global";
 export type ContinuousAttribute = { key: string; mode: "fixed" | "percent"; step: number; cap: number };
 export type ContinuousStatusAction = { kind: "status"; polarity: "buff" | "debuff"; attributes: ContinuousAttribute[] };
 export type ContinuousDamageAction = { kind: "damage"; dice_count: number; dice_sides: number; flat: number; damage_kind: "true" | "physical" | "magical"; neutralizable: boolean };
-export type ContinuousAction = ContinuousStatusAction | ContinuousDamageAction;
+export type ContinuousDotAction = { kind: "dot"; template_id: string; damage_mode: "fixed" | "percent"; damage_amount: number; duration: number; repeat: boolean };
+export type ContinuousEffectAction = { kind: "effect"; effect_type: "stun" | "no_regen_hp" | "no_regen_mana" | "magic_prohibition" | "no_mana" | "invincible"; name: string; duration: number; repeat: boolean };
+export type ContinuousAction = ContinuousStatusAction | ContinuousDamageAction | ContinuousDotAction | ContinuousEffectAction;
 export type ContinuousRule = { name: string; trigger: ContinuousTrigger; linger_turns: number; actions: ContinuousAction[] };
 export type ContinuousInstance = {
   id: string; battle_id: string; character_ability_id: string;
@@ -35,6 +37,19 @@ export function parseContinuousRules(value: unknown): ContinuousRule[] {
         }) : [];
         return [{ kind: "status", polarity: action.polarity === "buff" ? "buff" : "debuff", attributes }];
       }
+      if (action.kind === "dot" && typeof action.template_id === "string") return [{
+        kind:"dot",template_id:action.template_id,
+        damage_mode:action.damage_mode==="percent"?"percent":"fixed",
+        damage_amount:n(action.damage_amount,5,1000000),
+        duration:Math.max(1,n(action.duration,2,1000)),
+        repeat:action.repeat===true,
+      }];
+      if (action.kind === "effect" && typeof action.effect_type === "string" &&
+        ["stun","no_regen_hp","no_regen_mana","magic_prohibition","no_mana","invincible"].includes(action.effect_type)) return [{
+          kind:"effect",effect_type:action.effect_type as ContinuousEffectAction["effect_type"],
+          name:typeof action.name==="string"?action.name.slice(0,120):"Efeito",duration:Math.max(1,n(action.duration,2,1000)),
+          repeat:action.repeat===true,
+      }];
       if (action.kind === "damage") return [{
         kind: "damage", dice_count: n(action.dice_count, 1, 20), dice_sides: Math.max(1, n(action.dice_sides, 50, 1000)),
         flat: n(action.flat, 0, 1000000),
