@@ -140,7 +140,7 @@ export function ContinuousTurnDialog({ items, title, busy, fighterNames, onCance
               <div className="min-w-0">
                 <p className="truncate font-display text-base font-semibold text-gold">{index+1}. {item.name}</p>
                 <p className="truncate text-xs text-muted-foreground">{fighterNames[item.caster_character_id]??"Usuário"} → {fighterNames[item.target_character_id]??"Alvo"} · {item.ticks} acúmulo(s)</p>
-                <p className="text-xs font-semibold ${resolution==="dispel"?"text-emerald-400":resolution==="interrupt"?"text-amber-400":"text-muted-foreground"}">
+                <p className={resolution==="dispel"?"text-xs font-semibold text-emerald-400":resolution==="interrupt"?"text-xs font-semibold text-amber-400":"text-xs font-semibold text-muted-foreground"}>
                   {resolution==="dispel"?"Dissipar completamente":resolution==="interrupt"?"Interromper com resíduos":resolution==="skip"?"Ignorar neste turno":(damage?"Dano "+(value?.neutralize?"neutralizado":value?.damage):"Aplicar acúmulo/efeitos")}
                 </p>
               </div>
