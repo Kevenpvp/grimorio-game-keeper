@@ -1039,7 +1039,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                   {detailTab === "status" && <div className="flex flex-wrap items-center justify-between gap-2 rounded border border-border p-2">
                     <span className="text-xs text-muted-foreground">Turnos individuais: {f.participant_turn_count ?? 0}</span>
                     {isMaster && <Button size="sm" variant="outline" disabled={!battle.active || advancingTurnKeys.has("__global__") || advancingTurnKeys.has(f.id)} onClick={() => void advanceCombatTurn(f.id)}><RotateCw className="mr-1 h-3.5 w-3.5" /> {advancingTurnKeys.has(f.id) ? "Avançando..." : "Avançar turno"}</Button>}
-                  </div>
+                  </div>}
                 </>
               )}
 
