@@ -76,9 +76,9 @@ function HabilidadesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="grimorio-section-header flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="flex items-center gap-2 text-2xl text-gold"><WandSparkles className="h-6 w-6" /> Habilidades</h1>
+          <h1 className="flex items-center gap-2 text-2xl font-semibold text-gold"><WandSparkles className="h-6 w-6" /> Habilidades</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">Crie habilidades ativáveis com cooldown e custo de Mana e configure efeitos passivos separados, que permanecem aplicados enquanto a habilidade estiver na ficha.</p>
         </div>
         <Button onClick={() => void create()}><Plus className="mr-1 h-4 w-4" /> Nova habilidade</Button>
