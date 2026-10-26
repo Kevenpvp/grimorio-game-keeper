@@ -468,7 +468,8 @@ export function CharacterAbilitiesPanel({
     effects: AbilityEffectDefinition[];
   } | null>(null);
   const [extraManaCosts, setExtraManaCosts] = useState<Record<string, string>>({});
-  const [expanded, setExpanded] = useState(true);
+  // Individual ability editors start minimized; expand only when explicitly requested.
+  const [expanded, setExpanded] = useState(false);
   const [attackDialogAbilityId, setAttackDialogAbilityId] = useState<string | null>(null);
   const [attackTargetIds, setAttackTargetIds] = useState<string[]>([]);
   const [attackHits, setAttackHits] = useState<Record<string, boolean>>({});
