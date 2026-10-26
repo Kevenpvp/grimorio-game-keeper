@@ -13,6 +13,7 @@ import { parseAbilityEffects, useAbilities, type AbilityEffectDefinition } from 
 import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
 import { TRAIT_STARTING_EFFECT_TYPES } from "@/lib/trait-starting-effect-types";
 import { TransformationGrantPicker } from "@/components/transformations/TransformationGrantPicker";
+import { SearchableGrantPicker } from "@/components/ui/searchable-grant-picker";
 import type { Json } from "@/integrations/supabase/types";
 
 export const Route = createFileRoute("/_authenticated/classes")({
@@ -288,25 +289,19 @@ function ClassEditor({ classTrait, defs, isNew, onSaved }: { classTrait: ClassTr
         ) : allAbilities.length === 0 ? (
           <p className="text-xs text-muted-foreground">Cadastre habilidades no catálogo para poder vinculá-las a esta classe.</p>
         ) : (
-          <div className="grid gap-2 sm:grid-cols-2">
-            {allAbilities.map((ability) => (
-              <label key={ability.id} className="flex cursor-pointer items-start gap-2 rounded-md border border-border px-3 py-2 text-sm">
-                <input
-                  type="checkbox"
-                  className="mt-1"
-                  checked={selectedAbilityIds.has(ability.id)}
-                  onChange={(event) => void toggleAbility(ability.id, event.target.checked)}
-                />
-                <span className="min-w-0">
-                  <span className="block font-medium">{ability.name}</span>
-                  <span className="block text-xs text-muted-foreground">
-                    {ability.can_activate ? "Ativável" : "Passiva / não ativável"}
-                    {ability.description ? ` · ${ability.description}` : ""}
-                  </span>
-                </span>
-              </label>
-            ))}
-          </div>
+          <SearchableGrantPicker
+            options={allAbilities.map((ability) => ({
+              id: ability.id,
+              name: ability.name,
+              description: (ability.can_activate ? "Ativável" : "Passiva / não ativável") + (ability.description ? " · " + ability.description : ""),
+            }))}
+            selectedIds={selectedAbilityIds}
+            selectedLabel="Habilidades concedidas"
+            emptyLabel="Nenhuma habilidade concedida por esta classe."
+            addLabel="Conceder habilidade"
+            searchPlaceholder="Buscar habilidade pelo nome ou descrição…"
+            onToggle={(id, checked) => void toggleAbility(id, checked)}
+          />
         )}
       </div>
       <TransformationGrantPicker scope="class" traitId={classTrait.id} />
