@@ -17,6 +17,8 @@ import { sedentoInvincibilityCooldown } from "@/lib/sedento-invincibility";
 import { useDefs, useMe, useRaces, useClasses, useVirtues } from "@/lib/sheets";
 import { parseAbilityEffects, parseAbilityAttackDamage, parseAbilityAttackEffectGroups, parseAbilityDotEffects, useAbilities, useCharacterAbilities, useCharacterActiveEffects, useDamageTypes, useDotTemplates, type Ability, type AbilityEffectDefinition, type CharacterAbility, type AbilityDotEffect, type AbilityAttackDamageConfig, type AbilityAttackEffectGroup } from "@/lib/abilities";
 import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
+import { ContinuousRulesEditor } from "@/components/abilities/ContinuousRulesEditor";
+import { parseContinuousRules, type ContinuousRule } from "@/lib/continuous-effects";
 import { parseAttributeStatusModifiers } from "@/lib/multi-attribute-effects";
 import { ActivationEffectValuesDialog, type ActivationEffectOverrides } from "@/components/abilities/ActivationEffectValuesDialog";
 import { customizableActivationEffects } from "@/lib/activation-effect-values";
@@ -1705,6 +1707,7 @@ export function CharacterAbilitiesManager({ characterId, personalOnly = false }:
       effects: ability.effects,
       passive_effects: ability.passive_effects,
       end_effects: ability.end_effects,
+      continuous_rules: (ability as Ability & { continuous_rules?: unknown }).continuous_rules ?? [],
       once_per_battle: Boolean((ability as Ability & { once_per_battle?: boolean }).once_per_battle),
     });
     if (error) { toast.error(error.message); return; }
@@ -1841,6 +1844,8 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
   const [manaCost, setManaCost] = useState(String(ability.mana_cost));
   const [attackManaCost, setAttackManaCost] = useState(ability.attack_mana_cost === null ? "" : String(ability.attack_mana_cost));
   const [effects, setEffects] = useState<AbilityEffectDefinition[]>(ability.effects);
+  const [continuousRules, setContinuousRules] = useState<ContinuousRule[]>(() =>
+    parseContinuousRules((ability as CharacterAbility & { continuous_rules?: unknown }).continuous_rules));
   const [passiveEffects, setPassiveEffects] = useState<AbilityEffectDefinition[]>(ability.passive_effects);
   const [endEffects, setEndEffects] = useState<AbilityEffectDefinition[]>(ability.end_effects);
   const [attackEnabled, setAttackEnabled] = useState(Boolean(ability.attack_enabled));
@@ -1866,6 +1871,7 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
     setManaCost(String(ability.mana_cost));
     setAttackManaCost(ability.attack_mana_cost === null ? "" : String(ability.attack_mana_cost));
     setEffects(parseAbilityEffects(ability.effects));
+    setContinuousRules(parseContinuousRules((ability as CharacterAbility & { continuous_rules?: unknown }).continuous_rules));
     setPassiveEffects(parseAbilityEffects(ability.passive_effects));
     setEndEffects(parseAbilityEffects(ability.end_effects));
     setAttackEnabled(Boolean(ability.attack_enabled));
@@ -1955,6 +1961,7 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
       effects: effects.map((effect) => ({ ...effect, duration: Math.max(1, effect.duration) })) as unknown as Json,
       passive_effects: passiveEffects.map((effect) => ({ ...effect, duration: 1 })) as unknown as Json,
       end_effects: endEffects.map((effect) => ({ ...effect, duration: Math.max(1, effect.duration) })) as unknown as Json,
+      continuous_rules: continuousRules as unknown as Json,
       ...(!ability.ability_id ? {
         attack_enabled: canActivate && !selfTargetOnly && !toggleMode && attackEnabled,
         attack_mana_cost: attackCost,
@@ -2096,6 +2103,7 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
           setDotEffects={setDotEffects}
         />
       )}
+      {canActivate && <ContinuousRulesEditor rules={continuousRules} onChange={setContinuousRules} defs={defs} disabled={busy}/>}
       {canActivate && <AbilityEffectsEditor
         allowActivationCustomization
         effects={effects}
