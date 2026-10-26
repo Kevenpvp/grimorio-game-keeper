@@ -29,6 +29,7 @@ export function AppHeader() {
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
   const links = navigation.filter((item) => !item.masterOnly || me?.isMaster);
+  const activeLink = (to: string) => pathname === to || (to === "/painel" && pathname.startsWith("/ficha/"));
 
   async function signOut() {
     setMobileOpen(false);
@@ -52,17 +53,17 @@ export function AppHeader() {
             </span>
           </Link>
 
-          <nav aria-label="Navegação principal" className="hidden min-w-0 items-center justify-center gap-0.5 xl:flex">
+          <nav aria-label="Navegação principal" className="hidden min-w-0 items-center justify-center gap-0.5 2xl:flex">
             {links.map(({ to, label, icon: Icon }) => (
-              <Link key={to} to={to} title={label} aria-current={pathname === to ? "page" : undefined}
-                className={cn("grimorio-nav-link", pathname === to && "is-active")}>
+              <Link key={to} to={to} title={label} aria-current={activeLink(to) ? "page" : undefined}
+                className={cn("grimorio-nav-link", activeLink(to) && "is-active")}>
                 <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
                 <span>{label}</span>
               </Link>
             ))}
           </nav>
 
-          <div className="hidden shrink-0 items-center gap-2 xl:flex">
+          <div className="hidden shrink-0 items-center gap-2 2xl:flex">
             {me && (
               <div className="grimorio-user-pill">
                 <span className="grimorio-user-avatar"><UserRound className="h-4 w-4" aria-hidden="true" /></span>
@@ -80,7 +81,7 @@ export function AppHeader() {
             </Button>
           </div>
 
-          <div className="flex shrink-0 items-center gap-2 xl:hidden">
+          <div className="flex shrink-0 items-center gap-2 2xl:hidden">
             {me && <span className="hidden max-w-32 truncate text-xs font-semibold text-gold sm:block">{me.isMaster ? "Mestre" : "Jogador"}</span>}
             <Button type="button" variant="outline" size="icon"
               className="h-11 w-11 border-gold/40"
@@ -94,15 +95,15 @@ export function AppHeader() {
 
         {mobileOpen && (
           <nav id="grimorio-mobile-navigation" aria-label="Navegação móvel"
-            className="grimorio-mobile-menu grid grid-cols-1 gap-0.5 sm:grid-cols-2 xl:hidden">
+            className="grimorio-mobile-menu grid grid-cols-1 gap-0.5 sm:grid-cols-2 2xl:hidden">
             {links.map(({ to, label, icon: Icon }) => (
               <Link key={to} to={to}
-                aria-current={pathname === to ? "page" : undefined}
-                className={cn("grimorio-mobile-link", pathname === to && "is-active")}
+                aria-current={activeLink(to) ? "page" : undefined}
+                className={cn("grimorio-mobile-link", activeLink(to) && "is-active")}
                 onClick={() => setMobileOpen(false)}>
                 <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
                 <span className="min-w-0 flex-1">{label}</span>
-                {pathname === to && <ChevronRight className="h-4 w-4" aria-hidden="true" />}
+                {activeLink(to) && <ChevronRight className="h-4 w-4" aria-hidden="true" />}
               </Link>
             ))}
             <div className="col-span-full mt-1 flex items-center justify-between gap-3 border-t border-gold/20 px-3 pt-3">
