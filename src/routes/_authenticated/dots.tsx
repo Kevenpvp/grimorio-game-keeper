@@ -23,8 +23,8 @@ function DamageOverTimeTemplatesPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="flex items-center gap-2 font-display text-3xl text-gold">
+      <div className="grimorio-section-header">
+        <h1 className="flex items-center gap-2 font-display text-3xl font-semibold text-gold">
           <Flame className="h-7 w-7" /> Dano por Turno (DoT)
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
