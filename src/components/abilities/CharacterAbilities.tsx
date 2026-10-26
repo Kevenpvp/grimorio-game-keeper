@@ -1564,7 +1564,7 @@ export function CharacterAbilitiesPanel({
             </div>
           )}
           </div>
-          <DialogFooter className="z-10 shrink-0 flex flex-col-reverse gap-2 border-t border-border bg-background/95 px-4 pb-[max(.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-6px_20px_rgba(0,0,0,.10)] sm:flex-row sm:items-center sm:px-6 sm:pb-4">
+          <DialogFooter className="z-10 shrink-0 flex flex-col gap-2 border-t border-border bg-background/95 px-4 pb-[max(.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-6px_20px_rgba(0,0,0,.10)] sm:flex-row sm:items-center sm:px-6 sm:pb-4">
             <div className="text-xs text-muted-foreground sm:mr-auto">
               {currentAttackTargets.length} alvo(s) · {confirmedAttackHits} acerto(s)
               {attackStarted ? ` · ${attackCount} aplicação(ões)` : " · Mana cobrada na primeira aplicação"}
