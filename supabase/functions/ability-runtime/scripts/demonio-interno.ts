@@ -56,12 +56,23 @@ const demonioInterno: AbilityScript = {
     const lastHit = updatedHitValues.length - 1;
     const actualReflection = Math.min(reflectedDamage, Math.max(0, 1_000_000 - updatedHitValues[lastHit]));
     if (actualReflection <= 0) return;
+    // Resolve HP and its cost BEFORE changing the damage. Otherwise a
+    // 0-HP character could deal free reflected damage while unable to pay.
+    // The resource maximum uses the same server calculation as the UI preview.
+    const casterHp = await api.consultarRecurso({ personagem: "caster", recurso: "hp" });
+    const hpCost = Math.ceil(Math.max(0, casterHp.maximo) * hpCostPercent / 100);
+    if (hpCost > 0 && casterHp.atual <= 0) {
+      api.registrarLog("Demônio Interno não refletiu: sem HP para pagar o custo", {
+        hpAtual: casterHp.atual,
+        hpMaximo: casterHp.maximo,
+        custoHp: hpCost,
+        superaquecimentoPreservado: storedHeat,
+      });
+      return;
+    }
+
     updatedHitValues[lastHit] += actualReflection;
     await api.modificarDanoFinal({ valoresPorGolpe: updatedHitValues });
-
-    // The configured HP penalty is a percentage of the Caster's maximum HP.
-    const casterHp = await api.consultarRecurso({ personagem: "caster", recurso: "hp" });
-    const hpCost = Math.ceil(casterHp.maximo * hpCostPercent / 100);
     if (hpCost > 0) {
       await api.alterarRecurso({
         personagem: "caster",
