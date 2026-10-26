@@ -1694,8 +1694,8 @@ export function CharacterAbilitiesPanel({
                 <section className="space-y-2 rounded-xl border border-gold/35 bg-gold/5 p-3">
                   <p className="text-sm font-semibold text-gold">Vínculos sustentados e limite de alvos</p>
                   <p className="text-xs text-muted-foreground">
-                    Se a habilidade atingiu o limite e está configurada para pedir escolha, solte uma vítima anterior antes do próximo acerto.
-                    Os debuffs antigos permanecem pelo tempo residual configurado.
+                    Ao acertar uma nova vítima com o limite cheio, o Grimório pergunta quem soltar antes de confirmar o ataque.
+                    A transferência ocorre junto com o golpe; se ele falhar, ninguém é solto. Também é possível liberar um alvo manualmente abaixo.
                   </p>
                   {attackContinuousRules.map((rule,index)=>rule.max_targets===null?null:(
                     <div key={index} className="space-y-2 rounded-lg border border-gold/15 p-2.5">
