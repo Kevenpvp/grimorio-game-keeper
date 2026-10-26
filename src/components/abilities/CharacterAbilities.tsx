@@ -27,7 +27,7 @@ import { TemporaryAttackCategoryEditor } from "@/components/abilities/TemporaryA
 import { TemporaryGuaranteedDotsEditor } from "@/components/abilities/TemporaryGuaranteedDotsEditor";
 import { findRegisteredDotTemplate, registerAbilityDotTemplates } from "@/lib/ability-dot-templates";
 import type { Json } from "@/integrations/supabase/types";
-import { parseCustomAbilityAttributes, type CustomAbilityAttribute } from "@/lib/custom-ability-scripts";
+import { CUSTOM_ABILITY_SCRIPTS, parseCustomAbilityAttributes, type CustomAbilityAttribute } from "@/lib/custom-ability-scripts";
 
 /** Visible on the character sheet and in combat; only uses persistent script
  * state and the character's individual turn, never the ability's toggle cooldown.
@@ -1834,6 +1834,7 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
   const { data: availableCatalogAbilities = [] } = useAbilities();
   const [name, setName] = useState(ability.name);
   const [description, setDescription] = useState(ability.description ?? "");
+  const [personalScript,setPersonalScript] = useState((ability as CharacterAbility & { custom_script_key?:string|null }).custom_script_key ?? "");
   const [canActivate, setCanActivate] = useState(ability.can_activate);
   const [toggleMode, setToggleMode] = useState(ability.toggle_mode);
   const [oncePerBattle, setOncePerBattle] = useState(Boolean((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle));
@@ -1861,6 +1862,7 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
   useEffect(() => {
     setName(ability.name);
     setDescription(ability.description ?? "");
+    setPersonalScript((ability as CharacterAbility & { custom_script_key?:string|null }).custom_script_key ?? "");
     setCanActivate(ability.can_activate);
     setToggleMode(ability.toggle_mode);
     setOncePerBattle(Boolean((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle));
@@ -1963,6 +1965,7 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
       end_effects: endEffects.map((effect) => ({ ...effect, duration: Math.max(1, effect.duration) })) as unknown as Json,
       continuous_rules: continuousRules as unknown as Json,
       ...(!ability.ability_id ? {
+        custom_script_key: personalScript || null,
         attack_enabled: canActivate && !selfTargetOnly && !toggleMode && attackEnabled,
         attack_mana_cost: attackCost,
         attack_damage: attackDamage,
@@ -2087,6 +2090,21 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
         </div>}
         <div className="space-y-1 sm:col-span-2"><Label>Descrição para este jogador</Label><Input value={description} onChange={(e) => setDescription(e.target.value)} /></div>
       </div>
+      {ability.ability_id === null && (
+        <section className="space-y-2 rounded-xl border border-gold/30 bg-gold/5 p-3">
+          <h3 className="text-sm font-semibold text-gold">Script personalizado da ficha</h3>
+          <p className="text-xs text-muted-foreground">
+            Selecione apenas scripts já registrados no servidor. O script é executado nos eventos da habilidade
+            e não altera o catálogo geral. A escolha é exclusiva deste personagem.
+          </p>
+          <select className="min-h-11 w-full rounded-lg border border-input bg-background px-3 text-sm"
+            value={personalScript} disabled={busy} aria-label="Script registrado para esta habilidade exclusiva"
+            onChange={e=>setPersonalScript(e.target.value)}>
+            <option value="">Sem script personalizado</option>
+            {CUSTOM_ABILITY_SCRIPTS.map(script=><option key={script.key} value={script.key}>{script.label}</option>)}
+          </select>
+        </section>
+      )}
       {ability.ability_id === null && (
         <SheetAbilityAttackEditor
           defs={defs}
