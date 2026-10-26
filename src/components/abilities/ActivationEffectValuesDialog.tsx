@@ -50,7 +50,7 @@ export function ActivationEffectValuesDialog({
           <DialogTitle className="text-gold">Modificar efeitos ao ativar</DialogTitle>
           <DialogDescription>
             {abilityName} · alvo: {targetName}. Escolha os valores desta utilização antes de ativar.
-            Os valores salvos na habilidade não serão alterados.
+            Os valores originais cadastrados não serão alterados.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
