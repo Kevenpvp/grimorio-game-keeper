@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronUp, Crosshair, Dices, Plus, Swords, Trash2, Copy, Footprints, RotateCw, Minus, Brain, Activity, Sparkles, Users, LayoutDashboard, ScrollText, Search, Settings2, Zap, ShieldAlert, ShieldCheck, Skull, Droplets, Hourglass, Crown } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { SearchableGrantPicker } from "@/components/ui/searchable-grant-picker";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { supabase } from "@/integrations/supabase/client";
@@ -1727,6 +1728,7 @@ function BattleAdmin({ battle, fighters, onUpdate }: {
 }) {
   const qc = useQueryClient();
   const [name, setName] = useState(battle.name);
+  const [participantsBusy, setParticipantsBusy] = useState(false);
   const { data: all } = useQuery({
     queryKey: ["characters-min"],
     queryFn: async () => {
@@ -1742,20 +1744,35 @@ function BattleAdmin({ battle, fighters, onUpdate }: {
   });
   const inIds = new Set(fighters.map((f) => f.id));
   const refresh = () => qc.invalidateQueries({ queryKey: ["battles"] });
-  async function add(id: string) {
-    const { error } = await supabase.from("battle_participants").insert({ battle_id: battle.id, character_id: id, sort_order: fighters.length });
-    if (error) toast.error(error.message);
-    refresh();
-  }
-  async function remove(id: string) {
-    const { error } = await supabase.from("battle_participants").delete().eq("battle_id", battle.id).eq("character_id", id);
-    if (error) toast.error(error.message);
-    if (battle.current_character_id === id || battle.target_character_id === id)
-      await supabase.from("battles").update({
-        current_character_id: battle.current_character_id === id ? null : battle.current_character_id,
-        target_character_id: battle.target_character_id === id ? null : battle.target_character_id,
-      }).eq("id", battle.id);
-    refresh();
+  async function toggleParticipant(id: string, checked: boolean) {
+    if (participantsBusy) return;
+    setParticipantsBusy(true);
+    try {
+      if (checked) {
+        const { error } = await supabase.from("battle_participants").insert({
+          battle_id: battle.id, character_id: id, sort_order: fighters.length,
+        });
+        if (error) throw error;
+        toast.success("Personagem adicionado à batalha.");
+      } else {
+        const { error } = await supabase.from("battle_participants")
+          .delete().eq("battle_id", battle.id).eq("character_id", id);
+        if (error) throw error;
+        if (battle.current_character_id === id || battle.target_character_id === id) {
+          const { error: resetError } = await supabase.from("battles").update({
+            current_character_id: battle.current_character_id === id ? null : battle.current_character_id,
+            target_character_id: battle.target_character_id === id ? null : battle.target_character_id,
+          }).eq("id", battle.id);
+          if (resetError) throw resetError;
+        }
+        toast.success("Personagem removido da batalha.");
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível alterar os participantes.");
+    } finally {
+      await refresh();
+      setParticipantsBusy(false);
+    }
   }
   async function del() {
     if (!confirm("Excluir esta batalha?")) return;
@@ -1772,15 +1789,27 @@ function BattleAdmin({ battle, fighters, onUpdate }: {
         </Button>
         <Button size="sm" variant="ghost" onClick={del}><Trash2 className="mr-1 h-4 w-4" /> Excluir</Button>
       </div>
-      <div>
-        <div className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">Fichas na batalha (clique para adicionar/remover)</div>
-        <div className="flex flex-wrap gap-2">
-          {(all ?? []).map((c) => (
-            <Button key={c.id} size="sm" variant={inIds.has(c.id) ? "default" : "outline"} onClick={() => (inIds.has(c.id) ? remove(c.id) : add(c.id))}>
-              {c.name}
-            </Button>
-          ))}
+      <div className="space-y-2">
+        <div>
+          <h3 className="text-sm font-semibold text-gold">Participantes da batalha ({fighters.length})</h3>
+          <p className="text-xs text-muted-foreground">
+            As fichas que já participam continuam visíveis. Pesquise pelo nome para incluir outras,
+            sem carregar todos os personagens na tela.
+          </p>
         </div>
+        <SearchableGrantPicker
+          options={(all ?? []).map((character) => ({ id: character.id, name: character.name }))}
+          selectedIds={inIds}
+          selectedLabel="Fichas selecionadas"
+          emptyLabel="Nenhuma ficha permanente foi adicionada."
+          addLabel="Adicionar ficha à batalha"
+          searchPlaceholder="Buscar personagem para adicionar…"
+          disabled={participantsBusy}
+          onToggle={(id, checked) => void toggleParticipant(id, checked)}
+        />
+        {fighters.length > inIds.size && <p className="text-xs text-muted-foreground">
+          As invocações que participam desta batalha aparecem nos cards de Combatentes.
+        </p>}
       </div>
     </div>
   );
