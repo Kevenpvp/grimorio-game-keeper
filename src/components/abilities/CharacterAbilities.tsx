@@ -735,12 +735,15 @@ export function CharacterAbilitiesPanel({
           results[target.id] = `Erro ao aplicar dano: ${message}`;
           continue;
         }
-        const damageResult = (runtimeResponse as { damage_result?: { total_damage?: number; hp_before?: number; hp_after?: number; final_damage_by_hit?: number[] } } | null)?.damage_result;
+        const damageResult = (runtimeResponse as { damage_result?: {
+          total_damage?: number; hp_before?: number; hp_after?: number; final_damage_by_hit?: number[];
+          critical_before_defense?: boolean; critical_raw_damage_by_hit?: number[];
+        } } | null)?.damage_result;
         if (!damageResult) {
           results[target.id] = "Dano enviado, mas sem resultado retornado.";
           continue;
         }
-        results[target.id] = `${attackCriticalHits[target.id] ? "⚔️ Crítico ×2 · " : ""}Dano base ${finalBaseDamage} → dano final ${Number(damageResult.total_damage ?? 0)}; HP ${Number(damageResult.hp_before ?? 0)} → ${Number(damageResult.hp_after ?? 0)}.${defenseIgnoreText(defenseIgnore) ? ` Ignorou: ${defenseIgnoreText(defenseIgnore)}.` : ""}`;
+        results[target.id] = `${attackCriticalHits[target.id] && damageResult.critical_before_defense ? "⚔️ Crítico ×2 antes da defesa · " : ""}Dano base ${finalBaseDamage}${attackCriticalHits[target.id] && damageResult.critical_raw_damage_by_hit?.length ? " → bruto crítico " + damageResult.critical_raw_damage_by_hit.join(", ") : ""} → dano final ${Number(damageResult.total_damage ?? 0)}; HP ${Number(damageResult.hp_before ?? 0)} → ${Number(damageResult.hp_after ?? 0)}.${defenseIgnoreText(defenseIgnore) ? ` Ignorou: ${defenseIgnoreText(defenseIgnore)}.` : ""}`;
       }
 
       // Report the real status effects and DoTs applied during this use, even
@@ -1389,8 +1392,8 @@ export function CharacterAbilitiesPanel({
                             <input type="checkbox" className="mt-0.5 h-5 w-5 shrink-0 accent-amber-500" checked={attackCriticalHits[target.id] === true} disabled={attackBusy}
                               onChange={(event) => setAttackCriticalHits((current) => ({ ...current, [target.id]: event.target.checked }))} />
                             <span className="min-w-0">
-                              <strong className="block text-amber-500">Dano Crítico — ×2 do dano final</strong>
-                              <span className="mt-1 block text-xs text-muted-foreground">Dobra o dano deste alvo após defesa, mitigação e modificadores. Vale só para este golpe; a próxima aplicação volta ao normal.</span>
+                              <strong className="block text-amber-500">Dano Crítico — ×2 do dano bruto</strong>
+                              <span className="mt-1 block text-xs text-muted-foreground">Dobra o dano deste alvo antes da defesa e mitigação. Exemplo: 40 × 2 − 78 Defesa = 2. Limite de 500000 por golpe bruto crítico; a próxima aplicação volta ao normal.</span>
                             </span>
                           </label>
                         )}
