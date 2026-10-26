@@ -1298,10 +1298,13 @@ function ActiveCombatEffectsPanel({ effects, defs, getSource }: {
   });
   return (
     <section className="space-y-3" aria-label="Visualização dos efeitos ativos">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h3 className="font-display text-lg text-gold">Efeitos ativos ({effects.length})</h3>
-          <p className="text-xs text-muted-foreground">Descrições, origem e duração de cada efeito deste personagem.</p>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gold/20 pb-3">
+        <div className="flex items-center gap-2.5">
+          <span className="rounded-lg border border-gold/30 bg-gold/10 p-2"><Sparkles className="h-5 w-5 text-gold" /></span>
+          <div>
+            <h3 className="font-display text-lg text-gold">Efeitos ativos <span className="text-muted-foreground">({effects.length})</span></h3>
+            <p className="text-xs text-muted-foreground">Descrição, origem e duração de cada efeito.</p>
+          </div>
         </div>
         <select aria-label="Filtrar efeitos ativos" className="min-h-10 rounded-md border border-input bg-background px-3 text-sm" value={filter}
           onChange={(event) => setFilter(event.target.value as typeof filter)}>
@@ -1318,34 +1321,48 @@ function ActiveCombatEffectsPanel({ effects, defs, getSource }: {
         const isDot = effect.effect_type === "damage_over_time";
         const positive = effect.polarity === "buff" && !isDot;
         const permanent = !!(effect.source_class_id || effect.source_race_id || effect.source_virtue_id || effect.is_sheet_permanent);
-        const durationText = permanent ? "Permanente" : effect.until_combat_end ? "Até o fim do combate"
-          : effect.duration + " turno(s) · " + (effect.duration_scope === "global" ? "global" : "individual");
+        const durationText = permanent ? "Permanente" : effect.until_combat_end ? "Até o fim do combate" : effect.duration + " turno(s)";
+        const EffectIcon = isDot ? Droplets : positive ? ShieldCheck : Skull;
+        const source = getSource(effect);
         return (
           <article key={effect.id} className={cn(
-            "min-w-0 space-y-3 rounded-lg border p-3 sm:p-4",
-            isDot ? "border-orange-500/35 bg-orange-500/5" : positive
-              ? "border-emerald-500/35 bg-emerald-500/5" : "border-red-500/35 bg-red-500/5",
+            "grimorio-effects-card relative grid min-w-0 gap-3 overflow-hidden p-3 transition-colors sm:grid-cols-[3rem_minmax(0,1fr)_minmax(7.75rem,auto)] sm:gap-4 sm:p-4",
+            isDot ? "!border-orange-500/55 bg-orange-950/20" : positive
+              ? "!border-emerald-500/55 bg-emerald-950/20" : "!border-red-500/55 bg-red-950/20",
           )}>
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div className="min-w-0 flex-1">
-                <h4 className="break-words font-semibold">{effect.name}</h4>
+            <div className={cn(
+              "flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border shadow-[inset_0_0_15px_rgba(255,255,255,.035)]",
+              isDot ? "border-orange-500/45 bg-orange-600/10 text-orange-400" : positive
+                ? "border-emerald-500/45 bg-emerald-600/10 text-emerald-400" : "border-red-500/45 bg-red-600/10 text-red-400",
+            )}><EffectIcon className="h-6 w-6" aria-hidden="true" /></div>
+            <div className="min-w-0 space-y-2">
+              <div>
+                <h4 className={cn("break-words text-sm font-bold sm:text-base", isDot ? "text-orange-300" : positive ? "text-emerald-300" : "text-red-300")}>{effect.name}</h4>
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
-                  <span className={cn("rounded px-2 py-0.5 text-[11px] font-semibold",
-                    isDot ? "bg-orange-500/15 text-orange-400" : positive ? "bg-emerald-500/15 text-emerald-400" : "bg-red-500/15 text-red-400")}>
-                    {isDot ? "DoT" : positive ? "Buff" : "Debuff"}
+                  <span className={cn("rounded-md border px-2 py-0.5 text-[11px] font-semibold",
+                    isDot ? "border-orange-500/30 bg-orange-500/15 text-orange-300" : positive
+                      ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-300" : "border-red-500/30 bg-red-500/15 text-red-300")}>
+                    {isDot ? "DoT" : positive ? "Positivo" : "Negativo"}
                   </span>
-                  <span className="rounded bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                  <span className="rounded-md border border-gold/15 bg-black/20 px-2 py-0.5 text-[11px] capitalize text-muted-foreground">
                     {effect.effect_type.replace(/_/g, " ")}
                   </span>
                 </div>
               </div>
-              <div className="rounded-md border border-border bg-background/50 px-2 py-1 text-xs text-muted-foreground">{durationText}</div>
+              <p className="whitespace-pre-wrap break-words text-xs leading-relaxed text-[#cbbfac] sm:text-sm">
+                {activeEffectDetails(effect, defs, damageTypes)}
+              </p>
             </div>
-            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
-              {activeEffectDetails(effect, defs, damageTypes)}
-            </p>
-            <div className="border-t border-border/70 pt-2 text-xs text-muted-foreground">
-              Origem: {getSource(effect)}
+            <div className="flex flex-row flex-wrap gap-x-4 gap-y-2 border-t border-gold/15 pt-2 text-xs text-muted-foreground sm:flex-col sm:justify-center sm:gap-3 sm:border-l sm:border-t-0 sm:pl-3 sm:pt-0">
+              <div>
+                <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Duração</p>
+                <p className="flex items-center gap-1.5 font-semibold text-foreground"><Hourglass className="h-3.5 w-3.5 shrink-0 text-gold" /> {durationText}</p>
+                {!permanent && !effect.until_combat_end && <span className="text-[10px] text-muted-foreground">{effect.duration_scope === "global" ? "Turno global" : "Turno individual"}</span>}
+              </div>
+              <div className="min-w-0">
+                <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Origem</p>
+                <p className="break-words font-medium text-[#e6cc9f]">{source}</p>
+              </div>
             </div>
           </article>
         );
