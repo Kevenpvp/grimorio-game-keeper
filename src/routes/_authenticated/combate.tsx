@@ -1807,9 +1807,11 @@ function BattleAdmin({ battle, fighters, onUpdate }: {
           disabled={participantsBusy}
           onToggle={(id, checked) => void toggleParticipant(id, checked)}
         />
-        {fighters.length > inIds.size && <p className="text-xs text-muted-foreground">
-          As invocações que participam desta batalha aparecem nos cards de Combatentes.
-        </p>}
+        {fighters.some((fighter) => !(all ?? []).some((character) => character.id === fighter.id)) && (
+          <p className="text-xs text-muted-foreground">
+            As invocações que participam desta batalha aparecem nos cards de Combatentes.
+          </p>
+        )}
       </div>
     </div>
   );
