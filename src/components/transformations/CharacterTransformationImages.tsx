@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
+import { SearchableGrantPicker } from "@/components/ui/searchable-grant-picker";
 import { effectSummary } from "@/components/abilities/CharacterAbilities";
 import { parseAbilityEffects, useAbilities, useDamageTypes, type AbilityEffectDefinition } from "@/lib/abilities";
 import { useDefs, useRaces, useClasses, useVirtues } from "@/lib/sheets";
@@ -23,6 +24,8 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
   const [newTransformationName, setNewTransformationName] = useState("");
   const [creatingTransformation, setCreatingTransformation] = useState(false);
   const [newTransformationTrait, setNewTransformationTrait] = useState<"none" | "race" | "virtue" | "class">("none");
+  const [catalogGrantTrait, setCatalogGrantTrait] = useState<"none" | "race" | "virtue" | "class">("none");
+  const [catalogGrantBusy, setCatalogGrantBusy] = useState(false);
 
   useEffect(() => {
     const channel = supabase
@@ -100,6 +103,43 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
     (availableIds.has(transformation.id) || transformation.owner_character_id === character.id)
     && !overriddenTransformationIds.has(transformation.id)
   );
+  const catalogTemplates = catalog.filter((transformation) =>
+    !transformation.owner_character_id && !transformation.source_transformation_id
+  );
+  const personalCatalogCopies = catalog.filter((transformation) =>
+    transformation.owner_character_id === character.id && !!transformation.source_transformation_id
+  );
+  const grantedCatalogIds = new Set(personalCatalogCopies.map((item) => item.source_transformation_id as string));
+
+  async function toggleCatalogGrant(templateId: string, checked: boolean) {
+    if (catalogGrantBusy) return;
+    if (!checked && !window.confirm("Retirar a transformação concedida desta ficha? O catálogo original não será alterado.")) return;
+    setCatalogGrantBusy(true);
+    try {
+      const { error } = checked
+        ? await db.rpc("grant_catalog_transformation_to_character", {
+            _character_id: character.id, _transformation_id: templateId, _link_kind: catalogGrantTrait,
+          })
+        : await db.rpc("revoke_catalog_transformation_from_character", {
+            _character_id: character.id, _source_transformation_id: templateId,
+          });
+      if (error) throw error;
+      toast.success(checked ? "Transformação do catálogo concedida à ficha" : "Transformação retirada da ficha");
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["transformations"] }),
+        qc.invalidateQueries({ queryKey: ["transformations", "character-transformation-images", character.id] }),
+        qc.invalidateQueries({ queryKey: ["character-transformations", character.id] }),
+        qc.invalidateQueries({ queryKey: ["battle-character-transformations"] }),
+        qc.invalidateQueries({ queryKey: ["character-abilities", character.id] }),
+        qc.invalidateQueries({ queryKey: ["transformation-abilities"] }),
+      ]);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível alterar a transformação.");
+    } finally {
+      setCatalogGrantBusy(false);
+    }
+  }
+
   async function createPersonalTransformation() {
     const name = newTransformationName.trim();
     if (!name) { toast.error("Informe o nome da transformação"); return; }
@@ -148,11 +188,62 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
       </div>
       <p className="text-sm text-muted-foreground">
         {isMaster
-          ? "Veja as transformações disponíveis nesta ficha, escolha uma imagem para cada uma e crie transformações exclusivas do personagem."
-          : "Aqui aparecem as transformações concedidas pela sua raça ou virtude, as transformações exclusivas da sua ficha e o estado de cada uma."}
+          ? "Conceda transformações existentes do catálogo, gerencie vínculos com características e personalize imagens ou transformações exclusivas."
+          : "Aqui aparecem as transformações da sua raça, virtude, classe ou ficha, com seus estados e imagens."}
       </p>
       {isMaster && (
-        <div className="space-y-2 rounded-md border border-gold/30 p-3">
+        <section className="space-y-3 rounded-xl border border-gold/35 bg-[#110d0b]/60 p-3 sm:p-4">
+          <div>
+            <h3 className="flex items-center gap-2 text-sm font-semibold text-gold"><Sparkles className="h-4 w-4" /> Conceder transformação já cadastrada</h3>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+              Selecione uma transformação do catálogo sem modificar a original. Ela ficará disponível apenas nesta ficha,
+              incluindo as habilidades que a transformação concede.
+            </p>
+          </div>
+          <label className="block space-y-1.5 text-xs font-semibold">
+            Vincular esta concessão a uma característica
+            <select value={catalogGrantTrait}
+              onChange={(event) => setCatalogGrantTrait(event.target.value as typeof catalogGrantTrait)}
+              disabled={catalogGrantBusy}
+              className="min-h-11 w-full rounded-lg border border-input bg-background px-3 text-sm">
+              <option value="none">Sem vínculo — permanece nesta ficha</option>
+              {character.race_id && <option value="race">Raça: {races.find((item) => item.id === character.race_id)?.name ?? "atual"}</option>}
+              {character.virtue_id && <option value="virtue">Virtude: {virtues.find((item) => item.id === character.virtue_id)?.name ?? "atual"}</option>}
+              {character.class_id && <option value="class">Classe: {classes.find((item) => item.id === character.class_id)?.name ?? "atual"}</option>}
+            </select>
+            <span className="block text-[11px] font-normal text-muted-foreground">
+              Se escolher Raça, Classe ou Virtude, esta concessão desaparece quando o personagem perder a característica.
+              Para mudar a origem de uma transformação já concedida, retire e adicione novamente.
+            </span>
+          </label>
+          {loadingCatalog ? <p className="text-xs text-muted-foreground">Carregando catálogo…</p> : (
+            <SearchableGrantPicker
+              options={catalogTemplates.map((item) => ({
+                id: item.id, name: item.name, description: item.description,
+              }))}
+              selectedIds={grantedCatalogIds}
+              selectedLabel="Transformações concedidas do catálogo"
+              emptyLabel="Nenhuma transformação do catálogo foi concedida diretamente."
+              addLabel="Pesquisar e conceder transformação"
+              searchPlaceholder="Buscar transformação já cadastrada…"
+              disabled={catalogGrantBusy}
+              onToggle={(id, checked) => void toggleCatalogGrant(id, checked)}
+              selectedExtra={(id) => {
+                const owned = personalCatalogCopies.find((item) => item.source_transformation_id === id);
+                const origin = owned?.linked_by_race_id ? "Raça" : owned?.linked_by_virtue_id ? "Virtude"
+                  : owned?.linked_by_class_id ? "Classe" : "Ficha";
+                return <span className="rounded border border-gold/25 bg-gold/10 px-2 py-1 text-[11px] text-gold">{origin}</span>;
+              }}
+            />
+          )}
+        </section>
+      )}
+      {isMaster && (
+        <details className="rounded-xl border border-border bg-[#100c0a]/50 p-3 sm:p-4">
+          <summary className="min-h-10 cursor-pointer text-sm font-semibold text-gold">
+            Criar transformação exclusiva
+          </summary>
+          <p className="mb-3 mt-2 text-xs text-muted-foreground">Crie uma transformação nova apenas para este personagem, separada do catálogo.</p>
           <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(200px,0.65fr)_auto]">
             <Input value={newTransformationName} onChange={(event) => setNewTransformationName(event.target.value)} placeholder="Nome da transformação exclusiva" />
             <select className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={newTransformationTrait} onChange={(event) => setNewTransformationTrait(event.target.value as typeof newTransformationTrait)}>
@@ -165,8 +256,8 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
               <Sparkles className="mr-1 h-4 w-4" /> {creatingTransformation ? "Criando..." : "Criar transformação"}
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">Se vincular a uma raça, virtude ou classe, a transformação será removida automaticamente quando o personagem deixar de ter essa característica.</p>
-        </div>
+          <p className="mt-2 text-xs text-muted-foreground">Se vincular a uma raça, virtude ou classe, a transformação será removida automaticamente quando o personagem deixar de ter essa característica.</p>
+        </details>
       )}
       {(statesError || raceLinksError || virtueLinksError || classLinksError) && (
         <p className="text-sm text-destructive">
@@ -203,11 +294,11 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
       ) : available.length === 0 ? (
         <p className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
           {isMaster
-            ? "Nenhuma transformação disponível nesta ficha. Vincule transformações à raça/virtude ou crie uma transformação exclusiva."
+            ? "Nenhuma transformação disponível. Conceda uma já cadastrada acima ou crie uma exclusiva."
             : "Você ainda não possui transformações vinculadas à sua raça, virtude ou ficha. Peça ao mestre para conceder uma."}
         </p>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid gap-3 lg:grid-cols-2">
           {available.map((transformation) => (
             <TransformationImageCard
               key={transformation.id}
