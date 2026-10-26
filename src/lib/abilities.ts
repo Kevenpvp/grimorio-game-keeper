@@ -18,6 +18,8 @@ export type AbilityEffectDefinition = {
   /** If true, the effect remains active until its battle ends, independent of turn advances. */
   until_combat_end?: boolean;
   remove_on_attack?: boolean;
+  /** When enabled, ask the GM for this effect's numeric values before Ativar. */
+  modify_on_activate?: boolean;
   /** Remove this temporary effect when its owner receives actual damage, including DoTs. */
   remove_on_hit?: boolean;
   dot_immunity_scope?: "all" | "physical" | "magical" | "specific";
@@ -358,6 +360,7 @@ export function parseAbilityEffects(value: unknown, nested = false): AbilityEffe
       magic_healing_reversal_custom_damage: Math.max(0, Math.min(1_000_000,
         Number.isFinite(Number(raw.magic_healing_reversal_custom_damage)) ? Number(raw.magic_healing_reversal_custom_damage) : 0)),
       remove_on_attack: raw.remove_on_attack === true,
+      modify_on_activate: raw.modify_on_activate === true,
       remove_on_hit: raw.remove_on_hit === true,
       dot_immunity_scope: raw.dot_immunity_scope === "physical" || raw.dot_immunity_scope === "magical" || raw.dot_immunity_scope === "specific" ? raw.dot_immunity_scope : "all",
       dot_immunity_template_ids: Array.isArray(raw.dot_immunity_template_ids)
