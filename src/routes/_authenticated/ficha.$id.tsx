@@ -352,7 +352,7 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
               <summary className="min-h-10 text-sm font-semibold text-gold">Distribuição de pontos</summary>
               <div className="mt-3 space-y-4 border-t border-gold/15 pt-3">
                 <PointsDistribution character={character} attrs={attrs} defs={defs} canRemove />
-                <PhysicalPointsDistribution character={character} attrs={attrs} defs={defs} />
+                <PhysicalPointsDistribution character={character} attrs={attrs} defs={defs} masterQuickEntry />
               </div>
             </details>
             <div className="space-y-3">
