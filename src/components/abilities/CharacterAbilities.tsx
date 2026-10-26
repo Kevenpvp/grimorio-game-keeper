@@ -19,6 +19,7 @@ import { parseAbilityEffects, parseAbilityAttackDamage, parseAbilityAttackEffect
 import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
 import { ContinuousRulesEditor } from "@/components/abilities/ContinuousRulesEditor";
 import { parseContinuousRules, type ContinuousRule, type ContinuousInstance } from "@/lib/continuous-effects";
+import { planContinuousTargetTransfer, validateTransferSelection, type TransferRequirement } from "@/lib/continuous-target-transfer";
 import { parseAttributeStatusModifiers } from "@/lib/multi-attribute-effects";
 import { ActivationEffectValuesDialog, type ActivationEffectOverrides } from "@/components/abilities/ActivationEffectValuesDialog";
 import { customizableActivationEffects } from "@/lib/activation-effect-values";
@@ -28,6 +29,21 @@ import { TemporaryGuaranteedDotsEditor } from "@/components/abilities/TemporaryG
 import { findRegisteredDotTemplate, registerAbilityDotTemplates } from "@/lib/ability-dot-templates";
 import type { Json } from "@/integrations/supabase/types";
 import { CUSTOM_ABILITY_SCRIPTS, parseCustomAbilityAttributes, type CustomAbilityAttribute } from "@/lib/custom-ability-scripts";
+
+/** Supabase PostgrestError is a plain object, not an Error instance. */
+function friendlyAbilityError(error: unknown): string {
+  if (typeof error === "string") return error;
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === "object") {
+    const value = error as { message?: unknown; details?: unknown; hint?: unknown; code?: unknown };
+    const parts = [value.message,value.details,value.hint].filter(
+      (part): part is string => typeof part === "string" && part.trim().length > 0,
+    );
+    if (parts.length) return [...new Set(parts)].join(" · ");
+    if (typeof value.code === "string") return "Erro ao processar ataque ("+value.code+").";
+  }
+  return "Não foi possível concluir o ataque. Confira os vínculos e tente novamente.";
+}
 
 /** Visible on the character sheet and in combat; only uses persistent script
  * state and the character's individual turn, never the ability's toggle cooldown.
@@ -527,6 +543,10 @@ export function CharacterAbilitiesPanel({
   const [attackExtraDamagePercent, setAttackExtraDamagePercent] = useState<Record<string, string>>({});
   const [attackTargetDefenseIgnore, setAttackTargetDefenseIgnore] = useState<Record<string, DefenseIgnore>>({});
   const [attackBusy, setAttackBusy] = useState(false);
+  const [pendingTargetTransfer, setPendingTargetTransfer] = useState<{
+    requirements: TransferRequirement[]; newTargets: string[];
+  } | null>(null);
+  const [transferSelectedIds, setTransferSelectedIds] = useState<string[]>([]);
   const [attackStarted, setAttackStarted] = useState(false);
   const [attackCount, setAttackCount] = useState(0);
   const [attackResults, setAttackResults] = useState<Record<string, string>>({});
@@ -633,7 +653,7 @@ export function CharacterAbilitiesPanel({
       .catch(() => toast.error("Não foi possível copiar o dado"));
   }
 
-  async function resolveAbilityAttack() {
+  async function resolveAbilityAttack(releaseIds?: string[]) {
     if (!attackAbility || !attackDefinition?.attack_enabled || !attackConfig || !battleId || attackBusy) return;
     if (attackTargetIds.length === 0) {
       toast.error("Selecione pelo menos um alvo para este ataque.");
@@ -651,6 +671,38 @@ export function CharacterAbilitiesPanel({
     }
 
     const hitTargets = currentAttackTargets.filter((target) => attackHits[target.id]);
+    // Resolve capped ongoing links as part of the same database transaction.
+    // Never release a previous victim in a separate request before the attack
+    // has succeeded; cooldown, mana and residuals all roll back together.
+    if (attackContinuousRules.some(rule => rule.max_targets !== null) && hitTargets.length > 0) {
+      const { data: freshLinks, error: freshError } = await db.from("continuous_effect_instances")
+        .select("id,battle_id,character_ability_id,caster_character_id,target_character_id,rule_index,rule,name,ticks,active")
+        .eq("battle_id", battleId).eq("character_ability_id", attackAbility.id).eq("active", true);
+      if (freshError) {
+        toast.error("Não foi possível consultar vínculos: " + friendlyAbilityError(freshError));
+        return;
+      }
+      const plan = planContinuousTargetTransfer(attackContinuousRules,
+        (freshLinks ?? []) as ContinuousInstance[],hitTargets.map(target => target.id));
+      if (plan.error) { toast.error(plan.error); return; }
+      if (plan.requirements.length) {
+        if (!releaseIds) {
+          setTransferSelectedIds([]);
+          setPendingTargetTransfer({
+            requirements:plan.requirements,newTargets:hitTargets.map(target => target.name),
+          });
+          return;
+        }
+        if (!validateTransferSelection(plan.requirements,releaseIds)) {
+          toast.error("Selecione exatamente quais vínculos antigos serão liberados antes do ataque.");
+          return;
+        }
+      } else if (releaseIds?.length) {
+        toast.error("A seleção de vítimas mudou. Confira os vínculos atuais e tente novamente.");
+        setPendingTargetTransfer(null);
+        return;
+      }
+    }
     const hasInvalidExtraDamage = hitTargets.some((target) =>
       !isValidAbilityTargetAdjustment(
         Number(attackExtraDamage[target.id] ?? 0),
@@ -714,7 +766,12 @@ export function CharacterAbilitiesPanel({
 
       const continuingAttack = attackStarted;
       const { data: spentMana, error: activationError } = await db.rpc(
-        continuingAttack ? "repeat_character_ability_attack" : "activate_character_ability_attack", {
+        releaseIds?.length ? "attack_with_continuous_transfer"
+          : continuingAttack ? "repeat_character_ability_attack" : "activate_character_ability_attack", {
+        ...(releaseIds?.length ? {
+          _release_continuous_ids: releaseIds,
+          _repeat: continuingAttack,
+        } : {}),
         _character_ability_id: attackAbility.id,
         _target_character_id: hitTargets[0]?.id ?? characterId,
         _battle_id: battleId,
@@ -729,6 +786,8 @@ export function CharacterAbilitiesPanel({
         _dot_attribute_values: dotAttributeValues,
       });
       if (activationError) throw activationError;
+      setPendingTargetTransfer(null);
+      setTransferSelectedIds([]);
       // A sequência continua mesmo que um alvo falhe depois desta ativação.
       // As próximas aplicações repetem dano/efeitos, não o custo nem a recarga.
       if (!continuingAttack) {
@@ -852,8 +911,7 @@ export function CharacterAbilitiesPanel({
         qc.invalidateQueries({ queryKey: ["battle-character-public-states"] }),
       ]);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      toast.error(message);
+      toast.error(friendlyAbilityError(error));
     } finally {
       setAttackBusy(false);
     }
@@ -1694,6 +1752,64 @@ export function CharacterAbilitiesPanel({
             <Button type="button" className="min-h-11 w-full sm:w-auto" onClick={() => void resolveAbilityAttack()} disabled={attackBusy || !attackAbility || !attackConfig || attackTargetIds.length === 0 || !battleId}>
               <Swords className="mr-1 h-4 w-4" />
               {attackBusy ? "Aplicando..." : "Causar o Ataque"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={pendingTargetTransfer !== null}
+        onOpenChange={(open) => { if (!open && !attackBusy) setPendingTargetTransfer(null); }}>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto border-gold/40 bg-background sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="font-display text-gold">Transferir vínculo contínuo</DialogTitle>
+            <DialogDescription>
+              A habilidade atingiu o limite de alvos. Escolha quem soltar; o ataque no novo alvo e
+              a liberação acontecerão juntos, sem perder os acúmulos residuais.
+            </DialogDescription>
+          </DialogHeader>
+          {pendingTargetTransfer && <div className="space-y-3">
+            <p className="rounded-lg border border-gold/25 bg-gold/5 p-3 text-xs">
+              Novo(s) alvo(s): <strong>{pendingTargetTransfer.newTargets.join(", ")}</strong>
+            </p>
+            {pendingTargetTransfer.requirements.map(group => (
+              <div key={group.ruleIndex} className="space-y-2 rounded-xl border border-gold/30 bg-[#150f0d] p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="font-semibold text-gold">{group.name}</p>
+                  <span className="text-xs text-muted-foreground">
+                    Liberar {group.needed} · {group.available.filter(item => transferSelectedIds.includes(item.id)).length} selecionado(s)
+                  </span>
+                </div>
+                {group.available.map(item => {
+                  const checked = transferSelectedIds.includes(item.id);
+                  const selectedForGroup = group.available.filter(link=>transferSelectedIds.includes(link.id)).length;
+                  return <label key={item.id}
+                    className={`flex min-h-12 cursor-pointer items-center gap-3 rounded-lg border p-3 text-sm ${checked?"border-amber-500/60 bg-amber-500/10":"border-border bg-background/60"}`}>
+                    <input type="checkbox" className="h-5 w-5 accent-amber-500" checked={checked}
+                      disabled={attackBusy || (!checked && selectedForGroup >= group.needed)}
+                      onChange={e=>setTransferSelectedIds(current=>e.target.checked
+                        ? [...current,item.id] : current.filter(id=>id!==item.id))}/>
+                    <span className="min-w-0 flex-1">
+                      <strong className="block truncate">
+                        {targets.find(target=>target.id===item.target_character_id)?.name ?? "Alvo anterior"}
+                      </strong>
+                      <span className="block text-xs text-muted-foreground">
+                        {item.ticks} acúmulo(s) · após soltar, penalidade por {item.rule.linger_turns} turno(s)
+                      </span>
+                    </span>
+                  </label>;
+                })}
+              </div>
+            ))}
+          </div>}
+          <DialogFooter className="flex-col gap-2 sm:flex-row">
+            <Button type="button" variant="outline" className="min-h-11 w-full sm:w-auto"
+              disabled={attackBusy} onClick={()=>setPendingTargetTransfer(null)}>
+              Cancelar
+            </Button>
+            <Button type="button" className="min-h-11 w-full sm:w-auto"
+              disabled={attackBusy || !pendingTargetTransfer ||
+                !validateTransferSelection(pendingTargetTransfer.requirements,transferSelectedIds)}
+              onClick={()=>void resolveAbilityAttack(transferSelectedIds)}>
+              {attackBusy?"Transferindo...":"Soltar e aplicar ataque"}
             </Button>
           </DialogFooter>
         </DialogContent>
