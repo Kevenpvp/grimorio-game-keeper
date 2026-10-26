@@ -6,6 +6,7 @@ import { ChevronDown, ChevronUp, Crosshair, Dices, Plus, Swords, Trash2, Copy, F
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { SearchableGrantPicker } from "@/components/ui/searchable-grant-picker";
+import { parseAttributeStatusModifiers, type AttributeStatusModifier } from "@/lib/multi-attribute-effects";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { supabase } from "@/integrations/supabase/client";
@@ -735,7 +736,21 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
   }
 
   async function addEffect(characterId: string, effect: Omit<BattleEffect, "id" | "battle_id" | "character_id">) {
-    const { error } = await supabase.from("battle_effects").insert({ ...effect, battle_id: battle.id, character_id: characterId });
+    const raw = effect.effect_data && typeof effect.effect_data === "object" && !Array.isArray(effect.effect_data)
+      ? effect.effect_data as Record<string, unknown> : {};
+    const modifiers = effect.effect_type === "status" ? parseAttributeStatusModifiers(raw.attribute_modifiers) : [];
+    const clean = { ...raw }; delete clean.attribute_modifiers;
+    const rows = modifiers.length ? modifiers.map((modifier) => ({
+      ...effect,
+      name: effect.name + " · " + (defs.find((def) => def.key === modifier.attribute_key)?.label ?? modifier.attribute_key),
+      attribute_key: modifier.attribute_key,
+      value_mode: modifier.value_mode,
+      amount: modifier.amount,
+      effect_data: clean,
+      battle_id: battle.id,
+      character_id: characterId,
+    })) : [{ ...effect, battle_id: battle.id, character_id: characterId }];
+    const { error } = await supabase.from("battle_effects").insert(rows);
     if (error) { toast.error(error.message); return; }
     toast.success("Efeito aplicado: " + effect.name);
     noteActivity("effect", "Efeito " + effect.name + " aplicado a " + (fighters.find((fighter) => fighter.id === characterId)?.name ?? "personagem") + ".");
@@ -1387,6 +1402,7 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
   const [effectName, setEffectName] = useState("");
   const [effectType, setEffectType] = useState<BattleEffect["effect_type"]>("status");
   const [effectAttr, setEffectAttr] = useState("hp");
+  const [statusAttributes, setStatusAttributes] = useState<AttributeStatusModifier[]>([{ attribute_key: "hp", value_mode: "fixed", amount: 10 }]);
   const [effectPolarity, setEffectPolarity] = useState<"buff" | "debuff">("buff");
   const [effectMode, setEffectMode] = useState<"percent" | "fixed">("fixed");
   const [effectDamageScope, setEffectDamageScope] = useState<"any" | "physical" | "magical">("any");
@@ -1596,7 +1612,46 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
           <select className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={effectType} onChange={e => { const type = e.target.value as BattleEffect["effect_type"]; setEffectType(type); if(type === "regeneration") setEffectAttr("hp"); if(type === "magic_prohibition" || type === "no_mana" || type === "healing_blocked") setEffectPolarity("debuff"); if(["invincible","damage_reduction","mental_control_immunity","mental_control_chance","mental_control_resistance","dot_immunity","dot_resistance","invisibility"].includes(type)) setEffectPolarity("buff"); if(type === "mental_control_chance" || type === "mental_control_resistance") { setEffectMode("percent"); setEffectAmount("50"); } if(type === "dot_resistance") { setEffectMode("percent"); setEffectAmount("25"); setDotResistanceScope("all"); setDotResistanceTemplateIds([]); setDotResistanceMode("damage"); setDotResistanceValueMode("percent"); } if(type === "invincible" || type === "damage_reduction") { setEffectPolarity("buff"); setReductionScope("physical"); setReductionTypeIds(damageTypes[0] ? [damageTypes[0].id] : []); setReductionMagicLevels(["baixa"]); } }}>
             <option value="status">Buff/debuff de status</option><option value="regeneration">Buff/debuff de regeneração</option><option value="no_regen_hp">Não regenera HP</option><option value="no_regen_mana">Não regenera Mana</option><option value="no_mana">Sem Mana (debuff)</option><option value="damage_dealt">Dano Causado</option><option value="damage_reduction">Mitigação de Dano</option><option value="magic_prohibition">Proibição de magia (debuff)</option><option value="invincible">Invencível — não recebe dano</option><option value="healing_blocked">Bloqueio de Cura (debuff)</option><option value="mental_control_immunity">Imune a Controle Mental</option><option value="mental_control_chance">Potência de Controle Mental</option><option value="mental_control_resistance">Resistência a Controle Mental</option><option value="dot_immunity">Imunidade a DoTs</option><option value="dot_resistance">Resistência a DoTs</option><option value="invisibility">Invisibilidade (visual)</option><option value="stun">Stun (visual)</option>
           </select>
-          {(effectType === "status" || effectType === "regeneration") && <select className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={effectAttr} onChange={e => setEffectAttr(e.target.value)}>{(effectType === "regeneration" ? [{key:"hp",label:"HP"},{key:"mana",label:"Mana"}] : defs.map(d => ({key:d.key,label:d.key === "hp" ? "HP máximo" : d.key === "mana" ? "Mana máxima" : d.label}))).map(d => <option key={d.key} value={d.key}>{d.label}</option>)}</select>}
+          {effectType === "regeneration" && <select className="min-h-11 rounded-md border border-input bg-background px-2 text-sm" value={effectAttr} onChange={e => setEffectAttr(e.target.value)}><option value="hp">HP</option><option value="mana">Mana</option></select>}
+          {effectType === "status" && <div className="col-span-2 space-y-2 rounded-lg border border-gold/30 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-sm font-semibold text-gold">Atributos deste Buff/Debuff ({statusAttributes.length})</span>
+              <select aria-label="Buff ou debuff de atributos" className="min-h-11 rounded-md border border-input bg-background px-2 text-xs" value={effectPolarity} onChange={e => setEffectPolarity(e.target.value as "buff" | "debuff")}>
+                <option value="buff">Buff (+)</option><option value="debuff">Debuff (−)</option>
+              </select>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {statusAttributes.map((item) => (
+                <div key={item.attribute_key} className="min-w-0 space-y-2 rounded-md border border-border p-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="min-w-0 break-words text-xs font-semibold">{defs.find(d => d.key === item.attribute_key)?.label ?? item.attribute_key}</span>
+                    <Button size="sm" variant="ghost" className="min-h-9 text-red-300" disabled={statusAttributes.length <= 1}
+                      aria-label={"Remover " + item.attribute_key}
+                      onClick={() => setStatusAttributes(items => items.filter(v => v.attribute_key !== item.attribute_key))}>
+                      <Minus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <select className="min-h-11 min-w-0 rounded-md border border-input bg-background px-2 text-xs" aria-label={"Modo de " + item.attribute_key}
+                      value={item.value_mode} onChange={e => setStatusAttributes(items => items.map(v => v.attribute_key === item.attribute_key ? { ...v, value_mode: e.target.value as "fixed" | "percent" } : v))}>
+                      <option value="fixed">Fixo</option><option value="percent">%</option>
+                    </select>
+                    <Input type="number" min={0} max={1000000} step="any" inputMode="decimal" aria-label={"Valor de " + item.attribute_key}
+                      value={item.amount} onChange={e => setStatusAttributes(items => items.map(v => v.attribute_key === item.attribute_key ? { ...v, amount: Math.max(0, Math.min(1000000, Number(e.target.value) || 0)) } : v))}/>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <select value="" aria-label="Adicionar atributo ao efeito" className="min-h-11 w-full rounded-md border border-input bg-background px-2 text-sm"
+              onChange={e => { if (e.target.value) setStatusAttributes(items => [...items, { attribute_key: e.target.value, value_mode: "fixed", amount: 10 }]); }}>
+              <option value="">+ Adicionar atributo…</option>
+              {defs.filter(d => !statusAttributes.some(v => v.attribute_key === d.key)).map(d => <option key={d.key} value={d.key}>{d.label}</option>)}
+            </select>
+            <Button size="sm" variant="outline" className="min-h-10" disabled={defs.every(d => statusAttributes.some(v => v.attribute_key === d.key))}
+              onClick={() => setStatusAttributes(items => [...items, ...defs.filter(d => !items.some(v => v.attribute_key === d.key)).map(d => ({ attribute_key: d.key, amount: 10, value_mode: "fixed" as const }))])}>
+              <Plus className="mr-1 h-4 w-4"/> Todos os atributos
+            </Button>
+          </div>
           {effectType === "damage_dealt" && <label className="col-span-2 space-y-1 text-xs font-medium"><span>Tipo de dano afetado</span><select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={effectDamageScope} onChange={e => setEffectDamageScope(e.target.value as "any" | "physical" | "magical")}><option value="physical">Físico</option><option value="magical">Mágico</option><option value="any">Qualquer dano</option></select></label>}
           {effectType === "damage_reduction" && <>
             <label className="col-span-2 space-y-1 text-xs font-medium"><span>Categoria a mitigar</span><select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={reductionScope} onChange={e => setReductionScope(e.target.value as "physical" | "magical")}><option value="physical">Físico</option><option value="magical">Mágico</option></select></label>
@@ -1637,8 +1692,8 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
             </>}
             <p className="col-span-2 text-xs text-muted-foreground">Aplica-se depois da defesa correspondente. A redução fixa vem primeiro e a porcentagem depois.</p>
           </>}
-          {(effectType === "status" || effectType === "regeneration" || effectType === "damage_dealt" || effectType === "damage_reduction" || effectType === "mental_control_chance" || effectType === "mental_control_resistance") && <>{!["damage_reduction","mental_control_chance","mental_control_resistance"].includes(effectType) && <select className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={effectPolarity} onChange={e => setEffectPolarity(e.target.value as "buff" | "debuff")}><option value="buff">Buff</option><option value="debuff">Debuff</option></select>}<select className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={effectMode} onChange={e => setEffectMode(e.target.value as "percent" | "fixed")}><option value="percent">Porcentagem</option><option value="fixed">Pontos fixos</option></select></>}
-          {(effectType === "status" || effectType === "regeneration" || effectType === "damage_dealt" || effectType === "damage_reduction" || effectType === "mental_control_chance" || effectType === "mental_control_resistance") && <label className="col-span-2 space-y-1 text-xs font-medium"><span>Valor do efeito ({effectMode === "percent" ? "%" : effectType === "damage_dealt" ? "dano fixo" : effectType === "damage_reduction" ? "dano reduzido fixo" : "pontos fixos"})</span><Input aria-label="Valor do efeito em porcentagem ou pontos fixos" type="number" min="0" value={effectAmount} onChange={e => setEffectAmount(e.target.value)} /></label>}
+          {(effectType === "regeneration" || effectType === "damage_dealt" || effectType === "damage_reduction" || effectType === "mental_control_chance" || effectType === "mental_control_resistance") && <>{!["damage_reduction","mental_control_chance","mental_control_resistance"].includes(effectType) && <select className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={effectPolarity} onChange={e => setEffectPolarity(e.target.value as "buff" | "debuff")}><option value="buff">Buff</option><option value="debuff">Debuff</option></select>}<select className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={effectMode} onChange={e => setEffectMode(e.target.value as "percent" | "fixed")}><option value="percent">Porcentagem</option><option value="fixed">Pontos fixos</option></select></>}
+          {(effectType === "regeneration" || effectType === "damage_dealt" || effectType === "damage_reduction" || effectType === "mental_control_chance" || effectType === "mental_control_resistance") && <label className="col-span-2 space-y-1 text-xs font-medium"><span>Valor do efeito ({effectMode === "percent" ? "%" : effectType === "damage_dealt" ? "dano fixo" : effectType === "damage_reduction" ? "dano reduzido fixo" : "pontos fixos"})</span><Input aria-label="Valor do efeito em porcentagem ou pontos fixos" type="number" min="0" value={effectAmount} onChange={e => setEffectAmount(e.target.value)} /></label>}
           <label className="col-span-2 space-y-1 text-xs font-medium"><span>Duração do efeito</span><select aria-label="Duração do efeito" className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={effectUntilCombatEnd ? "until_combat_end" : "turns"} onChange={e => setEffectUntilCombatEnd(e.target.value === "until_combat_end")}><option value="turns">Por turnos</option><option value="until_combat_end">Até o fim do combate</option></select></label>
           {effectType === "dot_resistance" && <fieldset className="col-span-2 space-y-2 rounded-md border border-border p-3">
              <legend className="text-xs font-semibold">Resistência a DoTs</legend>
@@ -1658,7 +1713,7 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
           const duration = effectUntilCombatEnd ? 1 : Math.floor(Number(effectDuration));
           const amount = Number(effectAmount);
           const needsAttribute = effectType === "status" || effectType === "regeneration";
-          const needsAmount = needsAttribute || effectType === "damage_dealt" || effectType === "damage_reduction" || effectType === "mental_control_chance" || effectType === "mental_control_resistance" || effectType === "dot_resistance";
+          const needsAmount = effectType !== "status" && (needsAttribute || effectType === "damage_dealt" || effectType === "damage_reduction" || effectType === "mental_control_chance" || effectType === "mental_control_resistance" || effectType === "dot_resistance");
           if (!effectName.trim() || (!effectUntilCombatEnd && (duration < 1 || !Number.isFinite(duration))) || (needsAmount && (!Number.isFinite(amount) || amount < 0))) {
             toast.error("Preencha o nome, uma duração e um valor válidos.");
             return;
@@ -1678,7 +1733,7 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
           onAddEffect({
             name: effectName.trim(),
             effect_type: effectType,
-            attribute_key: needsAttribute ? effectAttr : null,
+            attribute_key: effectType === "status" ? statusAttributes[0]?.attribute_key ?? effectAttr : needsAttribute ? effectAttr : null,
             damage_scope: effectType === "damage_dealt" ? effectDamageScope : "any",
             damage_reduction_scope: effectType === "damage_reduction" ? reductionScope : "physical",
             damage_reduction_type_id: null,
@@ -1686,18 +1741,20 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
             damage_reduction_type_ids: effectType === "damage_reduction" && reductionScope === "magical" ? reductionTypeIds : null,
             damage_reduction_magic_levels: effectType === "damage_reduction" && reductionScope === "magical" ? reductionMagicLevels : null,
             polarity: ["magic_prohibition","no_mana","healing_blocked"].includes(effectType) ? "debuff" : ["damage_reduction","invincible","mental_control_immunity","mental_control_chance","mental_control_resistance","dot_immunity","dot_resistance","invisibility"].includes(effectType) ? "buff" : effectPolarity,
-            value_mode: effectType === "magic_prohibition" || effectType === "no_mana" ? "fixed" : effectMode,
-            amount: needsAmount ? amount : 0,
+            value_mode: effectType === "status" ? statusAttributes[0]?.value_mode ?? "fixed" : effectType === "magic_prohibition" || effectType === "no_mana" ? "fixed" : effectMode,
+            amount: effectType === "status" ? statusAttributes[0]?.amount ?? 0 : needsAmount ? amount : 0,
             duration,
             until_combat_end: effectUntilCombatEnd,
             duration_scope: "global",
             effect_data: {
               remove_on_attack: effectRemoveOnAttack,
+              ...(effectType === "status" ? { attribute_modifiers: statusAttributes } : {}),
               ...(effectType === "dot_immunity" ? { dot_immunity_scope: dotImmunityScope, dot_immunity_template_ids: dotImmunityTemplateIds } : {}),
               ...(effectType === "dot_resistance" ? { dot_resistance_scope: dotResistanceScope, dot_resistance_template_ids: dotResistanceTemplateIds, dot_resistance_mode: dotResistanceMode, dot_resistance_value_mode: dotResistanceValueMode, dot_resistance_amount: amount } : {}),
             } as Json,
           });
           setEffectName("");
+          setStatusAttributes([{ attribute_key: "hp", value_mode: "fixed", amount: 10 }]);
           setEffectUntilCombatEnd(false);
           setEffectRemoveOnAttack(false);
           setDotImmunityScope("all");
