@@ -535,7 +535,11 @@ function TransformationImageCard({
           {state?.active && <p className="mt-1 text-xs font-semibold text-emerald-500">Transformação ativa · {state.cooldown_remaining} turno(s)</p>}
           {transformation.description && <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">{transformation.description}</p>}
         </div>
-        <div className="w-full space-y-3 border-t border-border pt-3">
+        <details className="group w-full min-w-0 rounded-lg border border-gold/20 bg-[#110d0b]/40 p-2.5 sm:p-3">
+          <summary className="flex min-h-10 cursor-pointer items-center text-xs font-semibold uppercase tracking-wide text-gold">
+            Ver bônus, efeitos e habilidades concedidas
+          </summary>
+          <div className="space-y-3 border-t border-border/60 pt-3">
           <div className="space-y-1.5">
             <h4 className="text-xs font-semibold uppercase tracking-wide text-gold">Modificadores de atributos</h4>
             {(() => {
@@ -560,7 +564,7 @@ function TransformationImageCard({
             <h4 className="text-xs font-semibold uppercase tracking-wide text-gold">Efeitos ao ativar</h4>
             {effects.length ? effects.map((effect, index) => (
               <p key={index} className="text-xs text-muted-foreground">
-                {effectSummary(effect, defs, damageTypes, races)} · Destino: {effect.target_scope === "caster" ? "Caster" : effect.target_scope === "both" ? "Ambos" : "Alvo"}
+                {effectSummary(effect, defs, damageTypes, races)} · No próprio personagem
                 {effect.effect_type === "healing" && effect.healing_timing !== "per_turn" ? "" : ` · ${effect.until_combat_end ? "até o fim do combate" : `${effect.duration} turno(s)`}`}
               </p>
             )) : <p className="text-xs text-muted-foreground">Nenhum efeito de ativação.</p>}
@@ -569,7 +573,7 @@ function TransformationImageCard({
             <h4 className="text-xs font-semibold uppercase tracking-wide text-gold">Efeitos ao terminar</h4>
             {endEffects.length ? endEffects.map((effect, index) => (
               <p key={index} className="text-xs text-muted-foreground">
-                {effectSummary(effect, defs, damageTypes, races)} · Destino: {effect.target_scope === "caster" ? "Caster" : effect.target_scope === "both" ? "Ambos" : "Alvo"}
+                {effectSummary(effect, defs, damageTypes, races)} · No próprio personagem
                 {effect.effect_type === "healing" && effect.healing_timing !== "per_turn" ? "" : ` · ${effect.until_combat_end ? "até o fim do combate" : `${effect.duration} turno(s)`}`}
               </p>
             )) : <p className="text-xs text-muted-foreground">Nenhum efeito de encerramento.</p>}
@@ -584,7 +588,8 @@ function TransformationImageCard({
               </p>;
             }) : <p className="text-xs text-muted-foreground">Nenhuma habilidade concedida.</p>}
           </div>
-        </div>
+          </div>
+        </details>
         <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={(event) => {
           const file = event.target.files?.[0];
           if (file) void upload(file);
@@ -644,21 +649,32 @@ function TransformationImageCard({
           <div className="space-y-2 rounded-md border border-border p-3">
             <Label>Habilidades concedidas por esta transformação</Label>
             <p className="text-xs text-muted-foreground">As habilidades marcadas como condicionais só aparecem enquanto a transformação estiver ativa no combate.</p>
-            {abilityCatalog.map((ability) => {
-              const grant = abilityGrants.find((item) => item.ability_id === ability.id);
-              return <div key={ability.id} className="flex flex-wrap items-center justify-between gap-2">
-                <label className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" checked={!!grant} onChange={(event) => setAbilityGrants((current) => event.target.checked
-                    ? [...current.filter((item) => item.ability_id !== ability.id), { ability_id: ability.id, only_while_transformed: false }]
-                    : current.filter((item) => item.ability_id !== ability.id))} />
-                  {ability.name}
-                </label>
-                {grant && <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <input type="checkbox" checked={grant.only_while_transformed} onChange={(event) => setAbilityGrants((current) => current.map((item) => item.ability_id === ability.id ? { ...item, only_while_transformed: event.target.checked } : item))} />
-                  Só enquanto transformado
-                </label>}
-              </div>;
-            })}
+            <SearchableGrantPicker
+              options={abilityCatalog.map((ability) => ({
+                id: ability.id, name: ability.name, description: ability.description,
+              }))}
+              selectedIds={new Set(abilityGrants.map((grant) => grant.ability_id))}
+              selectedLabel="Habilidades concedidas"
+              addLabel="Adicionar habilidade à transformação"
+              searchPlaceholder="Buscar habilidade já cadastrada…"
+              onToggle={(id, checked) => setAbilityGrants((current) => checked
+                ? current.some((item) => item.ability_id === id)
+                  ? current
+                  : [...current, { ability_id: id, only_while_transformed: false }]
+                : current.filter((item) => item.ability_id !== id))}
+              selectedExtra={(id) => {
+                const grant = abilityGrants.find((item) => item.ability_id === id);
+                return grant && (
+                  <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <input type="checkbox" checked={grant.only_while_transformed}
+                      onChange={(event) => setAbilityGrants((current) => current.map((item) =>
+                        item.ability_id === id ? { ...item, only_while_transformed: event.target.checked } : item))}
+                    />
+                    Só enquanto transformado
+                  </label>
+                );
+              }}
+            />
             {abilityCatalog.length === 0 && <p className="text-xs text-muted-foreground">Nenhuma habilidade do catálogo disponível.</p>}
           </div>
           <Button type="button" onClick={() => void saveTransformation()}>{isPersonal ? "Salvar transformação" : "Personalizar transformação nesta ficha"}</Button>
