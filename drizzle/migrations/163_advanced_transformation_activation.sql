@@ -89,8 +89,9 @@ BEGIN
                 AND NOT EXISTS (SELECT 1 FROM public.attribute_definitions ad WHERE ad.key=_field.key))
             THEN RAISE EXCEPTION 'Atributo avançado inválido: %',_field.key; END IF;
             _n := (_field.value #>> '{}')::numeric;
-            IF _n <> trunc(_n) OR _n < CASE WHEN _field.key IN ('body','sanity') THEN -100 ELSE -1000000 END
-              OR _n > CASE WHEN _field.key IN ('body','sanity') THEN 100 ELSE 1000000 END
+            IF _n <> trunc(_n)
+              OR _n < (CASE WHEN _field.key IN ('body','sanity') THEN -100 ELSE -1000000 END)
+              OR _n > (CASE WHEN _field.key IN ('body','sanity') THEN 100 ELSE 1000000 END)
             THEN RAISE EXCEPTION 'Valor fora do limite no atributo %',_field.key; END IF;
           END LOOP;
           _transformation.modifiers := _advanced_entry.value;
