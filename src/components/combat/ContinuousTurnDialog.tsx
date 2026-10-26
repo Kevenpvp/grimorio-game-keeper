@@ -26,6 +26,20 @@ export function ContinuousTurnDialog({ items, title, busy, fighterNames, onCance
   onConfirm: (decisions: Record<string,ContinuousDecision>) => void;
 }) {
   const [values,setValues] = useState<Record<string,FormValue>>(()=>initial(items));
+  type ActionEdit = { skip:boolean; amount:string; duration:string; attributes:Record<string,string> };
+  const [actionEdits,setActionEdits] = useState<Record<string,Record<string,ActionEdit>>>(()=>
+    Object.fromEntries(items.map(item=>[item.id,Object.fromEntries(item.rule.actions.map((action,j)=>[
+      String(j),{
+        skip:false,
+        amount:action.kind==="dot"?String(action.damage_amount):"",
+        duration:action.kind==="dot"||action.kind==="effect"?String(action.duration):"",
+        attributes:action.kind==="status"?Object.fromEntries(action.attributes.map(a=>[a.key,String(Math.min(a.cap,a.step*(item.ticks+1)))])):{},
+      },
+    ]))]))
+  );
+  const patchAction=(id:string,index:number,patch:Partial<ActionEdit>)=>setActionEdits(current=>({
+    ...current,[id]:{...current[id],[String(index)]:{...current[id]?.[String(index)],...patch}},
+  }));
   const patch=(id:string, partial:Partial<FormValue>)=>setValues(current=>({
     ...current,[id]:{...current[id],...partial},
   }));
@@ -41,14 +55,51 @@ export function ContinuousTurnDialog({ items, title, busy, fighterNames, onCance
         if(!/^\d+$/.test(raw)||!Number.isSafeInteger(amount)||amount<0||amount>1000000)return;
         decisions[item.id]={damage:amount,damage_kind:value.damage_kind,neutralize:value.neutralize};
       }else decisions[item.id]={};
+      const actions:NonNullable<ContinuousDecision["actions"]>={};
+      for(let i=0;i<item.rule.actions.length;i++){
+        const action=item.rule.actions[i];
+        const edit=actionEdits[item.id]?.[String(i)];
+        if(!edit)continue;
+        if(edit.skip){actions[String(i)]={skip:true};continue;}
+        if(action.kind==="dot" || action.kind==="effect"){
+          const duration=Number(edit.duration);
+          if(!/^\d+$/.test(edit.duration.trim())||!Number.isSafeInteger(duration)||duration<1||duration>1000)return;
+          actions[String(i)]={duration};
+          if(action.kind==="dot"){
+            const amount=Number(edit.amount);
+            if(!/^\d+$/.test(edit.amount.trim())||!Number.isSafeInteger(amount)||amount<1||amount>1000000)return;
+            actions[String(i)].damage_amount=amount;
+          }
+        }
+        if(action.kind==="status"){
+          const attrs:Record<string,number>={};
+          for(const attr of action.attributes){
+            const raw=edit.attributes[attr.key]??"";
+            const amount=Number(raw);
+            if(!/^\d+$/.test(raw.trim())||!Number.isSafeInteger(amount)||amount<0||amount>1000000)return;
+            attrs[attr.key]=amount;
+          }
+          actions[String(i)]={attributes:attrs};
+        }
+      }
+      if(Object.keys(actions).length) decisions[item.id].actions=actions;
     }
     onConfirm(decisions);
   }
   const bad=items.some(item=>{
     const damage=item.rule.actions.some(action=>action.kind==="damage");
-    if(!damage)return false;
-    const raw=values[item.id]?.damage.trim()??"";
-    return !/^\d+$/.test(raw)||!Number.isSafeInteger(Number(raw))||Number(raw)>1000000;
+    if(damage){
+      const raw=values[item.id]?.damage.trim()??"";
+      if(!/^\d+$/.test(raw)||!Number.isSafeInteger(Number(raw))||Number(raw)>1000000)return true;
+    }
+    return item.rule.actions.some((action,index)=>{
+      const edit=actionEdits[item.id]?.[String(index)];
+      if(!edit || edit.skip || action.kind==="damage")return false;
+      const integer=(raw:string,min:number,max:number)=>/^\d+$/.test(raw.trim()) && Number.isSafeInteger(Number(raw)) && Number(raw)>=min && Number(raw)<=max;
+      if(action.kind==="status")return action.attributes.some(attr=>!integer(edit.attributes[attr.key]??"",0,1000000));
+      if(!integer(edit.duration,1,1000))return true;
+      return action.kind==="dot" && !integer(edit.amount,1,1000000);
+    });
   });
   return <Dialog open onOpenChange={(open)=>{if(!open&&!busy)onCancel();}}>
     <DialogContent className="flex h-[100dvh] max-h-[100dvh] w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none border-gold/40 bg-[#100c0a] p-0 sm:h-auto sm:max-h-[90dvh] sm:max-w-xl sm:rounded-xl">
@@ -107,6 +158,42 @@ export function ContinuousTurnDialog({ items, title, busy, fighterNames, onCance
               </label>}
               <p className="text-xs text-muted-foreground">Dano final: {value.neutralize?0:Math.max(0,Number(value.damage)||0)} (antes das proteções aplicáveis).</p>
             </div>}
+            {item.rule.actions.map((action,index)=>{
+              if(action.kind==="damage")return null;
+              const edit=actionEdits[item.id]?.[String(index)];
+              if(!edit)return null;
+              return <details key={index} className="rounded-lg border border-gold/20 bg-black/20 p-2.5">
+                <summary className="min-h-10 cursor-pointer py-2 text-xs font-semibold text-gold">
+                  <Settings2 className="mr-1 inline h-3.5 w-3.5"/>
+                  {action.kind==="status"?"Modificar atributos":"Editar "+(action.kind==="dot"?"DoT":"efeito")+" deste turno"}
+                </summary>
+                <div className="mt-2 space-y-3 border-t border-gold/10 pt-3">
+                  <label className="flex min-h-11 items-center gap-2 text-xs">
+                    <input type="checkbox" checked={edit.skip} disabled={busy}
+                      onChange={e=>patchAction(item.id,index,{skip:e.target.checked})}/>
+                    Não aplicar esta ação neste turno
+                  </label>
+                  {action.kind==="status"&&action.attributes.map(attr=>(
+                    <label key={attr.key} className="flex items-center justify-between gap-2 text-xs">
+                      <span>{attr.key} ({attr.mode==="percent"?"%":"pontos"})</span>
+                      <Input className="h-11 w-28 text-right" inputMode="numeric" type="number" min={0} max={1000000}
+                        disabled={busy||edit.skip} value={edit.attributes[attr.key]??"0"}
+                        onChange={e=>patchAction(item.id,index,{attributes:{...edit.attributes,[attr.key]:e.target.value}})}/>
+                    </label>
+                  ))}
+                  {(action.kind==="dot"||action.kind==="effect")&&<label className="flex items-center justify-between gap-2 text-xs">
+                    Duração neste turno
+                    <Input className="h-11 w-28 text-right" inputMode="numeric" type="number" min={1} max={1000}
+                      disabled={busy||edit.skip} value={edit.duration} onChange={e=>patchAction(item.id,index,{duration:e.target.value})}/>
+                  </label>}
+                  {action.kind==="dot"&&<label className="flex items-center justify-between gap-2 text-xs">
+                    Dano do DoT
+                    <Input className="h-11 w-28 text-right" inputMode="numeric" type="number" min={1} max={1000000}
+                      disabled={busy||edit.skip} value={edit.amount} onChange={e=>patchAction(item.id,index,{amount:e.target.value})}/>
+                  </label>}
+                </div>
+              </details>;
+            })}
             {item.rule.linger_turns>0&&<p className="flex items-center gap-2 text-xs text-muted-foreground">
               <Hourglass className="h-4 w-4"/> Após interromper, os atributos afetados continuam por {item.rule.linger_turns} turno(s).
             </p>}
