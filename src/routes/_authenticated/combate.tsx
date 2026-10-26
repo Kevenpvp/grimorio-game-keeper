@@ -1082,7 +1082,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                       disabled={!battle.active || advancingTurnKeys.has("__global__") || advancingTurnKeys.has(f.id)}
                       onClick={() => void advanceCombatTurn(f.id)}>
                       <RotateCw className={cn("mr-1 h-3.5 w-3.5", advancingTurnKeys.has(f.id) && "animate-spin")} />
-                      {advancingTurnKeys.has(f.id) ? "Avançando..." : "Turno"}
+                      {advancingTurnKeys.has(f.id) ? "Avançando..." : "Avançar turno"}
                     </Button>
                   </>
                 )}
