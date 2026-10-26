@@ -435,31 +435,38 @@ export function CharacterAbilitiesPanel({
     "percentual_hp_perdido_por_refletir",
     10,
   );
-  const { data: demonioHp, isError: demonioHpError } = useQuery({
+  const { data: demonioHp, isError: demonioHpError } = useQuery<{
+    current: number; maximum: number; configuredMax: number;
+  }>({
     queryKey: ["demonio-interno-hp", characterId],
     enabled: !!demonioAssignment,
     queryFn: async () => {
-      const [attributeResult, maximumResult] = await Promise.all([
-        supabase.from("character_attributes").select("current_value")
-          .eq("character_id", characterId).eq("attribute_key", "hp").maybeSingle(),
-        supabase.rpc("calculate_character_resource_max", {
-          _character_id: characterId,
-          _attribute_key: "hp",
-        }),
-      ]);
-      if (attributeResult.error) throw attributeResult.error;
-      if (maximumResult.error) throw maximumResult.error;
-      return {
-        current: Number(attributeResult.data?.current_value ?? 0),
-        maximum: Math.max(0, Number(maximumResult.data ?? 0)),
-      };
+      // calculate_character_resource_max is deliberately not executable by
+      // browser roles. This narrow, ownership-checked RPC reads the same
+      // effective HP maximum as the custom script running on the server.
+      const { data, error } = await db.rpc("get_character_hp_for_ability_preview", {
+        _character_id: characterId,
+      });
+      if (error) throw error;
+      const values = data as { current?: unknown; maximum?: unknown; configured_max?: unknown } | null;
+      const current = Number(values?.current);
+      const maximum = Number(values?.maximum);
+      const configuredMax = Number(values?.configured_max);
+      if (![current, maximum, configuredMax].every(Number.isFinite)) {
+        throw new Error("A consulta retornou valores de HP inválidos.");
+      }
+      return { current, maximum, configuredMax };
     },
     staleTime: 0,
+    refetchInterval: mode === "combat" ? 5000 : false,
+    refetchOnWindowFocus: "always",
   });
   const demonioBonusDamage = Math.floor(demonioHeat * demonioReflectPercent / 100);
   const demonioHpCost = demonioHp
     ? Math.ceil(demonioHp.maximum * demonioHpCostPercent / 100)
     : null;
+  const demonioCannotPay = demonioHp !== undefined && demonioHpCost !== null
+    && demonioHpCost > 0 && demonioHp.current <= 0;
   const [targetId, setTargetId] = useState(characterId);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [activationPreparingId, setActivationPreparingId] = useState<string | null>(null);
@@ -1199,11 +1206,13 @@ export function CharacterAbilitiesPanel({
                         </div>
                         <div className="mt-1 text-base font-bold tabular">
                           {demonioHpError
-                            ? "Não foi possível calcular"
+                            ? "Falha na consulta do HP"
                             : demonioHpCost === null
                               ? "Calculando HP máximo…"
                               : demonioHeat > 0 && demonioBonusDamage > 0
-                                ? `${demonioHpCost} HP`
+                                ? demonioCannotPay
+                                  ? "Sem HP para refletir"
+                                  : `${demonioHpCost} HP`
                                 : "0 HP neste momento"}
                           <span className="ml-1 text-xs font-normal text-muted-foreground">
                             ({demonioHpCostPercent}% do HP máximo{demonioHp ? `: ${demonioHp.maximum} × ${demonioHpCostPercent}%` : ""})
@@ -1211,11 +1220,22 @@ export function CharacterAbilitiesPanel({
                         </div>
                         {demonioHp && (
                           <div className="text-muted-foreground">
-                            HP atual: {demonioHp.current}/{demonioHp.maximum}. O custo é arredondado para cima e só é pago quando houver dano refletido.
+                            HP atual: {demonioHp.current}/{demonioHp.maximum} (máximo efetivo). O custo é arredondado para cima e só é pago quando houver reflexão.
+                          </div>
+                        )}
+                        {demonioHp?.configuredMax === 0 && (
+                          <div className="rounded border border-amber-500/40 bg-amber-500/10 p-2 text-amber-200">
+                            A ficha está com HP máximo configurado em 0. O cálculo interno utiliza o mínimo de 1 HP.
+                            Configure o HP da ficha para poder pagar o custo de reflexões.
+                          </div>
+                        )}
+                        {demonioCannotPay && demonioHeat > 0 && demonioBonusDamage > 0 && (
+                          <div className="text-amber-300">
+                            Não é possível refletir dano com 0 HP quando a habilidade exige custo de HP.
                           </div>
                         )}
                         {demonioHpError && (
-                          <div className="text-muted-foreground">Confira a conexão ou atualize a página para recalcular o custo.</div>
+                          <div className="text-muted-foreground">A consulta do HP falhou; tente atualizar a página. O custo não é estimado a partir de valores incompletos.</div>
                         )}
                       </div>
                     </div>
