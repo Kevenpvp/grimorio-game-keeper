@@ -20,11 +20,11 @@ export function TemporaryGuaranteedDotsEditor({
   damageTypes: DamageType[];
 }) {
   return (
-    <section className="space-y-2 rounded-md border border-orange-500/30 bg-orange-500/5 p-3">
-      <div className="flex flex-wrap items-start justify-between gap-2">
+    <section className="min-w-0 space-y-2 rounded-lg border border-orange-500/30 bg-orange-500/5 p-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 flex-1">
           <h4 className="text-sm font-semibold text-gold">DoTs garantidos (fora do ataque)</h4>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="mt-1 break-words text-xs leading-relaxed text-muted-foreground">
             Aplicados em {targetName} mesmo se o ataque não acertar.
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
@@ -40,7 +40,7 @@ export function TemporaryGuaranteedDotsEditor({
               : "Nenhum DoT nesta aplicação."}
           </p>
         </div>
-        <Button type="button" size="sm" variant="outline" disabled={disabled}
+        <Button type="button" size="sm" variant="outline" className="min-h-10 w-full sm:w-auto" disabled={disabled}
           aria-expanded={expanded} onClick={onToggle}>
           {expanded ? <ChevronUp className="mr-1 h-3.5 w-3.5" /> : <ChevronDown className="mr-1 h-3.5 w-3.5" />}
           {expanded ? "Minimizar" : "Maximizar"}
