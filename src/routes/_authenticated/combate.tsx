@@ -391,7 +391,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
   const qc = useQueryClient();
   const [combatTab, setCombatTab] = useState<CombatTab>("fighters");
   const [actionMode, setActionMode] = useState<"combat" | "abilities" | "dots">("combat");
-  const [detailTab, setDetailTab] = useState<"status" | "abilities" | "summons" | "transformations" | "effects">("status");
+  const [detailTab, setDetailTab] = useState<"status" | "abilities" | "summons" | "transformations" | "effects" | "activeEffects">("status");
   const [battleAdminOpen, setBattleAdminOpen] = useState(false);
   const [fighterSearch, setFighterSearch] = useState("");
   const [fighterFilter, setFighterFilter] = useState<"all" | "targets" | "effects" | "critical">("all");
@@ -764,6 +764,17 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
   const actor = fighters.find((f) => f.id === battle.current_character_id);
   const targets = fighters.filter((f) => selectedTargetIds.includes(f.id) && f.id !== actor?.id);
 
+  // Reset also when another connected master changes the turn; never reuse the prior attacker's targets.
+  useEffect(() => {
+    setSelectedTargetIds([]);
+  }, [battle.current_character_id]);
+
+  function changeCurrentActor(characterId: string | null) {
+    if (characterId === battle.current_character_id) return;
+    setSelectedTargetIds([]);
+    void update({ current_character_id: characterId, target_character_id: null });
+  }
+
   function toggleTarget(id: string) {
     if (!actor || actor.id === id) return;
     const next = selectedTargetIds.includes(id)
@@ -910,7 +921,8 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                       ...((isMaster || isOwnFighter) ? [["summons", "Invocações"]] : []),
                       ["transformations", "Transformações"],
                       ...(isMaster ? [["effects", "Recursos e efeitos"]] : []),
-                    ] as Array<["status" | "abilities" | "summons" | "transformations" | "effects", string]>).map(([key, label]) =>
+                      ["activeEffects", "Efeitos ativos"],
+                    ] as Array<["status" | "abilities" | "summons" | "transformations" | "effects" | "activeEffects", string]>).map(([key, label]) =>
                       <button key={key} type="button" role="tab" aria-selected={detailTab === key}
                         onClick={() => setDetailTab(key)}
                         className={cn("shrink-0 rounded-md px-3 py-2 text-xs font-medium", detailTab === key ? "bg-gold/15 text-gold" : "text-muted-foreground hover:bg-muted")}>{label}</button>)}
@@ -1039,6 +1051,13 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                     ))}
                   </div>}
                   </>}
+                  {detailTab === "activeEffects" && <ActiveCombatEffectsPanel effects={effects.filter((e) => e.character_id === f.id)} defs={defs} getSource={(effect) => {
+                    if (effect.source_race_id) return "Raça: " + (races?.find((r) => r.id === effect.source_race_id)?.name ?? "raça");
+                    if (effect.source_class_id) return "Classe: " + (classes?.find((c) => c.id === effect.source_class_id)?.name ?? "classe");
+                    if (effect.source_virtue_id) return "Virtude: " + (virtues?.find((v) => v.id === effect.source_virtue_id)?.name ?? "virtude");
+                    if (effect.source_character_ability_id) return "Habilidade: " + (battleAbilities.find((ability) => ability.id === effect.source_character_ability_id)?.name ?? "habilidade");
+                    return effect.is_sheet_permanent ? "Ficha" : "Aplicação manual ou combate";
+                  }} />}
                   {detailTab === "effects" && isMaster && <CombatResourceEditor fighter={f} val={val} effects={effects.filter(e => e.character_id === f.id)} defs={defs} onAddEffect={(effect) => void addEffect(f.id, effect)} onRemoveEffect={async (id) => { const { data, error } = await supabase.rpc("remove_manual_character_effect", { _effect_id: id }); if (error) toast.error(error.message); else if (data !== true) toast.error("Este efeito não foi removido."); await qc.invalidateQueries({ queryKey: ["battle-effects", battle.id] }); await qc.invalidateQueries({ queryKey: ["character-active-effects"] }); await qc.invalidateQueries({ queryKey: ["battles"] }); }} hpRegenBlocked={blocked(f.id, "no_regen_hp")} manaRegenBlocked={blocked(f.id, "no_regen_mana") || blocked(f.id, "no_mana")} manaRegenMode={manaRegenSettings[f.id]?.mode ?? "percent"} manaRegenAmount={manaRegenSettings[f.id]?.amount ?? "0"} onManaRegenModeChange={(mode) => setManaRegen(f.id, { mode })} onManaRegenAmountChange={(amount) => setManaRegen(f.id, { amount })} />}
                   {detailTab === "status" && <div className="flex flex-wrap items-center justify-between gap-2 rounded border border-border p-2">
                     <span className="text-xs text-muted-foreground">Turnos individuais: {f.participant_turn_count ?? 0}</span>
@@ -1053,15 +1072,17 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
               <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
                 {isMaster && (
                   <>
-                    <Button size="sm" className="flex-1" variant={isActor ? "default" : "outline"} onClick={() => {
-                      const next = selectedTargetIds.filter((id) => id !== f.id);
-                      setSelectedTargetIds(next);
-                      void update({ current_character_id: f.id, target_character_id: next[0] ?? null });
-                    }}>
+                    <Button size="sm" className="flex-1" variant={isActor ? "default" : "outline"} onClick={() => changeCurrentActor(f.id)}>
                       <Swords className="mr-1 h-3.5 w-3.5" /> Vez
                     </Button>
                     <Button size="sm" className="flex-1" variant={isTarget ? "destructive" : "outline"} disabled={isActor} onClick={() => toggleTarget(f.id)}>
                       <Crosshair className="mr-1 h-3.5 w-3.5" /> {isTarget ? "Remover alvo" : "Selecionar alvo"}
+                    </Button>
+                    <Button size="sm" variant="outline" className="min-h-9 flex-1 px-2" aria-label={`Avançar turno individual de ${f.name}`}
+                      disabled={!battle.active || advancingTurnKeys.has("__global__") || advancingTurnKeys.has(f.id)}
+                      onClick={() => void advanceCombatTurn(f.id)}>
+                      <RotateCw className={cn("mr-1 h-3.5 w-3.5", advancingTurnKeys.has(f.id) && "animate-spin")} />
+                      {advancingTurnKeys.has(f.id) ? "Avançando..." : "Turno"}
                     </Button>
                   </>
                 )}
@@ -1099,12 +1120,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
             <label className="block space-y-1 text-sm">
               <span className="text-muted-foreground">Quem está agindo?</span>
               <select className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm"
-                value={actor?.id ?? ""} onChange={(event) => {
-                  const id = event.target.value || null;
-                  const next = selectedTargetIds.filter((targetId) => targetId !== id);
-                  setSelectedTargetIds(next);
-                  void update({ current_character_id: id, target_character_id: next[0] ?? null });
-                }}>
+                value={actor?.id ?? ""} onChange={(event) => changeCurrentActor(event.target.value || null)}>
                 <option value="">Selecione um combatente</option>
                 {fighters.map((fighter) => <option key={fighter.id} value={fighter.id}>{fighter.name}</option>)}
               </select>
@@ -1200,6 +1216,110 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
   );
 }
 
+
+
+function activeEffectDetails(effect: BattleEffect, defs: AttributeDef[], damageTypes: { id: string; name: string }[]) {
+  const amount = Number(effect.amount) || 0;
+  const sign = effect.polarity === "buff" ? "+" : "−";
+  const value = effect.value_mode === "percent" ? amount + "%" : amount + " pontos";
+  const attribute = defs.find((definition) => definition.key === effect.attribute_key)?.label ?? effect.attribute_key ?? "atributo";
+  switch (effect.effect_type) {
+    case "status": return \`Modifica \${attribute}: \${sign}\${value}. O valor é considerado nos atributos do personagem enquanto o efeito estiver ativo.\`;
+    case "regeneration": return \`Modifica a regeneração de \${effect.attribute_key === "hp" ? "HP" : "Mana"} em \${sign}\${value} por turno.\`;
+    case "damage_over_time": return damageOverTimeSummary(effect, damageTypes);
+    case "damage_reduction": return damageReductionSummary(effect, damageTypes);
+    case "healing": return periodicHealingSummary(effect);
+    case "damage_dealt": return \`Modifica o dano causado (\${effect.damage_scope === "physical" ? "físico" : effect.damage_scope === "magical" ? "mágico" : "qualquer categoria"}) em \${sign}\${effect.value_mode === "percent" ? amount + "%" : amount + " fixos"}.\`;
+    case "damage_vulnerability": return "Vulnerabilidade: receber o tipo de dano configurado pode ativar outros efeitos neste personagem.";
+    case "debuff_relief": return \`Alívio de debuffs: reduz a intensidade numérica dos efeitos negativos em \${amount}%.\`;
+    case "dot_resistance": return \`Resistência a DoTs: reduz \${String((effect.effect_data as Record<string, Json> | undefined)?.dot_resistance_mode ?? "damage") === "duration" ? "a duração" : "o dano"} em \${effect.value_mode === "percent" ? amount + "%" : amount + " fixos"}.\`;
+    case "dot_immunity": return "Imune à aplicação de efeitos de dano por turno (DoTs) conforme a configuração.";
+    case "no_regen_hp": return "Impede a regeneração de HP enquanto durar o efeito.";
+    case "no_regen_mana": return "Impede a regeneração de Mana enquanto durar o efeito.";
+    case "no_mana": return "Sem Mana: a Mana é zerada e habilidades mágicas ou que dependam dela são bloqueadas.";
+    case "magic_prohibition": return "Proibição de magia: impede o uso de habilidades classificadas como mágicas.";
+    case "invincible": return "Invencível: bloqueia o dano recebido enquanto este efeito estiver ativo.";
+    case "healing_blocked": return "Bloqueio de cura: impede receber cura de habilidades conforme as regras do efeito.";
+    case "mana_used": return \`Modifica o custo de Mana de habilidades em \${effect.polarity === "buff" ? "−" : "+"}\${effect.value_mode === "percent" ? amount + "%" : amount + " Mana"}.\`;
+    case "stun": return "Stun: efeito de atordoamento, considerado nos testes de ataque.";
+    case "mind_control": return "Controle mental: o personagem está sendo controlado pela origem indicada no efeito.";
+    case "mental_control_immunity": return "Imunidade contra tentativas de controle mental.";
+    case "mental_control_chance": return \`Aumenta a potência do controle mental em \${effect.value_mode === "percent" ? amount + "%" : amount + " pontos"}.\`;
+    case "mental_control_resistance": return \`Aumenta a resistência a controle mental em \${effect.value_mode === "percent" ? amount + "%" : amount + " pontos"}.\`;
+    case "invisibility": return "Invisibilidade: personagem marcado como invisível enquanto este efeito estiver ativo.";
+    default: return "Efeito ativo neste personagem.";
+  }
+}
+
+function ActiveCombatEffectsPanel({ effects, defs, getSource }: {
+  effects: BattleEffect[];
+  defs: AttributeDef[];
+  getSource: (effect: BattleEffect) => string;
+}) {
+  const [filter, setFilter] = useState<"all" | "buff" | "debuff" | "dots">("all");
+  const { data: damageTypes = [] } = useDamageTypes();
+  const visible = effects.filter((effect) => {
+    if (filter === "dots") return effect.effect_type === "damage_over_time";
+    if (filter === "all") return true;
+    return effect.polarity === filter;
+  });
+  return (
+    <section className="space-y-3" aria-label="Visualização dos efeitos ativos">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="font-display text-lg text-gold">Efeitos ativos ({effects.length})</h3>
+          <p className="text-xs text-muted-foreground">Descrições, origem e duração de cada efeito deste personagem.</p>
+        </div>
+        <select aria-label="Filtrar efeitos ativos" className="min-h-10 rounded-md border border-input bg-background px-3 text-sm" value={filter}
+          onChange={(event) => setFilter(event.target.value as typeof filter)}>
+          <option value="all">Todos os efeitos</option>
+          <option value="buff">Buffs</option>
+          <option value="debuff">Debuffs</option>
+          <option value="dots">DoTs</option>
+        </select>
+      </div>
+      {visible.length === 0 && <p className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+        {effects.length === 0 ? "Nenhum efeito ativo neste personagem." : "Nenhum efeito corresponde ao filtro."}
+      </p>}
+      {visible.map((effect) => {
+        const isDot = effect.effect_type === "damage_over_time";
+        const positive = effect.polarity === "buff" && !isDot;
+        const permanent = !!(effect.source_class_id || effect.source_race_id || effect.source_virtue_id || effect.is_sheet_permanent);
+        const durationText = permanent ? "Permanente" : effect.until_combat_end ? "Até o fim do combate"
+          : effect.duration + " turno(s) · " + (effect.duration_scope === "global" ? "global" : "individual");
+        return (
+          <article key={effect.id} className={cn(
+            "min-w-0 space-y-3 rounded-lg border p-3 sm:p-4",
+            isDot ? "border-orange-500/35 bg-orange-500/5" : positive
+              ? "border-emerald-500/35 bg-emerald-500/5" : "border-red-500/35 bg-red-500/5",
+          )}>
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <h4 className="break-words font-semibold">{effect.name}</h4>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  <span className={cn("rounded px-2 py-0.5 text-[11px] font-semibold",
+                    isDot ? "bg-orange-500/15 text-orange-400" : positive ? "bg-emerald-500/15 text-emerald-400" : "bg-red-500/15 text-red-400")}>
+                    {isDot ? "DoT" : positive ? "Buff" : "Debuff"}
+                  </span>
+                  <span className="rounded bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                    {effect.effect_type.replace(/_/g, " ")}
+                  </span>
+                </div>
+              </div>
+              <div className="rounded-md border border-border bg-background/50 px-2 py-1 text-xs text-muted-foreground">{durationText}</div>
+            </div>
+            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+              {activeEffectDetails(effect, defs, damageTypes)}
+            </p>
+            <div className="border-t border-border/70 pt-2 text-xs text-muted-foreground">
+              Origem: {getSource(effect)}
+            </div>
+          </article>
+        );
+      })}
+    </section>
+  );
+}
 
 function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemoveEffect, hpRegenBlocked, manaRegenBlocked, manaRegenMode, manaRegenAmount, onManaRegenModeChange, onManaRegenAmountChange }: { fighter: Fighter; val: (f: Fighter, k: string) => number; effects: BattleEffect[]; defs: AttributeDef[]; onAddEffect: (effect: Omit<BattleEffect, "id" | "battle_id" | "character_id">) => void; onRemoveEffect: (id: string) => void; hpRegenBlocked: boolean; manaRegenBlocked: boolean; manaRegenMode: "percent" | "fixed"; manaRegenAmount: string; onManaRegenModeChange: (mode: "percent" | "fixed") => void; onManaRegenAmountChange: (amount: string) => void }) {
   const qc = useQueryClient();
