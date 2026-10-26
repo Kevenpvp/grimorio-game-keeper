@@ -40,34 +40,40 @@ function NotFoundComponent() {
 function ErrorComponent({ error, reset }: ErrorComponentProps) {
   console.error(error);
   const router = useRouter();
+  const detail = error instanceof Error ? error.message : String(error ?? "Erro desconhecido");
+  const staleChunk = /failed to fetch dynamically imported module|loading (css )?chunk|chunkloaderror|importing a module script failed|failed to load module/i.test(detail);
   useEffect(() => {
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
   }, [error]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="max-w-md text-center">
-        <h1 className="text-xl font-semibold tracking-tight text-foreground">
-          This page didn't load
+      <div className="panel w-full max-w-md space-y-3 border-red-500/35 p-5 text-center">
+        <h1 className="font-display text-xl font-semibold tracking-tight text-gold">
+          Não foi possível carregar esta página
         </h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Something went wrong on our end. You can try refreshing or head back home.
+        <p className="text-sm text-muted-foreground">
+          {staleChunk
+            ? "O navegador parece estar usando arquivos de uma versão antiga do Grimório. Atualize a página para carregar a versão publicada."
+            : "A interface encontrou um erro. Você pode tentar novamente ou voltar às fichas."}
         </p>
-        <div className="mt-6 flex flex-wrap justify-center gap-2">
-          <button
+        <details className="rounded-lg border border-gold/20 p-2 text-left">
+          <summary className="cursor-pointer text-xs font-semibold text-gold">Ver detalhes técnicos do erro</summary>
+          <p className="mt-2 break-words font-mono text-xs text-muted-foreground">{detail}</p>
+        </details>
+        <div className="flex flex-wrap justify-center gap-2 pt-2">
+          <button type="button"
             onClick={() => {
-              router.invalidate();
-              reset();
+              if (staleChunk) window.location.reload();
+              else { router.invalidate(); reset(); }
             }}
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            className="min-h-11 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
           >
-            Try again
+            {staleChunk ? "Atualizar página" : "Tentar novamente"}
           </button>
-          <a
-            href="/"
-            className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
-          >
-            Go home
+          <a href="/painel"
+            className="inline-flex min-h-11 items-center justify-center rounded-lg border border-input bg-background px-4 text-sm font-semibold text-foreground hover:bg-accent">
+            Voltar às fichas
           </a>
         </div>
       </div>
