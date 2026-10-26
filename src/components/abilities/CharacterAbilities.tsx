@@ -476,6 +476,7 @@ export function CharacterAbilitiesPanel({
   const [attackFocusedTargetId, setAttackFocusedTargetId] = useState<string | null>(null);
   const [attackShowTargetPicker, setAttackShowTargetPicker] = useState(true);
   const [attackHits, setAttackHits] = useState<Record<string, boolean>>({});
+  const [attackCriticalHits, setAttackCriticalHits] = useState<Record<string, boolean>>({});
   const [attackEffectHits, setAttackEffectHits] = useState<Record<string, string[]>>({});
   const [attackExtraDamage, setAttackExtraDamage] = useState<Record<string, string>>({});
   const [attackExtraDamagePercent, setAttackExtraDamagePercent] = useState<Record<string, string>>({});
@@ -565,6 +566,7 @@ export function CharacterAbilitiesPanel({
     setAttackFocusedTargetId(preferred[0] ?? null);
     setAttackShowTargetPicker(true);
     setAttackHits({});
+    setAttackCriticalHits({});
     setAttackEffectHits({});
     setAttackExtraDamage({});
     setAttackExtraDamagePercent({});
@@ -716,7 +718,7 @@ export function CharacterAbilitiesPanel({
             _damage_values: [finalBaseDamage],
             _magic_level: needsMagic ? attackConfig.magic_level : null,
             _source_character_id: characterId,
-            _critical_damage: false,
+            _critical_damage: attackCriticalHits[target.id] === true,
             _defense_ignore: defenseIgnore,
           },
         });
@@ -738,7 +740,7 @@ export function CharacterAbilitiesPanel({
           results[target.id] = "Dano enviado, mas sem resultado retornado.";
           continue;
         }
-        results[target.id] = `Dano base ${finalBaseDamage} → dano final ${Number(damageResult.total_damage ?? 0)}; HP ${Number(damageResult.hp_before ?? 0)} → ${Number(damageResult.hp_after ?? 0)}.${defenseIgnoreText(defenseIgnore) ? ` Ignorou: ${defenseIgnoreText(defenseIgnore)}.` : ""}`;
+        results[target.id] = `${attackCriticalHits[target.id] ? "⚔️ Crítico ×2 · " : ""}Dano base ${finalBaseDamage} → dano final ${Number(damageResult.total_damage ?? 0)}; HP ${Number(damageResult.hp_before ?? 0)} → ${Number(damageResult.hp_after ?? 0)}.${defenseIgnoreText(defenseIgnore) ? ` Ignorou: ${defenseIgnoreText(defenseIgnore)}.` : ""}`;
       }
 
       // Report the real status effects and DoTs applied during this use, even
@@ -774,6 +776,7 @@ export function CharacterAbilitiesPanel({
         results[target.id] = `${directText} DoTs aplicados: ${dots.length}. Outros efeitos aplicados: ${otherEffects.length}.${effectNames.length ? ` ${effectNames.join(" · ")}.` : ""}`;
       }
       setAttackResults(results);
+      setAttackCriticalHits({}); // Each new strike must require an explicit critical selection.
       setAttackCount((count) => count + 1);
       // Another Causar o Ataque starts with the saved defaults; changing them
       // again requires opening Maximizar for that target/category.
@@ -1286,6 +1289,7 @@ export function CharacterAbilitiesPanel({
                                 : current.filter((id) => id !== target.id));
                               if (!event.target.checked) {
                                 setAttackHits((current) => { const next = { ...current }; delete next[target.id]; return next; });
+                                setAttackCriticalHits((current) => { const next = { ...current }; delete next[target.id]; return next; });
                                 setAttackExtraDamage((current) => { const next = { ...current }; delete next[target.id]; return next; });
                                 setAttackExtraDamagePercent((current) => { const next = { ...current }; delete next[target.id]; return next; });
                               }
@@ -1301,6 +1305,7 @@ export function CharacterAbilitiesPanel({
                     onClick={() => {
                       setAttackTargetIds([]);
                       setAttackHits({});
+                      setAttackCriticalHits({});
                       setAttackEffectHits({});
                     }}>Limpar seleção</Button>
                   <Button type="button" size="sm" className="min-h-10" disabled={attackBusy || currentAttackTargets.length === 0}
@@ -1372,12 +1377,23 @@ export function CharacterAbilitiesPanel({
                             onChange={(event) => {
                               setAttackHits((current) => ({ ...current, [target.id]: event.target.checked }));
                               if (!event.target.checked) {
+                                setAttackCriticalHits((current) => ({ ...current, [target.id]: false }));
                                 setAttackEffectHits((current) => ({ ...current, [target.id]: [] }));
                               }
                             }} />
                           <span className="min-w-0 flex-1 font-semibold">{attackHits[target.id] ? "Acerto confirmado" : "Marcar: Acertou"}</span>
                           <span className="w-full text-xs text-muted-foreground">O acerto vale mesmo com 0 de dano. DoTs garantidos são aplicados mesmo sem acerto.</span>
                         </label>
+                        {attackHits[target.id] === true && (
+                          <label className={`flex min-h-12 cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm ${attackCriticalHits[target.id] ? "border-amber-500 bg-amber-500/10" : "border-amber-500/30 bg-amber-500/5"}`}>
+                            <input type="checkbox" className="mt-0.5 h-5 w-5 shrink-0 accent-amber-500" checked={attackCriticalHits[target.id] === true} disabled={attackBusy}
+                              onChange={(event) => setAttackCriticalHits((current) => ({ ...current, [target.id]: event.target.checked }))} />
+                            <span className="min-w-0">
+                              <strong className="block text-amber-500">Dano Crítico — ×2 do dano final</strong>
+                              <span className="mt-1 block text-xs text-muted-foreground">Dobra o dano deste alvo após defesa, mitigação e modificadores. Vale só para este golpe; a próxima aplicação volta ao normal.</span>
+                            </span>
+                          </label>
+                        )}
                         {guaranteedAttackDots.length > 0 && (
                           <TemporaryGuaranteedDotsEditor
                             targetName={target.name}
