@@ -1532,6 +1532,7 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
   const [cooldown, setCooldown] = useState(String(ability.cooldown_turns));
   const [duration, setDuration] = useState(String(ability.duration_turns ?? 0));
   const [manaCost, setManaCost] = useState(String(ability.mana_cost));
+  const [attackManaCost, setAttackManaCost] = useState(ability.attack_mana_cost === null ? "" : String(ability.attack_mana_cost));
   const [effects, setEffects] = useState<AbilityEffectDefinition[]>(ability.effects);
   const [passiveEffects, setPassiveEffects] = useState<AbilityEffectDefinition[]>(ability.passive_effects);
   const [endEffects, setEndEffects] = useState<AbilityEffectDefinition[]>(ability.end_effects);
@@ -1555,6 +1556,7 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
     setCooldown(String(ability.cooldown_turns));
     setDuration(String(ability.duration_turns ?? 0));
     setManaCost(String(ability.mana_cost));
+    setAttackManaCost(ability.attack_mana_cost === null ? "" : String(ability.attack_mana_cost));
     setEffects(parseAbilityEffects(ability.effects));
     setPassiveEffects(parseAbilityEffects(ability.passive_effects));
     setEndEffects(parseAbilityEffects(ability.end_effects));
@@ -1568,6 +1570,7 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
     const cooldownTurns = canActivate ? Math.floor(Number(cooldown)) : 0;
     const durationTurns = canActivate && !toggleMode ? Math.floor(Number(duration)) : 0;
     const cost = Math.floor(Number(manaCost));
+    const attackCost = attackManaCost.trim() === "" ? null : Number(attackManaCost);
     if (!name.trim()) { toast.error("Informe o nome"); return; }
     if (ability.toggle_active) { toast.error("Desative esta habilidade antes de alterar sua configuração."); return; }
     if (toggleMode && !canActivate) { toast.error("Habilidade sustentada precisa ser ativável."); return; }
@@ -1594,6 +1597,10 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
     if (!Number.isInteger(durationTurns) || durationTurns < 0 || durationTurns > 1000) { toast.error("Duração deve ser um inteiro de 0 a 1000 turnos."); return; }
     if (ability.active_duration_remaining > 0) { toast.error("Aguarde o fim da duração antes de alterar a habilidade."); return; }
     if (!Number.isFinite(cost) || cost < 0) { toast.error("Custo de Mana inválido"); return; }
+    if (attackCost !== null && (!Number.isInteger(attackCost) || attackCost < 0 || attackCost > 1000000)) {
+      toast.error("Custo de Mana de Atacar deve ser um número inteiro de 0 a 1.000.000.");
+      return;
+    }
     if (canActivate && (!Number.isFinite(cooldownTurns) || cooldownTurns < 0)) { toast.error("O cooldown precisa ser 0 ou maior"); return; }
     const canTriggerEndEffects = effects.some((effect) =>
       effect.effect_type !== "healing" || effect.healing_timing === "per_turn"
@@ -1642,6 +1649,7 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
       end_effects: endEffects.map((effect) => ({ ...effect, duration: Math.max(1, effect.duration) })) as unknown as Json,
       ...(!ability.ability_id ? {
         attack_enabled: canActivate && !selfTargetOnly && !toggleMode && attackEnabled,
+        attack_mana_cost: attackCost,
         attack_damage: attackDamage,
         attack_effect_groups: attackEffectGroups
           .filter((group) => group.name.trim() && (
@@ -1744,7 +1752,19 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
             Só pode ser usada 1 vez por combate
           </label>
         )}
-        {canActivate && <div className="space-y-1"><Label>Custo base de Mana</Label><Input type="number" min="0" value={manaCost} onChange={(e) => setManaCost(e.target.value)} /></div>}
+        {canActivate && <div className="space-y-1"><Label>Custo de Mana para Ativar</Label><Input type="number" min="0" value={manaCost} onChange={(e) => setManaCost(e.target.value)} /></div>}
+        {canActivate && !ability.ability_id && !toggleMode && !selfTargetOnly && attackEnabled && (
+          <div className="space-y-1">
+            <Label>Custo de Mana para Atacar (opcional)</Label>
+            <Input type="number" min="0" max="1000000" step="1"
+              placeholder="Mesmo custo de Ativar" value={attackManaCost}
+              onChange={(event) => setAttackManaCost(event.target.value)} />
+            <p className="text-[11px] text-muted-foreground">
+              Deixe em branco para usar o custo de Ativar. Defina 0 para Atacar sem gastar Mana.
+              A Mana é cobrada uma vez na sequência de ataque, mesmo que não acerte.
+            </p>
+          </div>
+        )}
         {!canActivate && <p className="text-xs text-muted-foreground">Não ativável: não gasta Mana nem possui cooldown; seus efeitos passivos continuam funcionando.</p>}
         {canActivate && <div className="space-y-1"><Label>Cooldown máximo (turnos)</Label><Input type="number" min="0" value={cooldown} onChange={(e) => setCooldown(e.target.value)} /></div>}
         {canActivate && !toggleMode && <div className="space-y-1"><Label>Duração da habilidade (turnos)</Label><Input type="number" min="0" max="1000" value={duration} onChange={(e) => setDuration(e.target.value)} />
