@@ -722,6 +722,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
         {!canActivate && <p className="text-xs text-muted-foreground">Esta habilidade não pode ser ativada. Seus efeitos passivos permanecem aplicados enquanto estiver na ficha.</p>}
       </div>
       {canActivate && <AbilityEffectsEditor
+        allowActivationCustomization
         effects={effects}
         onChange={setEffects}
         permanent={false}
