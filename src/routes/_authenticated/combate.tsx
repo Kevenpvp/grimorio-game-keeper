@@ -897,21 +897,28 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                 <p className="truncate text-sm font-semibold">{instance.name}</p>
                 <p className="text-xs text-muted-foreground">{fighters.find(f=>f.id===instance.caster_character_id)?.name??"Origem"} → {fighters.find(f=>f.id===instance.target_character_id)?.name??"Alvo"} · {instance.ticks} acúmulo(s)</p>
               </div>
-              <Button size="sm" variant="outline" className="min-h-10 shrink-0 border-red-500/30 text-red-300"
-                disabled={stoppingContinuous===instance.id}
-                onClick={()=>{void (async()=>{
-                  setStoppingContinuous(instance.id);
-                  const {error}=await db.rpc("stop_continuous_effect",{_id:instance.id});
-                  setStoppingContinuous(null);
-                  if(error){toast.error("Não foi possível interromper: "+error.message);return;}
-                  toast.success("Efeito interrompido; resíduos preservados.");
-                  await Promise.all([
-                    qc.invalidateQueries({queryKey:["battle-continuous-instances",battle.id]}),
-                    qc.invalidateQueries({queryKey:["battle-effects"]}),
-                    qc.invalidateQueries({queryKey:["character-active-effects"]}),
-                  ]);
-                })();}}
-              >Soltar / Parar</Button>
+              <div className="flex shrink-0 flex-col gap-1.5 sm:flex-row">
+                {(["interrupt","dispel"] as const).map(mode=>(
+                  <Button key={mode} size="sm" variant="outline"
+                    className={mode==="dispel"?"min-h-10 border-red-500/40 text-red-300":"min-h-10 border-amber-500/35 text-amber-300"}
+                    disabled={stoppingContinuous!==null}
+                    onClick={()=>{void (async()=>{
+                      if(mode==="dispel" && !window.confirm("Dissipar completamente "+instance.name+"? Isso também remove penalidades e DoTs vinculados."))return;
+                      setStoppingContinuous(instance.id);
+                      const {error}=await db.rpc("control_continuous_effect",{_id:instance.id,_mode:mode});
+                      setStoppingContinuous(null);
+                      if(error){toast.error("Não foi possível "+(mode==="dispel"?"dissipar":"interromper")+": "+error.message);return;}
+                      toast.success(mode==="dispel"?"Vínculo dissipado e penalidades removidas.":"Vínculo interrompido; resíduos preservados.");
+                      await Promise.all([
+                        qc.invalidateQueries({queryKey:["battle-continuous-instances",battle.id]}),
+                        qc.invalidateQueries({queryKey:["battle-effects"]}),
+                        qc.invalidateQueries({queryKey:["character-active-effects"]}),
+                      ]);
+                    })();}}>
+                    {stoppingContinuous===instance.id?"Processando...":mode==="dispel"?"Dissipar":"Soltar"}
+                  </Button>
+                ))}
+              </div>
             </div>
           ))}
         </div>
