@@ -49,12 +49,13 @@ export function CharacterSheetView({
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-      <section className="grid gap-6 md:grid-cols-[240px_1fr]">
+      <section className="panel grid min-w-0 gap-6 border-gold/35 p-4 sm:p-6 md:grid-cols-[240px_minmax(0,1fr)]">
         <Portrait path={character.photo_path} name={character.name} className="aspect-[3/4] w-full max-w-[240px] mx-auto" />
         <div className="flex flex-col gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-gold md:text-4xl">{character.name}</h1>
-            <p className="text-muted-foreground">Jogador: {character.player_name || "—"}</p>
+          <div className="border-b border-gold/20 pb-3">
+            <p className="mb-1 text-[10px] font-semibold uppercase tracking-[.22em] text-muted-foreground">Ficha de personagem</p>
+            <h1 className="break-words text-3xl font-bold text-gold md:text-4xl">{character.name}</h1>
+            <p className="mt-1 text-sm text-muted-foreground">Jogador: {character.player_name || "—"}</p>
             {character.description && <p className="mt-3 max-w-prose text-sm leading-relaxed">{character.description}</p>}
           </div>
 
