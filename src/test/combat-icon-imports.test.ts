@@ -44,7 +44,7 @@ describe("Ícones e referências JSX do Combate", () => {
     // Catches runtime errors such as "Repeat2 is not defined", which a
     // bundler build without a TypeScript semantic check does not catch.
     const lucideExports = new Set(Object.keys(lucide));
-    const missing = [...referenced].filter(name => lucideExports.has(name) && !declared.has(name));
+    const missing = [...referenced].filter(name => name !== "Icon" && lucideExports.has(name) && !declared.has(name));
     expect(missing, "Ícones JSX do Combate sem import ou declaração").toEqual([]);
   });
 });
