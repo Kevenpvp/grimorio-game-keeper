@@ -20,11 +20,12 @@ type DamageType = { id: string; name: string; category: "physical" | "magical" }
 export type DamageTarget = { id: string; name: string };
 type DamageSource = { id: string; name: string };
 type ManualDotDraft = { templateId: string; damageMode: "fixed" | "percent"; amount: string; duration: string };
-export function DamageApplier({ target, battleId = null, sources = [], defaultSourceCharacterId = null }: {
+export function DamageApplier({ target, battleId = null, sources = [], defaultSourceCharacterId = null, onDamageApplied }: {
   target: DamageTarget;
   battleId?: string | null;
   sources?: DamageSource[];
   defaultSourceCharacterId?: string | null;
+  onDamageApplied?: (result: { targetId: string; totalDamage: number; hpBefore: number; hpAfter: number }) => void;
 }) {
   const qc = useQueryClient();
   const [damageMode, setDamageMode] = useState<"repeat" | "list">("repeat");
@@ -317,6 +318,7 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
         `${criticalSummary}${target.name}: ${result.hits} golpe(s) de ${damageDescription}; ${defenseText}; ${result.total_damage} de dano total. HP: ${result.hp_before} → ${result.hp_after}.${manualDamageSummary}${penetrationSummary}${sourceSummary}${reductionSummary}${hitSummary}`,
         { duration: 8000 },
       );
+      onDamageApplied?.({ targetId: target.id, totalDamage: result.total_damage, hpBefore: result.hp_before, hpAfter: result.hp_after });
       const hookErrors = result.custom_script_hooks?.errors ?? [];
       if (hookErrors.length > 0) {
         toast.error("Dano aplicado, mas houve falha em script customizado: " + hookErrors[0], { duration: 8000 });
