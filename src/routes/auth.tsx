@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
-import { Loader2, Swords } from "lucide-react";
+import { BookOpenText, Loader2, Swords } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -144,12 +144,19 @@ function AuthPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
-      <div className="panel w-full max-w-sm p-6">
-        <div className="mb-6 text-center">
-          <Swords className="mx-auto mb-2 h-8 w-8 text-gold" />
-          <h1 className="text-2xl text-gold">
-            {mode === "in" ? "Entrar" : mode === "up" ? "Criar conta" : "Recuperar senha"}
+    <div className="flex min-h-screen items-center justify-center px-4 py-10">
+      <div className="panel w-full max-w-md border-gold/40 p-6 shadow-[0_25px_75px_rgba(0,0,0,.55)] sm:p-8">
+        <div className="mb-7 space-y-3 text-center">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-xl border border-gold/50 bg-gold/10">
+            <BookOpenText className="h-8 w-8 text-gold" />
+          </div>
+          <div className="font-display text-2xl font-semibold tracking-wide text-gold">Grimório
+            <span className="block text-[10px] tracking-[.35em] text-[#b39564]">GAME KEEPER</span>
+          </div>
+          <div className="grimorio-divider" />
+          <h1 className="flex items-center justify-center gap-2 text-xl text-foreground">
+            <Swords className="h-5 w-5 text-gold" />
+            {mode === "in" ? "Entrar na campanha" : mode === "up" ? "Criar conta" : "Recuperar senha"}
           </h1>
         </div>
         {sent ? (
