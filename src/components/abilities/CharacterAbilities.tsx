@@ -468,8 +468,7 @@ export function CharacterAbilitiesPanel({
     effects: AbilityEffectDefinition[];
   } | null>(null);
   const [extraManaCosts, setExtraManaCosts] = useState<Record<string, string>>({});
-  // Individual ability editors start minimized; expand only when explicitly requested.
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const [attackDialogAbilityId, setAttackDialogAbilityId] = useState<string | null>(null);
   const [attackTargetIds, setAttackTargetIds] = useState<string[]>([]);
   const [attackHits, setAttackHits] = useState<Record<string, boolean>>({});
@@ -1634,7 +1633,8 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
   const { data: damageTypes = [] } = useDamageTypes();
   const { data: dotTemplates = [] } = useDotTemplates();
   const [busy, setBusy] = useState(false);
-  const [expanded, setExpanded] = useState(true);
+  // Open each ability's settings only when the user clicks Maximizar.
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     setName(ability.name);
