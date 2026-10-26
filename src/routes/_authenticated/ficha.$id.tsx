@@ -23,6 +23,7 @@ import {
   type AttributeDef, type Character, type CharacterAttr,
 } from "@/lib/sheets";
 import { CharacterSheetView, Portrait } from "@/components/sheet/CharacterSheetView";
+import { SheetSectionTabs, SheetTabPanel, type SheetTabKey } from "@/components/sheet/SheetSectionTabs";
 import { PointsDistribution } from "@/components/sheet/PointsDistribution";
 import { PhysicalPointsDistribution } from "@/components/sheet/PhysicalPointsDistribution";
 import { RacePicker } from "@/components/sheet/RacePicker";
@@ -56,6 +57,7 @@ function FichaPage() {
   const { data, isLoading } = useCharacter(id);
   const { data: defs } = useDefs();
   useCharacterLive(id);
+  const [playerTab, setPlayerTab] = useState<SheetTabKey>("overview");
 
   if (isLoading || !me || !defs) return <p className="text-muted-foreground">Carregando…</p>;
   if (!data?.character)
@@ -67,19 +69,52 @@ function FichaPage() {
     );
   if (!me.isMaster)
     return (
-      <div className="space-y-6">
-        <RacePicker character={data.character} isMaster={false} />
-        <ClassPicker character={data.character} isMaster={false} />
-        <CharacterTransformationImages character={data.character} />
-        <CharacterAbilitiesManager characterId={data.character.id} personalOnly />
-        <SummonGrantsEditor characterId={data.character.id} master={false} />
-        <CharacterAbilitiesPanel characterId={data.character.id} characterName={data.character.name} mode="sheet" canUse={false} allowCustomAttributeEdit />
-        <CharacterSheetView character={data.character} attrs={data.attrs} defs={defs} />
-        {/* Keep this panel before normal points: physical grants must be visible to the player without being buried below the regular allocation panel. */}
-        <PhysicalPointsDistribution character={data.character} attrs={data.attrs} defs={defs} />
-        {(data.character.available_points > 0 || data.character.race_points_granted > 0 || data.character.virtue_points_granted > 0 || (data.character.class_points_granted ?? 0) > 0) && (
-          <PointsDistribution character={data.character} attrs={data.attrs} defs={defs} />
-        )}
+      <div className="min-w-0 space-y-4">
+        <header className="grimorio-section-header flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <Link to="/painel" className="flex min-h-9 items-center gap-1 text-xs text-muted-foreground hover:text-gold"><ArrowLeft className="h-4 w-4" /> Todas as fichas</Link>
+            <h1 className="truncate font-display text-2xl text-gold sm:text-3xl">{data.character.name}</h1>
+            <p className="text-xs text-muted-foreground">Minha ficha · escolha uma seção abaixo</p>
+          </div>
+        </header>
+        <SheetSectionTabs active={playerTab} onChange={setPlayerTab} tabs={[
+          { key: "overview", label: "Resumo" },
+          { key: "points", label: "Pontos", badge: data.character.available_points },
+          { key: "origin", label: "Origem" },
+          { key: "abilities", label: "Habilidades" },
+          { key: "transformations", label: "Transformações" },
+        ]} />
+        <SheetTabPanel tab="overview" active={playerTab}>
+          <CharacterSheetView character={data.character} attrs={data.attrs} defs={defs} />
+        </SheetTabPanel>
+        <SheetTabPanel tab="points" active={playerTab}>
+          <section className="space-y-3">
+            <h2 className="text-lg text-gold">Distribuir pontos físicos</h2>
+            <p className="text-xs text-muted-foreground">Pontos específicos de Força, Defesa, Velocidade e Velocidade de Ataque.</p>
+            <PhysicalPointsDistribution character={data.character} attrs={data.attrs} defs={defs} />
+          </section>
+          {(data.character.available_points > 0 || data.character.race_points_granted > 0 || data.character.virtue_points_granted > 0 || (data.character.class_points_granted ?? 0) > 0) && (
+            <section className="space-y-3">
+              <h2 className="text-lg text-gold">Pontos gerais</h2>
+              <PointsDistribution character={data.character} attrs={data.attrs} defs={defs} />
+            </section>
+          )}
+        </SheetTabPanel>
+        <SheetTabPanel tab="origin" active={playerTab}>
+          <RacePicker character={data.character} isMaster={false} />
+          <ClassPicker character={data.character} isMaster={false} />
+          {data.character.race_id && data.character.virtue_id && data.character.class_id && (
+            <p className="panel p-4 text-xs text-muted-foreground">Raça, Virtude e Classe já estão confirmadas. Seus bônus aparecem no Resumo.</p>
+          )}
+        </SheetTabPanel>
+        <SheetTabPanel tab="abilities" active={playerTab}>
+          <CharacterAbilitiesManager characterId={data.character.id} personalOnly />
+          <SummonGrantsEditor characterId={data.character.id} master={false} />
+          <CharacterAbilitiesPanel characterId={data.character.id} characterName={data.character.name} mode="sheet" canUse={false} allowCustomAttributeEdit />
+        </SheetTabPanel>
+        <SheetTabPanel tab="transformations" active={playerTab}>
+          <CharacterTransformationImages character={data.character} />
+        </SheetTabPanel>
       </div>
     );
   return <Editor character={data.character} attrs={data.attrs} defs={defs} />;
@@ -95,6 +130,7 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
   const navigate = useNavigate();
   const { savedAt, mark } = useSaved();
   const [preview, setPreview] = useState(false);
+  const [tab, setTab] = useState<SheetTabKey>("overview");
   const [info, setInfo] = useState({
     name: character.name,
     player_name: character.player_name,
@@ -180,10 +216,14 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
   return (
     <div className="space-y-6">
       <div className="grimorio-section-header flex flex-wrap items-center justify-between gap-3">
-        <Link to="/painel" className="flex items-center gap-1 text-sm text-muted-foreground hover:text-gold">
-          <ArrowLeft className="h-4 w-4" /> Todas as fichas
-        </Link>
-        <div className="flex items-center gap-2">
+        <div className="space-y-1">
+          <Link to="/painel" className="flex items-center gap-1 text-sm text-muted-foreground hover:text-gold">
+            <ArrowLeft className="h-4 w-4" /> Todas as fichas
+          </Link>
+          <h1 className="max-w-[80vw] truncate font-display text-2xl text-gold sm:text-3xl">{character.name}</h1>
+          <p className="text-xs text-muted-foreground">Ficha do mestre · {character.player_name || "Sem jogador"} · {character.available_points} pontos livres</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
           <SavedBadge savedAt={savedAt} />
           <Button variant="outline" size="sm" onClick={() => setPreview((p) => !p)}>
             <Eye className="mr-1 h-4 w-4" /> {preview ? "Editar" : "Ver como jogador"}
@@ -206,17 +246,36 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
         </div>
       </div>
 
+
       {preview ? (
-        <>
-          <SummonGrantsEditor characterId={character.id} master={false} />
-          <CharacterAbilitiesPanel characterId={character.id} characterName={character.name} mode="sheet" canUse />
+        <div className="space-y-4">
+          <div className="panel flex flex-wrap items-center justify-between gap-2 p-3">
+            <p className="text-sm text-muted-foreground">Prévia da ficha na visão de jogador.</p>
+            <Button variant="outline" size="sm" onClick={() => setPreview(false)}>Voltar à edição</Button>
+          </div>
           <CharacterSheetView character={character} attrs={attrs} defs={defs} />
-        </>
+          <SummonGrantsEditor characterId={character.id} master={false} />
+          <CharacterAbilitiesPanel characterId={character.id} characterName={character.name} mode="sheet" canUse={false} />
+        </div>
       ) : (
         <>
-          <section className="panel grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6 border-gold/35 p-4 sm:p-6 md:grid-cols-[200px_minmax(0,1fr)]">
+          <SheetSectionTabs active={tab} onChange={setTab} tabs={[
+            { key: "overview", label: "Resumo" },
+            { key: "attributes", label: "Atributos", badge: character.available_points },
+            { key: "origin", label: "Origem" },
+            { key: "abilities", label: "Habilidades" },
+            { key: "transformations", label: "Transformações" },
+            { key: "resources", label: "Recursos" },
+          ]} />
+
+          <SheetTabPanel tab="overview" active={tab}>
+            <div className="space-y-1">
+              <h2 className="font-display text-xl text-gold">Identidade do personagem</h2>
+              <p className="text-xs text-muted-foreground">Nome, imagem, jogador responsável e uma prévia dos atributos.</p>
+            </div>
+          <section className="panel grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 border-gold/35 p-4 sm:p-6 md:grid-cols-[175px_minmax(0,1fr)]">
             <div className="min-w-0 space-y-2">
-              <Portrait path={character.photo_path} name={character.name} className="mx-auto aspect-[3/4] w-full max-w-[200px]" />
+              <Portrait path={character.photo_path} name={character.name} className="mx-auto aspect-[3/4] w-32 max-w-full rounded-xl border border-gold/30 sm:w-44" />
               <input ref={fileRef} type="file" accept="image/*" className="hidden"
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ""; }} />
               <Button variant="outline" size="sm" className="w-full" onClick={() => fileRef.current?.click()}>
@@ -256,49 +315,86 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
               </div>
             </div>
           </section>
+            <CharacterSheetView character={character} attrs={attrs} defs={defs} />
+          </SheetTabPanel>
 
-          <section className="grid gap-4 sm:grid-cols-2">
-            <PercentEditor label="Corpo" icon="activity" tone={barTone("body")} value={character.body}
-              onSave={(v) => updateCharacter({ body: v })} />
-            <PercentEditor label="Sanidade" icon="eye" tone={barTone("sanity")} value={character.sanity}
-              onSave={(v) => updateCharacter({ sanity: v })} />
-          </section>
-
-          <RacePicker character={character} isMaster />
-          <ClassPicker character={character} isMaster />
-          <CharacterTransformationImages character={character} isMaster />
-          <CharacterAbilitiesManager characterId={character.id} />
-          <SummonGrantsEditor characterId={character.id} master />
-
-          <DamageApplier target={{ id: character.id, name: character.name }} sources={sourceCharacters.filter((source) => source.id !== character.id).map((source) => ({ id: source.id, name: source.name }))} />
-
-          <CharacterSheetEffectsManager characterId={character.id} characterName={character.name} />
-
-          <section className="grid gap-4 sm:grid-cols-2">
-            <NumberField label="Pontos disponíveis" icon="sparkles" value={character.available_points}
-              onSave={(v) => updateCharacter({ available_points: v })} />
-            <NumberField label="Abates" icon="flame" value={character.kills}
-              onSave={(v) => updateCharacter({ kills: v })} />
-          </section>
-
-          <section>
-            <h2 className="mb-3 text-lg text-gold">Pontos de atributo</h2>
-            <PointsDistribution character={character} attrs={attrs} defs={defs} canRemove />
-          {/* Always show this section to the master, even before race/virtue/class
-              grants physical points. The component already explains the empty
-              balance and disables allocation when none are available. */}
-          <PhysicalPointsDistribution character={character} attrs={attrs} defs={defs} />
-          </section>
-
-          <section>
-            <h2 className="mb-3 text-lg text-gold">Atributos</h2>
-            <div className="grid gap-3 md:grid-cols-2">
-              {defs.map((d) => (
+          <SheetTabPanel tab="attributes" active={tab}>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <NumberField label="Pontos disponíveis" icon="sparkles" value={character.available_points}
+                onSave={(v) => updateCharacter({ available_points: v })} />
+              <NumberField label="Abates" icon="flame" value={character.kills}
+                onSave={(v) => updateCharacter({ kills: v })} />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <PercentEditor label="Corpo" icon="activity" tone={barTone("body")} value={character.body}
+                onSave={(v) => updateCharacter({ body: v })} />
+              <PercentEditor label="Sanidade" icon="eye" tone={barTone("sanity")} value={character.sanity}
+                onSave={(v) => updateCharacter({ sanity: v })} />
+            </div>
+            <details className="panel p-3 sm:p-4" open>
+              <summary className="min-h-10 text-sm font-semibold text-gold">Distribuição de pontos</summary>
+              <div className="mt-3 space-y-4 border-t border-gold/15 pt-3">
+                <PointsDistribution character={character} attrs={attrs} defs={defs} canRemove />
+                <PhysicalPointsDistribution character={character} attrs={attrs} defs={defs} />
+              </div>
+            </details>
+            <div className="space-y-3">
+              <h2 className="font-display text-xl text-gold">Editar atributos individuais</h2>
+              <p className="text-xs text-muted-foreground">Abra somente o grupo que deseja ajustar. As alterações mantêm as regras de bônus e valores máximos.</p>
+              {[
+              { key: "resources", label: "HP e Mana", hint: "Vida, Mana atual e seus limites", filter: (key: string) => key === "hp" || key === "mana" },
+              { key: "physical", label: "Atributos físicos", hint: "Força, Defesa, Velocidade e ataques", filter: (key: string) => ["strength", "phys_def", "speed", "atk_speed"].includes(key) },
+              { key: "magical", label: "Atributos mágicos e mentais", hint: "Poder mágico, defesa mágica e mente", filter: (key: string) => ["mag_dmg", "mag_def", "iq", "mental"].includes(key) },
+              { key: "other", label: "Outros atributos", hint: "Atributos adicionais cadastrados", filter: (key: string) => !["hp", "mana", "strength", "phys_def", "speed", "atk_speed", "mag_dmg", "mag_def", "iq", "mental"].includes(key) },
+            ].map((group) => {
+                const entries = defs.filter((definition) => group.filter(definition.key));
+                if (entries.length === 0) return null;
+                return (
+                  <details key={group.key} className="panel min-w-0 p-3 sm:p-4" open={undefined} >
+                    <summary className="flex min-h-10 cursor-pointer items-center justify-between gap-3 text-sm font-semibold text-gold">
+                      <span>{group.label} <span className="text-xs text-muted-foreground">({entries.length})</span></span>
+                    </summary>
+                    <p className="mb-3 mt-1 text-xs text-muted-foreground">{group.hint}</p>
+                    <div className="grid min-w-0 gap-3 lg:grid-cols-2">
+                      {entries.map((d) => (
                 <AttrEditor key={d.key} def={d} characterId={character.id} body={character.body} sanity={character.sanity} attr={byKey.get(d.key)} racePts={raceModifiers[d.key] ?? 0} virtuePts={virtueModifiers[d.key] ?? 0} classPts={classModifiers[d.key] ?? 0} physicalPts={physicalAttributePoints(character, d.key)} noMana={noMana && d.key === "mana"} statusModifier={{ fixed: (passiveStatus[d.key]?.fixed ?? 0) + statusEffectModifiers(activeEffects, d.key).fixed, percent: (passiveStatus[d.key]?.percent ?? 0) + statusEffectModifiers(activeEffects, d.key).percent }}
                   onSaved={() => { mark(); refresh(); }} />
-              ))}
+                      ))}
+                    </div>
+                  </details>
+                );
+              })}
             </div>
-          </section>
+          </SheetTabPanel>
+
+          <SheetTabPanel tab="origin" active={tab}>
+            <div className="space-y-1">
+              <h2 className="font-display text-xl text-gold">Raça, Virtude e Classe</h2>
+              <p className="text-xs text-muted-foreground">As escolhas de origem ficam juntas, com seus pontos e habilidades concedidos.</p>
+            </div>
+            <RacePicker character={character} isMaster />
+            <ClassPicker character={character} isMaster />
+          </SheetTabPanel>
+
+          <SheetTabPanel tab="abilities" active={tab}>
+            <CharacterAbilitiesManager characterId={character.id} />
+            <SummonGrantsEditor characterId={character.id} master />
+          </SheetTabPanel>
+
+          <SheetTabPanel tab="transformations" active={tab}>
+            <CharacterTransformationImages character={character} isMaster />
+          </SheetTabPanel>
+
+          <SheetTabPanel tab="resources" active={tab}>
+            <details className="panel p-3 sm:p-4" open>
+              <summary className="min-h-10 text-sm font-semibold text-gold">Aplicar dano manualmente</summary>
+              <div className="mt-3 min-w-0">
+                <DamageApplier target={{ id: character.id, name: character.name }}
+                  sources={sourceCharacters.filter((source) => source.id !== character.id).map((source) => ({ id: source.id, name: source.name }))} />
+              </div>
+            </details>
+            <CharacterSheetEffectsManager characterId={character.id} characterName={character.name} />
+          </SheetTabPanel>
         </>
       )}
     </div>
