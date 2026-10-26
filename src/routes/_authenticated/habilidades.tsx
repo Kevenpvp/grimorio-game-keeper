@@ -116,6 +116,9 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
   const [cooldown, setCooldown] = useState(String(ability.cooldown_turns));
   const [duration, setDuration] = useState(String(ability.duration_turns ?? 0));
   const [manaCost, setManaCost] = useState(String(ability.mana_cost));
+  const [attackManaCost, setAttackManaCost] = useState(
+    ability.attack_mana_cost === null ? "" : String(ability.attack_mana_cost)
+  );
   const [effects, setEffects] = useState<AbilityEffectDefinition[]>(() => parseAbilityEffects(ability.effects));
   const [passiveEffects, setPassiveEffects] = useState<AbilityEffectDefinition[]>(() => parseAbilityEffects(ability.passive_effects));
   const [endEffects, setEndEffects] = useState<AbilityEffectDefinition[]>(() => parseAbilityEffects(ability.end_effects));
@@ -138,6 +141,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
     setCooldown(String(ability.cooldown_turns));
     setDuration(String(ability.duration_turns ?? 0));
     setManaCost(String(ability.mana_cost));
+    setAttackManaCost(ability.attack_mana_cost === null ? "" : String(ability.attack_mana_cost));
     setEffects(parseAbilityEffects(ability.effects));
     setPassiveEffects(parseAbilityEffects(ability.passive_effects));
     setEndEffects(parseAbilityEffects(ability.end_effects));
@@ -147,9 +151,14 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
     const cool = canActivate ? Math.floor(Number(cooldown)) : 0;
     const activeDuration = canActivate && !toggleMode ? Math.floor(Number(duration)) : 0;
     const mana = Math.floor(Number(manaCost));
+    const separateAttackMana = attackManaCost.trim() === "" ? null : Number(attackManaCost);
     if (!name.trim()) { toast.error("Informe o nome da habilidade"); return; }
     if (!Number.isInteger(activeDuration) || activeDuration < 0 || activeDuration > 1000) { toast.error("Duração deve ser de 0 a 1000 turnos."); return; }
     if (!Number.isFinite(mana) || mana < 0) { toast.error("O custo de Mana não pode ser negativo"); return; }
+    if (separateAttackMana !== null && (!Number.isInteger(separateAttackMana) || separateAttackMana < 0 || separateAttackMana > 1000000)) {
+      toast.error("O custo de Mana de Atacar deve ser um número inteiro entre 0 e 1.000.000.");
+      return;
+    }
     if (canActivate && (!Number.isFinite(cool) || cool < 0)) {
       toast.error("Uma habilidade ativável precisa ter cooldown de 0 ou mais turnos. Marque como não ativável se não puder ser usada.");
       return;
@@ -293,6 +302,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
       cooldown_turns: cool,
       duration_turns: activeDuration,
       mana_cost: canActivate ? mana : 0,
+      attack_mana_cost: canActivate ? separateAttackMana : null,
       effects: effects.map((effect) => ({ ...effect, duration: Math.max(1, effect.duration) })) as unknown as Json,
       passive_effects: passiveEffects.map((effect) => ({ ...effect, duration: 1 })) as unknown as Json,
       end_effects: endEffects.map((effect) => ({ ...effect, duration: Math.max(1, effect.duration) })) as unknown as Json,
@@ -685,9 +695,21 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
           <p className="text-xs text-muted-foreground">Se tiver duração, o cooldown só começa quando ela terminar. O contador diminui a cada avanço de turno.</p>
         </div>}
         {canActivate && <div className="space-y-1.5">
-          <Label>Custo de Mana (0 = não gasta)</Label>
+          <Label>Custo de Mana para Ativar (0 = não gasta)</Label>
           <Input type="number" min="0" value={manaCost} onChange={(e) => setManaCost(e.target.value)} />
         </div>}
+        {canActivate && !toggleMode && !selfTargetOnly && attackEnabled && (
+          <div className="space-y-1.5">
+            <Label>Custo de Mana para Atacar (opcional)</Label>
+            <Input type="number" min="0" max="1000000" step="1" value={attackManaCost}
+              placeholder="Mesmo custo de Ativar"
+              onChange={(event) => setAttackManaCost(event.target.value)} />
+            <p className="text-xs text-muted-foreground">
+              Em branco: usa {manaCost || "0"} Mana (mesmo custo de Ativar). Valor 0: Atacar não gasta Mana. 
+              Este custo é cobrado uma vez por sequência de ataque, mesmo sem acertar ninguém.
+            </p>
+          </div>
+        )}
         {canActivate && <div className="sm:col-span-2 rounded-md border border-border p-3">
           <label className="flex items-start gap-2 text-sm">
             <input type="checkbox" className="mt-1" checked={oncePerBattle} onChange={(e) => setOncePerBattle(e.target.checked)} />
