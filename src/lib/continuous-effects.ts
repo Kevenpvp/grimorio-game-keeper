@@ -5,7 +5,12 @@ export type ContinuousDamageAction = { kind: "damage"; dice_count: number; dice_
 export type ContinuousDotAction = { kind: "dot"; template_id: string; damage_mode: "fixed" | "percent"; damage_amount: number; duration: number; repeat: boolean };
 export type ContinuousEffectAction = { kind: "effect"; effect_type: "stun" | "no_regen_hp" | "no_regen_mana" | "magic_prohibition" | "no_mana" | "invincible"; name: string; duration: number; repeat: boolean };
 export type ContinuousAction = ContinuousStatusAction | ContinuousDamageAction | ContinuousDotAction | ContinuousEffectAction;
-export type ContinuousRule = { name: string; trigger: ContinuousTrigger; linger_turns: number; actions: ContinuousAction[] };
+export type ContinuousOnLimit = "replace_oldest" | "choose" | "block";
+export type ContinuousRule = {
+  name: string; trigger: ContinuousTrigger; linger_turns: number; actions: ContinuousAction[];
+  max_targets: number | null; on_limit: ContinuousOnLimit;
+  stop_on_caster_leave: boolean; stop_on_caster_death: boolean; stop_on_caster_stun: boolean;
+};
 export type ContinuousInstance = {
   id: string; battle_id: string; character_ability_id: string;
   caster_character_id: string; target_character_id: string; name: string;
@@ -13,6 +18,7 @@ export type ContinuousInstance = {
 };
 export type ContinuousActionDecision = { skip?: boolean; damage_amount?: number; duration?: number; attributes?: Record<string,number> };
 export type ContinuousDecision = {
+  resolution?: "apply" | "interrupt" | "dispel";
   damage?: number; damage_kind?: "true" | "physical" | "magical"; neutralize?: boolean;
   actions?: Record<string,ContinuousActionDecision>;
 };
@@ -67,6 +73,12 @@ export function parseContinuousRules(value: unknown): ContinuousRule[] {
       name: typeof data.name === "string" && data.name.trim() ? data.name.trim().slice(0, 140) : "Efeito contínuo",
       trigger: data.trigger === "caster" || data.trigger === "global" ? data.trigger : "target",
       linger_turns: n(data.linger_turns, 0, 1000),
+      max_targets: data.max_targets === null || data.max_targets === "unlimited" ? null
+        : data.max_targets === undefined ? null : Math.max(1, n(data.max_targets, 1, 100)),
+      on_limit: data.on_limit === "block" || data.on_limit === "choose" ? data.on_limit : "replace_oldest",
+      stop_on_caster_leave: data.stop_on_caster_leave !== false,
+      stop_on_caster_death: data.stop_on_caster_death === true,
+      stop_on_caster_stun: data.stop_on_caster_stun === true,
       actions,
     }];
   });
@@ -74,6 +86,8 @@ export function parseContinuousRules(value: unknown): ContinuousRule[] {
 
 export function defaultContinuousRule(): ContinuousRule {
   return { name: "Efeito contínuo", trigger: "target", linger_turns: 0,
+    max_targets: null, on_limit: "replace_oldest",
+    stop_on_caster_leave: true, stop_on_caster_death: false, stop_on_caster_stun: false,
     actions: [{ kind: "status", polarity: "debuff", attributes: [{ key: "strength", mode: "percent", step: 5, cap: 100 }] }] };
 }
 
