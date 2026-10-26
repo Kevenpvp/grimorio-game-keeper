@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { CheckCircle2, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
+import { SearchableGrantPicker } from "@/components/ui/searchable-grant-picker";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -73,29 +74,19 @@ export function TransformationGrantPicker({ scope, traitId }: { scope: Scope; tr
           Nenhuma transformação cadastrada. <Link to="/transformacoes" className="text-gold underline">Criar transformações</Link>.
         </p>
       ) : (
-        <div className="grid gap-2 sm:grid-cols-2">
-          {transformations.map((transformation) => {
-            const checked = assignments.some((row) => row.transformation_id === transformation.id);
-            return (
-              <label key={transformation.id} className="flex cursor-pointer items-start gap-2 rounded-md border border-border px-3 py-2 text-sm">
-                <input
-                  type="checkbox"
-                  className="mt-1"
-                  checked={checked}
-                  onChange={(event) => void toggle(transformation.id, event.target.checked)}
-                />
-                <span className="min-w-0 flex-1">
-                  <span className="block font-medium">{transformation.name}</span>
-                  <span className="block text-xs text-muted-foreground">
-                    {transformation.cooldown_turns} turno(s) · {transformation.mana_cost > 0 ? `${transformation.mana_cost} Mana` : "sem custo de Mana"}
-                  </span>
-                  {transformation.description && <span className="mt-1 block text-xs text-muted-foreground">{transformation.description}</span>}
-                </span>
-                {checked && <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />}
-              </label>
-            );
-          })}
-        </div>
+        <SearchableGrantPicker
+          options={transformations.map((transformation) => ({
+            id: transformation.id,
+            name: transformation.name,
+            description: `${transformation.cooldown_turns} turno(s) de recarga · ${transformation.mana_cost > 0 ? transformation.mana_cost + " Mana" : "sem custo de Mana"}${transformation.description ? " · " + transformation.description : ""}`,
+          }))}
+          selectedIds={new Set(assignments.map((row) => row.transformation_id))}
+          selectedLabel="Transformações concedidas"
+          addLabel="Conceder transformação"
+          emptyLabel="Nenhuma transformação concedida ainda."
+          searchPlaceholder="Buscar transformação pelo nome…"
+          onToggle={(id, checked) => void toggle(id, checked)}
+        />
       )}
     </section>
   );
