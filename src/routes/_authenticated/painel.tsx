@@ -123,8 +123,9 @@ function MasterDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-3xl text-gold">Fichas da campanha</h1>
+      <div className="grimorio-section-header flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div><p className="text-[10px] font-semibold uppercase tracking-[.21em] text-muted-foreground">Biblioteca de personagens</p>
+        <h1 className="text-3xl text-gold">Fichas da campanha</h1></div>
         <Button onClick={create}>
           <Plus className="mr-1 h-4 w-4" /> Nova ficha
         </Button>
