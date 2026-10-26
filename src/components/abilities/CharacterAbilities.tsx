@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronDown, ChevronUp, Clock3, Copy, Crosshair, Flame, HeartPulse, Minus, Plus, Sparkles, Swords, Trash2, WandSparkles, Zap } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock3, Copy, Crosshair, Flame, HeartPulse, Minus, Plus, Sparkles, Swords, Trash2, WandSparkles, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -472,6 +472,9 @@ export function CharacterAbilitiesPanel({
   const [expanded, setExpanded] = useState(true);
   const [attackDialogAbilityId, setAttackDialogAbilityId] = useState<string | null>(null);
   const [attackTargetIds, setAttackTargetIds] = useState<string[]>([]);
+  // Mobile shows one attack target at a time; desktop still renders all targets.
+  const [attackFocusedTargetId, setAttackFocusedTargetId] = useState<string | null>(null);
+  const [attackShowTargetPicker, setAttackShowTargetPicker] = useState(true);
   const [attackHits, setAttackHits] = useState<Record<string, boolean>>({});
   const [attackEffectHits, setAttackEffectHits] = useState<Record<string, string[]>>({});
   const [attackExtraDamage, setAttackExtraDamage] = useState<Record<string, string>>({});
@@ -506,6 +509,11 @@ export function CharacterAbilitiesPanel({
   const attackEffectGroups = attackDefinition?.attack_enabled ? parseAbilityAttackEffectGroups(attackDefinition.attack_effect_groups) : [];
   const guaranteedAttackDots = attackDefinition?.attack_enabled ? parseAbilityDotEffects(attackDefinition.dot_effects) : [];
   const currentAttackTargets = eligibleAttackTargets.filter((target) => attackTargetIds.includes(target.id));
+  const focusedAttackTargetId = currentAttackTargets.some((target) => target.id === attackFocusedTargetId)
+    ? attackFocusedTargetId
+    : currentAttackTargets[0]?.id ?? null;
+  const focusedAttackTargetIndex = Math.max(0, currentAttackTargets.findIndex((target) => target.id === focusedAttackTargetId));
+  const confirmedAttackHits = currentAttackTargets.filter((target) => attackHits[target.id] === true).length;
   const statValue = (id: string, key: string) => Math.max(0, Number(getAttributeValue?.(id, key) ?? 0) || 0);
   const attackBaseDamage = attackConfig
     ? Math.min(1000000, Math.max(0, Math.round(
@@ -554,6 +562,8 @@ export function CharacterAbilitiesPanel({
       : eligibleAttackTargets.slice(0, 1).map((target) => target.id);
     setAttackDialogAbilityId(ability.id);
     setAttackTargetIds(preferred);
+    setAttackFocusedTargetId(preferred[0] ?? null);
+    setAttackShowTargetPicker(true);
     setAttackHits({});
     setAttackEffectHits({});
     setAttackExtraDamage({});
@@ -1235,29 +1245,42 @@ export function CharacterAbilitiesPanel({
       <Dialog open={attackDialogAbilityId !== null} onOpenChange={(open) => {
         if (!open) void finishAbilityAttack(false);
       }}>
-        <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-gold">Ataque: {attackAbility?.name ?? "Habilidade"}</DialogTitle>
-            <DialogDescription>
-              {characterName} lança o ataque. Marque cada alvo que acertou e as categorias que acertaram. DoTs fora das categorias são garantidos em todos os alvos selecionados; DoTs dentro das categorias só aplicam quando a categoria foi marcada como acertada.
+        <DialogContent className="flex h-[100dvh] max-h-[100dvh] w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none p-0 sm:h-[min(92dvh,900px)] sm:max-h-[92dvh] sm:w-[min(96vw,860px)] sm:max-w-3xl sm:rounded-xl">
+          <DialogHeader className="shrink-0 border-b border-border px-4 pb-3 pt-5 pr-12 text-left sm:px-6 sm:pt-6 sm:pr-12">
+            <DialogTitle className="truncate text-lg text-gold sm:text-xl">Atacar · {attackAbility?.name ?? "Habilidade"}</DialogTitle>
+            <DialogDescription className="text-xs leading-relaxed sm:text-sm">
+              <span className="sm:hidden">{characterName} ataca. Escolha os alvos, confira os dados e marque quem acertou.</span>
+              <span className="hidden sm:inline">{characterName} lança o ataque. Marque cada alvo que acertou e as categorias que acertaram. DoTs fora das categorias são garantidos em todos os alvos selecionados; DoTs dentro das categorias só aplicam quando a categoria foi marcada como acertada.</span>
             </DialogDescription>
           </DialogHeader>
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6" data-testid="ability-attack-scroll-area">
           {!attackAbility || !attackConfig ? (
             <p className="text-sm text-muted-foreground">Não foi possível carregar a configuração de dano desta habilidade.</p>
           ) : (
             <div className="space-y-4">
-              <section className="space-y-2">
+              <div className="flex items-center justify-between gap-2 rounded-lg border border-gold/25 bg-gold/5 px-3 py-2 sm:hidden">
+                <div className="min-w-0 text-xs">
+                  <span className="block font-semibold text-gold">{currentAttackTargets.length} alvo(s) escolhido(s)</span>
+                  <span className="text-muted-foreground">{confirmedAttackHits} acerto(s) marcado(s)</span>
+                </div>
+                <Button type="button" variant="outline" size="sm" className="min-h-10 shrink-0" disabled={attackBusy}
+                  onClick={() => setAttackShowTargetPicker((current) => !current)} aria-expanded={attackShowTargetPicker}>
+                  <Crosshair className="mr-1.5 h-4 w-4" /> {attackShowTargetPicker ? "Ocultar seleção" : "Editar alvos"}
+                </Button>
+              </div>
+              <section className={attackShowTargetPicker ? "space-y-2" : "hidden space-y-2 sm:block"}>
                 <h3 className="flex items-center gap-2 text-sm font-semibold text-gold"><Crosshair className="h-4 w-4" /> Selecionar alvos</h3>
                 {eligibleAttackTargets.length === 0 ? (
                   <p className="text-sm text-muted-foreground">Não há outros personagens nesta batalha.</p>
                 ) : (
-                  <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="grid max-h-[29dvh] gap-2 overflow-y-auto pr-1 sm:max-h-none sm:grid-cols-2 sm:overflow-visible">
                     {eligibleAttackTargets.map((target) => {
                       const selected = attackTargetIds.includes(target.id);
                       return (
-                        <label key={target.id} className={`flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm ${selected ? "border-gold bg-gold/5" : "border-border"}`}>
-                          <input type="checkbox" checked={selected} disabled={attackBusy}
+                        <label key={target.id} className={`flex min-h-11 cursor-pointer items-center gap-3 rounded-md border px-3 py-2 text-sm transition-colors ${selected ? "border-gold bg-gold/10" : "border-border"}`}>
+                          <input type="checkbox" className="h-5 w-5 shrink-0 accent-amber-500" checked={selected} disabled={attackBusy}
                             onChange={(event) => {
+                              if (event.target.checked) setAttackFocusedTargetId(target.id);
                               setAttackTargetIds((current) => event.target.checked
                                 ? [...new Set([...current, target.id])]
                                 : current.filter((id) => id !== target.id));
@@ -1273,12 +1296,33 @@ export function CharacterAbilitiesPanel({
                     })}
                   </div>
                 )}
+                {eligibleAttackTargets.length > 0 && <div className="flex flex-wrap justify-end gap-2 sm:hidden">
+                  <Button type="button" size="sm" variant="ghost" disabled={attackBusy || attackTargetIds.length === 0}
+                    onClick={() => {
+                      setAttackTargetIds([]);
+                      setAttackHits({});
+                      setAttackEffectHits({});
+                    }}>Limpar seleção</Button>
+                  <Button type="button" size="sm" className="min-h-10" disabled={attackBusy || currentAttackTargets.length === 0}
+                    onClick={() => setAttackShowTargetPicker(false)}>Pronto · configurar acertos</Button>
+                </div>}
               </section>
               {currentAttackTargets.length > 0 && (
                 <section className="space-y-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <h3 className="text-sm font-semibold text-gold">Dados para lançar e esquivar</h3>
-
+                    <span className="text-xs text-muted-foreground sm:hidden">{focusedAttackTargetIndex + 1} / {currentAttackTargets.length}</span>
+                  </div>
+                  <div className="sticky top-0 z-10 -mx-4 border-y border-border bg-background/95 px-4 py-2 backdrop-blur sm:hidden" aria-label="Escolher alvo para conferir">
+                    <div className="flex gap-2 overflow-x-auto pb-1">
+                      {currentAttackTargets.map((target, index) => (
+                        <button key={target.id} type="button" aria-pressed={focusedAttackTargetId === target.id}
+                          onClick={() => { setAttackFocusedTargetId(target.id); setAttackShowTargetPicker(false); }}
+                          className={`min-h-10 max-w-44 shrink-0 truncate rounded-lg border px-3 text-xs font-semibold ${focusedAttackTargetId === target.id ? "border-gold bg-gold/15 text-gold" : "border-border text-muted-foreground"}`}>
+                          {index + 1}. {target.name}{attackHits[target.id] ? " ✓" : ""}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                   {currentAttackTargets.map((target) => {
                     const attackSpeed = statValue(characterId, "atk_speed");
@@ -1290,46 +1334,49 @@ export function CharacterAbilitiesPanel({
                     const percent = Number(attackExtraDamagePercent[target.id] ?? 0) || 0;
                     const damage = applyAbilityTargetDamage(attackBaseDamage, extra, percent);
                     return (
-                      <article key={target.id} className="space-y-3 rounded-md border border-border p-3">
+                      <article key={target.id} className={`space-y-3 rounded-lg border border-border p-3 sm:p-4 ${focusedAttackTargetId !== target.id ? "hidden sm:block" : ""}`}>
                         <div className="flex flex-wrap items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
                             <div className="font-semibold">{target.name}</div>
-                            <div className="mt-1 text-xs text-muted-foreground">Lançamento: ({attackSpeed} Velocidade de Ataque − {targetSpeed} Velocidade) ÷ 10, mínimo 0</div>
-                            <div className="text-xs text-muted-foreground">Esquiva: ({targetSpeed} Velocidade − {attackSpeed} Velocidade de Ataque) ÷ 10, mínimo 0</div>
+                            <details className="mt-2 text-xs text-muted-foreground">
+                              <summary className="cursor-pointer py-1">Ver cálculo dos dados</summary>
+                              <div className="mt-1">Lançamento: ({attackSpeed} Velocidade de Ataque − {targetSpeed} Velocidade) ÷ 10, mínimo 0</div>
+                              <div>Esquiva: ({targetSpeed} Velocidade − {attackSpeed} Velocidade de Ataque) ÷ 10, mínimo 0</div>
+                            </details>
                             {stunned && <div className="text-xs font-semibold text-amber-400">Alvo com Stun: +1 no dado de ataque.</div>}
                           </div>
 
                         </div>
-                        <div className="grid gap-2 sm:grid-cols-2">
-                          <div className="rounded-md bg-muted/40 p-3">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="min-w-0 rounded-md bg-muted/40 p-2.5 sm:p-3">
                             <div className="text-xs text-muted-foreground">Dado de quem lança</div>
                             <div className="flex items-center justify-between gap-2">
-                              <div className="font-display text-2xl text-gold">{diceText(attackMod)}</div>
-                              <Button type="button" size="icon" variant="ghost" className="h-7 w-7" aria-label={`Copiar ${diceText(attackMod)}`} onClick={() => copyDiceValue(diceText(attackMod))} disabled={attackBusy}>
+                              <div className="min-w-0 truncate font-display text-lg text-gold sm:text-2xl">{diceText(attackMod)}</div>
+                              <Button type="button" size="icon" variant="ghost" className="h-10 w-10 shrink-0" aria-label={`Copiar ${diceText(attackMod)}`} onClick={() => copyDiceValue(diceText(attackMod))} disabled={attackBusy}>
                                 <Copy className="h-3.5 w-3.5" />
                               </Button>
                             </div>
                           </div>
-                          <div className="rounded-md bg-muted/40 p-3">
+                          <div className="min-w-0 rounded-md bg-muted/40 p-2.5 sm:p-3">
                             <div className="text-xs text-muted-foreground">Dado de esquiva</div>
                             <div className="flex items-center justify-between gap-2">
-                              <div className="font-display text-2xl text-gold">{diceText(dodgeMod)}</div>
-                              <Button type="button" size="icon" variant="ghost" className="h-7 w-7" aria-label={`Copiar ${diceText(dodgeMod)}`} onClick={() => copyDiceValue(diceText(dodgeMod))} disabled={attackBusy}>
+                              <div className="min-w-0 truncate font-display text-lg text-gold sm:text-2xl">{diceText(dodgeMod)}</div>
+                              <Button type="button" size="icon" variant="ghost" className="h-10 w-10 shrink-0" aria-label={`Copiar ${diceText(dodgeMod)}`} onClick={() => copyDiceValue(diceText(dodgeMod))} disabled={attackBusy}>
                                 <Copy className="h-3.5 w-3.5" />
                               </Button>
                             </div>
                           </div>
                         </div>
-                        <label className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
-                          <input type="checkbox" checked={attackHits[target.id] === true} disabled={attackBusy}
+                        <label className={`flex min-h-14 cursor-pointer flex-wrap items-center gap-3 rounded-lg border px-3 py-3 text-sm transition-colors ${attackHits[target.id] ? "border-emerald-500/70 bg-emerald-500/10" : "border-border bg-muted/20"}`}>
+                          <input type="checkbox" className="h-5 w-5 shrink-0 accent-emerald-500" checked={attackHits[target.id] === true} disabled={attackBusy}
                             onChange={(event) => {
                               setAttackHits((current) => ({ ...current, [target.id]: event.target.checked }));
                               if (!event.target.checked) {
                                 setAttackEffectHits((current) => ({ ...current, [target.id]: [] }));
                               }
                             }} />
-                          <span className="font-semibold">Acertou</span>
-                          <span className="text-xs text-muted-foreground">— confirma o acerto, independentemente do dano final (inclusive 0). DoTs garantidos são aplicados mesmo sem marcar Acertou.</span>
+                          <span className="min-w-0 flex-1 font-semibold">{attackHits[target.id] ? "Acerto confirmado" : "Marcar: Acertou"}</span>
+                          <span className="w-full text-xs text-muted-foreground">O acerto vale mesmo com 0 de dano. DoTs garantidos são aplicados mesmo sem acerto.</span>
                         </label>
                         {guaranteedAttackDots.length > 0 && (
                           <TemporaryGuaranteedDotsEditor
