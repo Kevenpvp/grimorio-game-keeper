@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Tables } from "@/integrations/supabase/types";
 import { supabase } from "@/integrations/supabase/client";
 import { parseDefenseIgnore, type DefenseIgnore } from "@/lib/defense-ignore";
+import { parseAttributeStatusModifiers, statusModifiersForAttribute, type AttributeStatusModifier } from "@/lib/multi-attribute-effects";
 
 export type AbilityEffectType = "status" | "regeneration" | "mana_regeneration" | "mana_used" | "no_regen_hp" | "no_regen_mana" | "magic_prohibition" | "stun" | "damage_dealt" | "damage_reduction" | "damage_received" | "damage_vulnerability" | "no_mana" | "healing" | "invincible" | "healing_blocked" | "magic_healing_reversal" | "mental_control_immunity" | "mental_control_chance" | "mental_control_resistance" | "dot_immunity" | "dot_resistance" | "invisibility" | "temporal_freeze" | "visual_tag";
 export type DamageScope = "any" | "physical" | "magical";
@@ -77,6 +78,8 @@ export type AbilityEffectDefinition = {
   name: string;
   effect_type: AbilityEffectType;
   attribute_key: string | null;
+  /** Optional multi-attribute status, with independent mode and magnitude. */
+  attribute_modifiers?: AttributeStatusModifier[];
   polarity: "buff" | "debuff";
   value_mode: "percent" | "fixed";
   amount: number;
@@ -262,6 +265,7 @@ export function parseAbilityEffects(value: unknown, nested = false): AbilityEffe
       name: typeof raw.name === "string" && raw.name.trim() ? raw.name.trim() : "Efeito",
       effect_type: effectType,
       attribute_key: typeof raw.attribute_key === "string" ? raw.attribute_key : null,
+      attribute_modifiers: effectType === "status" ? parseAttributeStatusModifiers(raw.attribute_modifiers) : [],
       polarity,
       value_mode: effectType === "visual_tag" || effectType === "temporal_freeze" ? "fixed" : valueMode,
       amount: effectType === "visual_tag" || effectType === "temporal_freeze" ? 0 : Number.isFinite(amount) ? Math.max(0, amount) : 0,
@@ -466,6 +470,7 @@ export type ActiveCharacterEffect = {
   source_race_effect_index?: number | null;
   target_character_id?: string | null;
   effect_data?: import("@/integrations/supabase/types").Json;
+  attribute_modifiers?: AttributeStatusModifier[];
   damage_reduction_scope?: DamageReductionScope;
   damage_reduction_type_id?: string | null;
   damage_reduction_magic_level?: DamageMagicLevel | null;
@@ -526,10 +531,16 @@ export function useCharacterActiveEffects(characterId: string | undefined, enabl
 export function statusEffectModifiers(effects: ActiveCharacterEffect[] | undefined, attributeKey: string) {
   const result = { fixed: 0, percent: 0 };
   for (const effect of effects ?? []) {
-    if (effect.effect_type !== "status" || effect.attribute_key !== attributeKey) continue;
-    const value = effect.polarity === "buff" ? Number(effect.amount) : -Number(effect.amount);
-    if (effect.value_mode === "percent") result.percent += value;
-    else result.fixed += value;
+    if (effect.effect_type !== "status") continue;
+    const metadata = effect.effect_data && typeof effect.effect_data === "object" && !Array.isArray(effect.effect_data)
+      ? effect.effect_data as Record<string, unknown> : {};
+    for (const modifier of statusModifiersForAttribute({
+      ...effect, attribute_modifiers: effect.attribute_modifiers ?? metadata.attribute_modifiers,
+    }, attributeKey)) {
+      const value = effect.polarity === "buff" ? modifier.amount : -modifier.amount;
+      if (modifier.value_mode === "percent") result.percent += value;
+      else result.fixed += value;
+    }
   }
   return result;
 }
@@ -538,12 +549,18 @@ export function passiveStatusModifiers(abilities: CharacterAbility[] | undefined
   const result: Record<string, { fixed: number; percent: number }> = {};
   for (const ability of abilities ?? []) {
     for (const effect of ability.passive_effects) {
-      if (effect.effect_type !== "status" || !effect.attribute_key) continue;
-      const value = effect.polarity === "buff" ? effect.amount : -effect.amount;
-      const entry = result[effect.attribute_key] ?? { fixed: 0, percent: 0 };
-      if (effect.value_mode === "percent") entry.percent += value;
-      else entry.fixed += value;
-      result[effect.attribute_key] = entry;
+      if (effect.effect_type !== "status") continue;
+      const rows = parseAttributeStatusModifiers(effect.attribute_modifiers);
+      const items = rows.length ? rows : effect.attribute_key
+        ? [{ attribute_key: effect.attribute_key, amount: effect.amount, value_mode: effect.value_mode }]
+        : [];
+      for (const modifier of items) {
+        const value = effect.polarity === "buff" ? modifier.amount : -modifier.amount;
+        const entry = result[modifier.attribute_key] ?? { fixed: 0, percent: 0 };
+        if (modifier.value_mode === "percent") entry.percent += value;
+        else entry.fixed += value;
+        result[modifier.attribute_key] = entry;
+      }
     }
   }
   return result;
