@@ -675,7 +675,8 @@ export function CharacterAbilitiesPanel({
     // Resolve capped ongoing links as part of the same database transaction.
     // Never release a previous victim in a separate request before the attack
     // has succeeded; cooldown, mana and residuals all roll back together.
-    if (attackContinuousRules.some(rule => rule.max_targets !== null) && hitTargets.length > 0) {
+    if (attackContinuousRules.some(rule => rule.max_targets !== null) &&
+        !attackContinuousRules.some(rule => rule.exclusive_grip) && hitTargets.length > 0) {
       const { data: freshLinks, error: freshError } = await db.from("continuous_effect_instances")
         .select("id,battle_id,character_ability_id,caster_character_id,target_character_id,rule_index,rule,name,ticks,active")
         .eq("battle_id", battleId).eq("character_ability_id", attackAbility.id).eq("active", true);
@@ -1746,8 +1747,9 @@ export function CharacterAbilitiesPanel({
                 <section className="space-y-2 rounded-xl border border-gold/35 bg-gold/5 p-3">
                   <p className="text-sm font-semibold text-gold">Vínculos sustentados e limite de alvos</p>
                   <p className="text-xs text-muted-foreground">
-                    Ao acertar uma nova vítima com o limite cheio, o Grimório pergunta quem soltar antes de confirmar o ataque.
-                    A transferência ocorre junto com o golpe; se ele falhar, ninguém é solto. Também é possível liberar um alvo manualmente abaixo.
+                    {attackContinuousRules.some(rule => rule.exclusive_grip)
+                      ? "Grudagem exclusiva: ao acertar outro alvo com uma habilidade marcada desta criatura, o Grimório remove a grudagem anterior automaticamente. No mesmo alvo, os efeitos continuam. A troca só acontece se o ataque for confirmado."
+                      : "Ao acertar uma nova vítima com o limite cheio, o Grimório pergunta quem soltar antes de confirmar o ataque. A transferência ocorre junto com o golpe; se ele falhar, ninguém é solto. Também é possível liberar um alvo manualmente abaixo."}
                   </p>
                   {attackContinuousRules.map((rule,index)=>rule.max_targets===null?null:(
                     <div key={index} className="space-y-2 rounded-lg border border-gold/15 p-2.5">

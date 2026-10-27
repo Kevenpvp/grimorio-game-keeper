@@ -33,10 +33,21 @@ export function ContinuousRulesEditor({ rules, onChange, defs, disabled = false 
           </p>
         </div>
         <Button variant="outline" size="sm" className="min-h-11" disabled={disabled || rules.length >= 20}
-          onClick={() => onChange([...rules, defaultContinuousRule()])}>
+          onClick={() => onChange([...rules, { ...defaultContinuousRule(), exclusive_grip: rules.some(rule => rule.exclusive_grip) }])}>
           <Plus className="mr-1 h-4 w-4" /> Nova regra
         </Button>
       </div>
+      {rules.length > 0 && <label className="flex items-start gap-3 rounded-xl border border-gold/30 bg-gold/5 p-3 text-sm">
+        <input type="checkbox" className="mt-1" checked={rules.some(rule => rule.exclusive_grip)}
+          disabled={disabled} onChange={event => onChange(rules.map(rule => ({ ...rule, exclusive_grip: event.target.checked })))} />
+        <span>
+          <span className="font-semibold">Grudagem exclusiva entre habilidades da criatura</span>
+          <span className="mt-1 block text-xs text-muted-foreground">
+            Se a criatura usar outra habilidade com esta opção em um alvo diferente, os vínculos e efeitos anteriores de grudagem são removidos.
+            Se for no mesmo alvo, a grudagem anterior continua normalmente. Não afeta outras criaturas nem habilidades sem esta opção.
+          </span>
+        </span>
+      </label>}
       {rules.length === 0 && <p className="rounded-lg border border-dashed border-gold/25 p-3 text-xs text-muted-foreground">
         Nenhuma regra contínua. Habilidades normais continuarão funcionando sem janela de confirmação.
       </p>}

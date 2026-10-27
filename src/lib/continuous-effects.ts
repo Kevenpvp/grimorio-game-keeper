@@ -22,6 +22,8 @@ export type ContinuousOnLimit = "replace_oldest" | "choose" | "block";
 export type ContinuousRule = {
   name: string; trigger: ContinuousTrigger; linger_turns: number; actions: ContinuousAction[];
   max_targets: number | null; on_limit: ContinuousOnLimit;
+  /** A creature cannot keep exclusive grips on different targets through other marked abilities. */
+  exclusive_grip: boolean;
   stop_on_caster_leave: boolean; stop_on_caster_death: boolean; stop_on_caster_stun: boolean;
 };
 export type ContinuousInstance = {
@@ -116,6 +118,7 @@ export function parseContinuousRules(value: unknown): ContinuousRule[] {
       max_targets: data.max_targets === null || data.max_targets === "unlimited" ? null
         : data.max_targets === undefined ? null : Math.max(1, n(data.max_targets, 1, 100)),
       on_limit: data.on_limit === "block" || data.on_limit === "choose" ? data.on_limit : "replace_oldest",
+      exclusive_grip: data.exclusive_grip === true,
       stop_on_caster_leave: data.stop_on_caster_leave !== false,
       stop_on_caster_death: data.stop_on_caster_death === true,
       stop_on_caster_stun: data.stop_on_caster_stun === true,
@@ -126,7 +129,7 @@ export function parseContinuousRules(value: unknown): ContinuousRule[] {
 
 export function defaultContinuousRule(): ContinuousRule {
   return { name: "Efeito contínuo", trigger: "target", linger_turns: 0,
-    max_targets: null, on_limit: "replace_oldest",
+    max_targets: null, on_limit: "replace_oldest", exclusive_grip: false,
     stop_on_caster_leave: true, stop_on_caster_death: false, stop_on_caster_stun: false,
     actions: [{ kind: "status", polarity: "debuff", attributes: [{ key: "strength", mode: "percent", step: 5, cap: 100 }] }] };
 }
