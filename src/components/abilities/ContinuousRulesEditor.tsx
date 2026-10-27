@@ -1,7 +1,7 @@
 import { Plus, Trash2, Repeat2, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useDotTemplates } from "@/lib/abilities";
+import { useDotTemplates, useDamageTypes } from "@/lib/abilities";
 import {
   defaultContinuousRule, type ContinuousAction, type ContinuousRule,
   type ContinuousStatusAction, type ContinuousDamageAction, type ContinuousDotAction, type ContinuousEffectAction,
@@ -13,6 +13,7 @@ export function ContinuousRulesEditor({ rules, onChange, defs, disabled = false 
   defs: Def[]; disabled?: boolean;
 }) {
   const {data:registeredDots=[]}=useDotTemplates();
+  const {data:damageTypes=[]}=useDamageTypes();
   function changeRule(i: number, patch: Partial<ContinuousRule>) {
     onChange(rules.map((rule, index) => index === i ? { ...rule, ...patch } : rule));
   }
@@ -159,31 +160,81 @@ export function ContinuousRulesEditor({ rules, onChange, defs, disabled = false 
                       {defs.filter(d=>!action.attributes.some(a=>a.key===d.key)).map(d=><option key={d.key} value={d.key}>{d.label}</option>)}
                     </select>
                   </> : action.kind === "damage" ? <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                      {([
-                        ["Dados", "dice_count", 20], ["Faces", "dice_sides", 1000], ["Bônus fixo", "flat", 1000000],
-                      ] as const).map(([label,key,max])=>(
-                        <label key={key} className="space-y-1 text-xs">{label}
-                          <Input type="number" min={key==="dice_sides"?1:0} max={max} className="min-h-11" disabled={disabled}
-                            value={action[key]} onChange={(e)=>changeAction(i,j,{...action,[key]:numberValue(e.target.value,max)})}/>
-                        </label>
-                      ))}
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="block space-y-1 text-xs font-semibold">Como calcular o dano
+                        <select disabled={disabled} value={action.damage_source}
+                          className="min-h-11 w-full rounded-lg border border-input bg-background px-3 text-sm"
+                          onChange={e=>changeAction(i,j,{...action,damage_source:e.target.value as ContinuousDamageAction["damage_source"]})}>
+                          <option value="dice">Dado rolado no Discord</option>
+                          <option value="attribute">Percentual de um atributo</option>
+                          <option value="fixed">Valor fixo</option>
+                        </select>
+                      </label>
+                      <label className="block space-y-1 text-xs font-semibold">Tipo de dano
+                        <select disabled={disabled} value={action.damage_kind}
+                          className="min-h-11 w-full rounded-lg border border-input bg-background px-3 text-sm"
+                          onChange={e=>changeAction(i,j,{...action,damage_kind:e.target.value as ContinuousDamageAction["damage_kind"]})}>
+                          <option value="true">Verdadeiro (ignora Defesa)</option>
+                          <option value="physical">Físico</option>
+                          <option value="magical">Mágico</option>
+                        </select>
+                      </label>
                     </div>
-                    <label className="block space-y-1 text-xs">Tipo de dano padrão
-                      <select className="min-h-11 w-full rounded-lg border border-input bg-background px-3 text-sm"
-                        disabled={disabled} value={action.damage_kind}
-                        onChange={(e)=>changeAction(i,j,{...action,damage_kind:e.target.value as ContinuousDamageAction["damage_kind"]})}>
-                        <option value="true">Verdadeiro</option>
-                        <option value="physical">Físico</option>
-                        <option value="magical">Mágico</option>
+                    {action.damage_source==="dice" && <label className="block space-y-1 text-xs font-semibold">
+                      Expressão para rolar no Discord (não é rolada no site)
+                      <Input className="min-h-11" maxLength={80} disabled={disabled} placeholder="Ex.: 1d50, 2d10+5"
+                        value={action.dice_expression} onChange={e=>changeAction(i,j,{...action,dice_expression:e.target.value})}/>
+                      <span className="block font-normal text-muted-foreground">No turno o mestre insere o resultado que obteve no Discord.</span>
+                    </label>}
+                    {action.damage_source==="attribute" && <div className="grid gap-2 sm:grid-cols-2">
+                      <label className="block space-y-1 text-xs font-semibold">Atributo utilizado
+                        <select className="min-h-11 w-full rounded-lg border border-input bg-background px-3 text-sm"
+                          value={action.attribute_key??""} disabled={disabled}
+                          onChange={e=>changeAction(i,j,{...action,attribute_key:e.target.value||null})}>
+                          <option value="">Selecionar atributo…</option>
+                          {defs.map(d=><option key={d.key} value={d.key}>{d.label}</option>)}
+                        </select>
+                      </label>
+                      <label className="block space-y-1 text-xs font-semibold">Percentual do atributo
+                        <Input type="number" className="min-h-11" min={0} max={1000} step="any" inputMode="decimal"
+                          disabled={disabled} value={action.attribute_percent}
+                          onChange={e=>changeAction(i,j,{...action,attribute_percent:Math.max(0,Math.min(1000,Number(e.target.value)||0))})}/>
+                      </label>
+                    </div>}
+                    {(action.damage_source==="fixed"||action.damage_source==="attribute") && <label className="block space-y-1 text-xs font-semibold">
+                      {action.damage_source==="fixed"?"Dano fixo":"Dano fixo adicional"}
+                      <Input type="number" className="min-h-11" min={0} max={1000000} step={1}
+                        inputMode="numeric" disabled={disabled} value={action.fixed_damage}
+                        onChange={e=>changeAction(i,j,{...action,fixed_damage:numberValue(e.target.value)})}/>
+                    </label>}
+                    {action.damage_kind==="magical" && <div className="grid gap-2 sm:grid-cols-2">
+                      <label className="block space-y-1 text-xs">Tipo mágico cadastrado
+                        <select className="min-h-11 w-full rounded-lg border border-input bg-background px-3 text-sm" disabled={disabled}
+                          value={action.damage_type_id??""} onChange={e=>changeAction(i,j,{...action,damage_type_id:e.target.value||null})}>
+                          <option value="">Selecionar tipo mágico…</option>
+                          {damageTypes.filter(d=>d.category==="magical").map(d=><option key={d.id} value={d.id}>{d.name}</option>)}
+                        </select>
+                      </label>
+                      <label className="block space-y-1 text-xs">Grau da magia
+                        <select className="min-h-11 w-full rounded-lg border border-input bg-background px-3 text-sm" disabled={disabled}
+                          value={action.magic_level} onChange={e=>changeAction(i,j,{...action,magic_level:e.target.value as ContinuousDamageAction["magic_level"]})}>
+                          <option value="baixa">Baixa</option><option value="media">Média</option><option value="alta">Alta</option>
+                        </select>
+                      </label>
+                    </div>}
+                    {action.damage_kind==="physical" && <label className="block space-y-1 text-xs">Tipo físico (opcional)
+                      <select className="min-h-11 w-full rounded-lg border border-input bg-background px-3 text-sm" disabled={disabled}
+                        value={action.physical_damage_type_id??""}
+                        onChange={e=>changeAction(i,j,{...action,physical_damage_type_id:e.target.value||null})}>
+                        <option value="">Nenhum tipo específico</option>
+                        {damageTypes.filter(d=>d.category==="physical").map(d=><option key={d.id} value={d.id}>{d.name}</option>)}
                       </select>
-                    </label>
+                    </label>}
                     <label className="flex min-h-11 items-center gap-2 text-sm">
                       <input type="checkbox" checked={action.neutralizable} disabled={disabled}
                         onChange={e=>changeAction(i,j,{...action,neutralizable:e.target.checked})}/>
-                      Pode neutralizar o dano neste turno (ex.: Luz/Divino)
-                    </label>
-                  </div> : action.kind === "dot" ? <div className="space-y-3">
+                      Permitir neutralização deste dano durante o turno
+                    </label>                  </div> : action.kind === "dot" ? <div className="space-y-3">
                     <label className="block space-y-1 text-xs">DoT já cadastrado
                       <select value={action.template_id} disabled={disabled} className="min-h-11 w-full rounded-lg border border-input bg-background px-3 text-sm"
                         onChange={e=>changeAction(i,j,{...action,template_id:e.target.value})}>
@@ -246,7 +297,7 @@ export function ContinuousRulesEditor({ rules, onChange, defs, disabled = false 
                   <Plus className="mr-1 h-4 w-4"/> Acúmulo de atributos
                 </Button>
                 <Button variant="outline" className="min-h-11" disabled={disabled || rule.actions.length>=12}
-                  onClick={()=>changeRule(i,{actions:[...rule.actions,{kind:"damage",dice_count:1,dice_sides:50,flat:0,damage_kind:"true",neutralizable:false}]})}>
+                  onClick={()=>changeRule(i,{actions:[...rule.actions,{kind:"damage",damage_source:"dice",dice_expression:"1d50",attribute_key:null,attribute_percent:100,fixed_damage:0,damage_kind:"true",damage_type_id:null,physical_damage_type_id:null,magic_level:"baixa",neutralizable:false}]})}>
                   <Plus className="mr-1 h-4 w-4"/> Dano por turno
                 </Button>
                 <Button variant="outline" className="min-h-11" disabled={disabled||rule.actions.length>=12||registeredDots.length===0}
