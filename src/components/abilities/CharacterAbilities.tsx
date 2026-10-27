@@ -800,7 +800,28 @@ export function CharacterAbilitiesPanel({
       }
 
       const results: Record<string, string> = {};
+      // Execution is performed inside the authoritative attack RPC, before
+      // direct damage. Do not process another HP hit against a finished target.
+      const zeroHpAfterAttack = new Set<string>();
+      if (attackConfig.execute_enabled && hitTargets.length > 0) {
+        const { data: hpAfterActivation, error: hpCheckError } = await supabase
+          .from("character_attributes")
+          .select("character_id,current_value")
+          .eq("attribute_key", "hp")
+          .in("character_id", hitTargets.map(t => t.id));
+        if (hpCheckError) {
+          toast.error("Ataque realizado, mas não foi possível verificar a execução: " + hpCheckError.message);
+        } else {
+          for (const hp of hpAfterActivation ?? []) {
+            if (hp.current_value <= 0) zeroHpAfterAttack.add(hp.character_id);
+          }
+        }
+      }
       for (const target of hitTargets) {
+        if (zeroHpAfterAttack.has(target.id)) {
+          results[target.id] = "Execução! O HP deste alvo está em 0. Sem dano direto adicional; efeitos do ataque preservados.";
+          continue;
+        }
         const extraRaw = Number(attackExtraDamage[target.id] ?? 0);
         const extraPercent = Number(attackExtraDamagePercent[target.id] ?? 0);
         const finalBaseDamage = applyAbilityTargetDamage(attackBaseDamage, extraRaw, extraPercent);
@@ -1507,6 +1528,14 @@ export function CharacterAbilitiesPanel({
                             </div>
                           </div>
                         </div>
+                        {attackConfig.execute_enabled && <div className="rounded-lg border border-red-500/35 bg-red-950/15 px-3 py-2.5 text-xs">
+                          <p className="font-semibold text-red-300">Execução ao acertar <span className="text-muted-foreground">
+                            ({attackConfig.execute_mode==="percent"
+                              ? attackConfig.execute_threshold+"% do HP máximo"
+                              : "até "+attackConfig.execute_threshold+" HP"})</span>
+                          </p>
+                          <p className="mt-1 text-muted-foreground">O servidor verifica a condição ao confirmar o acerto, antes do dano direto. Se atingir o limite, HP → 0.</p>
+                        </div>}
                         <label className={`flex min-h-14 cursor-pointer flex-wrap items-center gap-3 rounded-lg border px-3 py-3 text-sm transition-colors ${attackHits[target.id] ? "border-emerald-500/70 bg-emerald-500/10" : "border-border bg-muted/20"}`}>
                           <input type="checkbox" className="h-5 w-5 shrink-0 accent-emerald-500" checked={attackHits[target.id] === true} disabled={attackBusy}
                             onChange={(event) => {
