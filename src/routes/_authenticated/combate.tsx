@@ -928,6 +928,10 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
         items={pendingContinuousTurn.items}
         title={pendingContinuousTurn.title}
         fighterNames={Object.fromEntries(fighters.map(f=>[f.id,f.name]))}
+        casterAttributes={Object.fromEntries(fighters.map(f=>[
+          f.id,Object.fromEntries((defs??[]).map(def=>[def.key,val(f,def.key)])),
+        ]))}
+        damageTypes={transformationDamageTypes}
         busy={advancingTurnKeys.has(pendingContinuousTurn.characterId??"__global__")}
         onCancel={()=>setPendingContinuousTurn(null)}
         onConfirm={(choices)=>{void advanceCombatTurn(pendingContinuousTurn.characterId,choices);}}
