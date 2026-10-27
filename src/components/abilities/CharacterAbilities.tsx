@@ -1765,7 +1765,7 @@ export function CharacterAbilitiesPanel({
                       {heldAttackTargets.filter(item=>item.rule_index===index).map(instance=>(
                         <div key={instance.id} className="flex items-center justify-between gap-2 rounded-lg bg-background/60 px-2.5 py-2">
                           <span className="min-w-0 truncate text-xs">
-                            {targets.find(target=>target.id===instance.target_character_id)?.name??"Alvo anterior"} · {instance.ticks} acúmulo(s)
+                            {targets.find(target=>target.id===instance.target_character_id)?.name??"Alvo anterior"} · {instance.rule.actions.length ? `${instance.ticks} acúmulo(s)` : `${instance.ticks} turno(s) de vínculo (sem efeitos)`}
                           </span>
                           <Button type="button" size="sm" variant="outline"
                             className="min-h-10 shrink-0 border-amber-600/40 text-amber-300"

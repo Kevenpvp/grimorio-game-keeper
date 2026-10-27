@@ -895,7 +895,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
             <div key={instance.id} className="flex min-w-0 items-center justify-between gap-2 rounded-lg border border-gold/20 bg-background/50 p-3">
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold">{instance.name}</p>
-                <p className="text-xs text-muted-foreground">{fighters.find(f=>f.id===instance.caster_character_id)?.name??"Origem"} → {fighters.find(f=>f.id===instance.target_character_id)?.name??"Alvo"} · {instance.ticks} acúmulo(s)</p>
+                <p className="text-xs text-muted-foreground">{fighters.find(f=>f.id===instance.caster_character_id)?.name??"Origem"} → {fighters.find(f=>f.id===instance.target_character_id)?.name??"Alvo"} · {instance.rule.actions.length ? `${instance.ticks} acúmulo(s)` : `${instance.ticks} turno(s) de vínculo (sem efeitos)`}</p>
               </div>
               <div className="flex shrink-0 flex-col gap-1.5 sm:flex-row">
                 {(["interrupt","dispel"] as const).map(mode=>(

@@ -79,6 +79,25 @@ describe("Efeitos contínuos", () => {
     expect(parsed[0].actions[1].kind).toBe("effect");
   });
 
+  it("salva regras sem ações e mantém a grudagem exclusiva", () => {
+    const grip = { ...defaultContinuousRule(), name: "Agarrar", exclusive_grip: true, max_targets: 1, actions: [] };
+    expect(defaultContinuousRule().actions).toEqual([]);
+    expect(parseContinuousRules([grip])).toMatchObject([{ name: "Agarrar", exclusive_grip: true, actions: [] }]);
+    expect(parseContinuousRules([{ ...grip, actions: [{ kind: "unknown" }] }])[0]?.actions).toEqual([]);
+    expect(parseContinuousRules([{ name: "Sem ações", trigger: "target" }])[0]?.actions).toEqual([]);
+  });
+
+  it("pula confirmações vazias, mas conserva a grudagem ativa", () => {
+    const blank = { ...defaultContinuousRule(), actions: [] };
+    const withEffect = { ...defaultContinuousRule(), actions: [{ kind: "status" as const, polarity: "debuff" as const, attributes: [] }] };
+    const grips = [
+      { id: "grip", active: true, rule: blank, target_character_id: target, caster_character_id: caster },
+      { id: "effect", active: true, rule: withEffect, target_character_id: target, caster_character_id: caster },
+    ] as ContinuousInstance[];
+    expect(pendingContinuousInstances(grips, target).map(item => item.id)).toEqual(["effect"]);
+    expect(grips[0].active).toBe(true);
+  });
+
   it("seleciona somente os vínculos pertinentes ao turno", () => {
     const items = [
       { id: "1", active: true, rule: { ...defaultContinuousRule(), trigger: "target" }, target_character_id: target, caster_character_id: caster },
@@ -123,5 +142,7 @@ describe("Efeitos contínuos", () => {
     );
     expect(html).toContain("Efeitos contínuos");
     expect(html).toContain("Nova regra");
+    expect(html).toContain("Somente grudagem");
+    expect(html).toContain("Só vínculo");
   });
 });

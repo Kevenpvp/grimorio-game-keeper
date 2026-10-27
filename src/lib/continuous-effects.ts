@@ -110,7 +110,6 @@ export function parseContinuousRules(value: unknown): ContinuousRule[] {
       }
       return [];
     }) : [];
-    if (!actions.length) return [];
     return [{
       name: typeof data.name === "string" && data.name.trim() ? data.name.trim().slice(0, 140) : "Efeito contínuo",
       trigger: data.trigger === "caster" || data.trigger === "global" ? data.trigger : "target",
@@ -131,7 +130,7 @@ export function defaultContinuousRule(): ContinuousRule {
   return { name: "Efeito contínuo", trigger: "target", linger_turns: 0,
     max_targets: null, on_limit: "replace_oldest", exclusive_grip: false,
     stop_on_caster_leave: true, stop_on_caster_death: false, stop_on_caster_stun: false,
-    actions: [{ kind: "status", polarity: "debuff", attributes: [{ key: "strength", mode: "percent", step: 5, cap: 100 }] }] };
+    actions: [] };
 }
 
 /** Dice notation is copied to Discord; the result is entered by the master. */
@@ -145,7 +144,7 @@ export function continuousDamageAdjusted(base: number, fixed: number, percent: n
 }
 
 export function pendingContinuousInstances(instances: ContinuousInstance[], characterId: string | null) {
-  return instances.filter((instance) => instance.active && (
+  return instances.filter((instance) => instance.active && instance.rule.actions.length > 0 && (
     characterId === null ? instance.rule.trigger === "global"
       : (instance.rule.trigger === "target" && instance.target_character_id === characterId)
       || (instance.rule.trigger === "caster" && instance.caster_character_id === characterId)

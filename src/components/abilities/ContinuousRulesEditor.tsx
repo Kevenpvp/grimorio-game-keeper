@@ -29,7 +29,7 @@ export function ContinuousRulesEditor({ rules, onChange, defs, disabled = false 
         <div>
           <h3 className="flex items-center gap-2 font-display text-lg text-gold"><Repeat2 className="h-5 w-5" /> Efeitos contínuos</h3>
           <p className="mt-1 max-w-xl text-xs text-muted-foreground">
-            Configure efeitos por turno sem escrever scripts. Em combate, o mestre confirma o dano antes de avançar.
+            O vínculo pode existir sozinho, sem causar dano ou aplicar efeitos. Se quiser, adicione ações por turno; o mestre confirma os danos no combate.
           </p>
         </div>
         <Button variant="outline" size="sm" className="min-h-11" disabled={disabled || rules.length >= 20}
@@ -56,7 +56,7 @@ export function ContinuousRulesEditor({ rules, onChange, defs, disabled = false 
           <details key={i} className="rounded-xl border border-gold/35 bg-[#0f0b09]/80 p-3">
             <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-2 font-semibold text-gold">
               <span className="flex min-w-0 items-center gap-2"><GripVertical className="h-4 w-4 shrink-0" /><span className="truncate">{rule.name}</span></span>
-              <span className="shrink-0 rounded-full bg-gold/10 px-2 py-1 text-xs">{rule.actions.length} ação(ões)</span>
+              <span className="shrink-0 rounded-full bg-gold/10 px-2 py-1 text-xs">{rule.actions.length ? `${rule.actions.length} ação(ões)` : "Só vínculo"}</span>
             </summary>
             <div className="space-y-4 border-t border-gold/15 pt-3">
               <label className="block space-y-1 text-xs font-semibold">Nome da regra
@@ -129,7 +129,7 @@ export function ContinuousRulesEditor({ rules, onChange, defs, disabled = false 
                 <div key={j} className="space-y-3 rounded-lg border border-gold/20 bg-background/40 p-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-sm font-bold text-gold">{action.kind === "status" ? "Acumular Buff/Debuff" : action.kind === "damage" ? "Dano periódico" : action.kind === "dot" ? "Aplicar DoT cadastrado" : "Efeito por turno"}</span>
-                    <Button variant="ghost" size="sm" className="min-h-10 text-red-300" disabled={disabled || rule.actions.length===1}
+                    <Button variant="ghost" size="sm" className="min-h-10 text-red-300" disabled={disabled}
                       onClick={() => changeRule(i, { actions: rule.actions.filter((_, id) => id !== j) })}>
                       <Trash2 className="mr-1 h-4 w-4" /> Remover ação
                     </Button>
@@ -309,6 +309,7 @@ export function ContinuousRulesEditor({ rules, onChange, defs, disabled = false 
                   </div>}
                 </div>
               ))}
+              {rule.actions.length === 0 && <p className="rounded-lg border border-dashed border-gold/25 p-3 text-xs text-muted-foreground">Somente grudagem: este vínculo não aplica efeitos nem causa dano por turno. Continua ativo e pode ser solto ou transferido normalmente.</p>}
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <Button variant="outline" className="min-h-11" disabled={disabled || rule.actions.length>=12}
                   onClick={()=>changeRule(i,{actions:[...rule.actions,{kind:"status",polarity:"debuff",attributes:[{key:defs.find(d=>d.key==="strength")?.key??defs.find(d=>d.key!=="hp"&&d.key!=="mana")?.key??"strength",mode:"percent",step:5,cap:100}]}]})}>
