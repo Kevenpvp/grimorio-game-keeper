@@ -1,7 +1,20 @@
 export type ContinuousTrigger = "target" | "caster" | "global";
 export type ContinuousAttribute = { key: string; mode: "fixed" | "percent"; step: number; cap: number };
 export type ContinuousStatusAction = { kind: "status"; polarity: "buff" | "debuff"; attributes: ContinuousAttribute[] };
-export type ContinuousDamageAction = { kind: "damage"; dice_count: number; dice_sides: number; flat: number; damage_kind: "true" | "physical" | "magical"; neutralizable: boolean };
+export type ContinuousDamageAction = {
+  kind: "damage";
+  /** A Discord dice expression is a reference, never rolled by the site. */
+  damage_source: "dice" | "fixed" | "attribute";
+  dice_expression: string;
+  attribute_key: string | null;
+  attribute_percent: number;
+  fixed_damage: number;
+  damage_kind: "true" | "physical" | "magical";
+  damage_type_id: string | null;
+  physical_damage_type_id: string | null;
+  magic_level: "baixa" | "media" | "alta";
+  neutralizable: boolean;
+};
 export type ContinuousDotAction = { kind: "dot"; template_id: string; damage_mode: "fixed" | "percent"; damage_amount: number; duration: number; repeat: boolean };
 export type ContinuousEffectAction = { kind: "effect"; effect_type: "stun" | "no_regen_hp" | "no_regen_mana" | "magic_prohibition" | "no_mana" | "invincible"; name: string; duration: number; repeat: boolean };
 export type ContinuousAction = ContinuousStatusAction | ContinuousDamageAction | ContinuousDotAction | ContinuousEffectAction;
@@ -16,7 +29,17 @@ export type ContinuousInstance = {
   caster_character_id: string; target_character_id: string; name: string;
   rule_index: number; active: boolean; ticks: number; rule: ContinuousRule;
 };
-export type ContinuousActionDecision = { skip?: boolean; damage_amount?: number; duration?: number; attributes?: Record<string,number> };
+export type ContinuousActionDecision = {
+  skip?: boolean; damage_amount?: number; duration?: number; attributes?: Record<string,number>;
+  damage?: number;
+  damage_kind?: "true" | "physical" | "magical";
+  damage_type_id?: string | null;
+  physical_damage_type_id?: string | null;
+  magic_level?: "baixa" | "media" | "alta";
+  fixed_adjustment?: number; percent_adjustment?: number;
+  defense_ignore?: { physical_fixed?: number; physical_percent?: number; magical_fixed?: number; magical_percent?: number };
+  neutralize?: boolean;
+};
 export type ContinuousDecision = {
   resolution?: "apply" | "interrupt" | "dispel";
   damage?: number; damage_kind?: "true" | "physical" | "magical"; neutralize?: boolean;
@@ -60,12 +83,29 @@ export function parseContinuousRules(value: unknown): ContinuousRule[] {
           name:typeof action.name==="string"?action.name.slice(0,120):"Efeito",duration:Math.max(1,n(action.duration,2,1000)),
           repeat:action.repeat===true,
       }];
-      if (action.kind === "damage") return [{
-        kind: "damage", dice_count: n(action.dice_count, 1, 20), dice_sides: Math.max(1, n(action.dice_sides, 50, 1000)),
-        flat: n(action.flat, 0, 1000000),
-        damage_kind: action.damage_kind === "physical" || action.damage_kind === "magical" ? action.damage_kind : "true",
-        neutralizable: action.neutralizable === true,
-      }];
+      if (action.kind === "damage") {
+        // Older rules stored dice_count, dice_sides and flat. Keep their
+        // notation but require the master to enter the roll from Discord.
+        const count = n(action.dice_count, 1, 20);
+        const sides = Math.max(1, n(action.dice_sides, 50, 1000));
+        const oldFlat = n(action.flat, 0, 1000000);
+        const legacyExpression = count ? `${count}d${sides}${oldFlat ? "+" + oldFlat : ""}` : String(oldFlat);
+        return [{
+          kind: "damage",
+          damage_source: action.damage_source === "attribute" || action.damage_source === "fixed"
+            ? action.damage_source : "dice",
+          dice_expression: typeof action.dice_expression === "string"
+            ? action.dice_expression.slice(0, 80) : legacyExpression,
+          attribute_key: typeof action.attribute_key === "string" ? action.attribute_key : null,
+          attribute_percent: Math.min(1000, n(action.attribute_percent, 100, 1000)),
+          fixed_damage: n(action.fixed_damage, oldFlat, 1000000),
+          damage_kind: action.damage_kind === "physical" || action.damage_kind === "magical" ? action.damage_kind : "true",
+          damage_type_id: typeof action.damage_type_id === "string" ? action.damage_type_id : null,
+          physical_damage_type_id: typeof action.physical_damage_type_id === "string" ? action.physical_damage_type_id : null,
+          magic_level: action.magic_level === "alta" || action.magic_level === "media" ? action.magic_level : "baixa",
+          neutralizable: action.neutralizable === true,
+        }];
+      }
       return [];
     }) : [];
     if (!actions.length) return [];
@@ -91,11 +131,14 @@ export function defaultContinuousRule(): ContinuousRule {
     actions: [{ kind: "status", polarity: "debuff", attributes: [{ key: "strength", mode: "percent", step: 5, cap: 100 }] }] };
 }
 
-/** UI dice roll is a suggested number; the server revalidates every edit. */
-export function previewContinuousDamage(action: ContinuousDamageAction): number {
-  let total = action.flat;
-  for (let i = 0; i < action.dice_count; i++) total += 1 + Math.floor(Math.random() * action.dice_sides);
-  return total;
+/** Dice notation is copied to Discord; the result is entered by the master. */
+export function continuousDamageExpression(action: ContinuousDamageAction): string {
+  return action.dice_expression.trim();
+}
+
+/** Final damage before defense and effects; signed adjustments are one-turn only. */
+export function continuousDamageAdjusted(base: number, fixed: number, percent: number): number {
+  return Math.max(0, Math.min(1_000_000, Math.round(Math.max(0, base + fixed) * (1 + percent / 100))));
 }
 
 export function pendingContinuousInstances(instances: ContinuousInstance[], characterId: string | null) {
