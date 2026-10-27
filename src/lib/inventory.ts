@@ -67,7 +67,7 @@ export function useCharacterInventory(characterId: string) {
       if (characterError) throw characterError;
       if (error) throw error;
       return {
-        slots: Number(character?.inventory_slots ?? 12),
+        slots: Number(character?.inventory_slots ?? 10),
         ownerId: character?.owner_id ?? null,
         items: (data ?? []).filter((item: any) => item.item_templates)
           .map((item: any) => ({ ...item, item_templates: normalizeTemplate(item.item_templates) })),
