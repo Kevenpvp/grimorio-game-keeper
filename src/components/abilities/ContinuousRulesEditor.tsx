@@ -74,15 +74,22 @@ export function ContinuousRulesEditor({ rules, onChange, defs, disabled = false 
                   <p className="text-xs text-muted-foreground">Controle quantas vítimas podem ficar agarradas, mordidas ou amaldiçoadas ao mesmo tempo.</p>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="space-y-1 text-xs font-semibold">Quantidade máxima de alvos
-                    <select className="min-h-11 w-full rounded-lg border border-input bg-background px-3 text-sm"
-                      value={rule.max_targets == null ? "unlimited" : String(rule.max_targets)}
-                      disabled={disabled}
-                      onChange={(e)=>changeRule(i,{max_targets:e.target.value==="unlimited"?null:Number(e.target.value)})}>
-                      <option value="unlimited">Sem limite</option>
-                      {[1,2,3,4,5,6,8,10,20].map(count=><option key={count} value={count}>{count} alvo{count>1?"s":""}</option>)}
-                    </select>
-                  </label>
+                  <div className="space-y-2">
+                    <label className="flex min-h-10 items-center gap-2 text-xs font-semibold">
+                      <input type="checkbox" checked={rule.max_targets===null} disabled={disabled}
+                        onChange={e=>changeRule(i,{max_targets:e.target.checked?null:1})}/>
+                      Sem limite de alvos
+                    </label>
+                    <label className="block space-y-1 text-xs font-semibold">
+                      Máximo de alvos simultâneos
+                      <Input type="number" min={1} max={100} step={1} inputMode="numeric"
+                        aria-label="Quantidade máxima de alvos simultâneos" className="min-h-11"
+                        disabled={disabled||rule.max_targets===null}
+                        value={rule.max_targets??""}
+                        placeholder={rule.max_targets===null?"Ilimitado":"Digite a quantidade"}
+                        onChange={e=>changeRule(i,{max_targets:Math.max(1,Math.min(100,Math.trunc(Number(e.target.value)||1)))})}/>
+                    </label>
+                  </div>
                   <label className="space-y-1 text-xs font-semibold">Ao atingir o limite
                     <select className="min-h-11 w-full rounded-lg border border-input bg-background px-3 text-sm"
                       value={rule.on_limit} disabled={disabled||rule.max_targets===null}
