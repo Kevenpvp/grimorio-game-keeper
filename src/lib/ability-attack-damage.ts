@@ -16,3 +16,10 @@ export function isValidAbilityTargetAdjustment(fixed: number, percent: number): 
   return Number.isInteger(fixed) && fixed >= -1_000_000 && fixed <= 1_000_000
     && Number.isFinite(percent) && percent >= -100 && percent <= 1000;
 }
+
+/** A zero-damage ability hit applies its effects but must not invoke the damage
+ * pipeline: flat damage bonuses, vulnerabilities and negative defenses could
+ * turn raw 0 into HP loss. Positive hits retain all those normal modifiers. */
+export function shouldApplyAbilityDirectDamage(rawDamage: number): boolean {
+  return Number.isFinite(rawDamage) && rawDamage > 0;
+}
