@@ -47,7 +47,7 @@ export function ContinuousTurnDialog({items,title,busy,fighterNames,casterAttrib
   const [values,setValues]=useState<Record<string,FormValue>>(()=>
     Object.fromEntries(items.map(item=>[item.id,{resolution:"apply"}])));
   const [expandedId,setExpandedId]=useState<string|null>(items[0]?.id??null);
-  const [actionEdits,setActionEdits]=useState<Record<string,Record<string,ActionEdit>>(()=>
+  const [actionEdits,setActionEdits]=useState<Record<string,Record<string,ActionEdit>>>(()=>
     Object.fromEntries(items.map(item=>[
       item.id,Object.fromEntries(item.rule.actions.map((action,j)=>[
         String(j),{
