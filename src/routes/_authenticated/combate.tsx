@@ -126,6 +126,7 @@ type TransformationTemplate = {
   end_effects: Json;
   owner_character_id?: string | null;
   source_transformation_id?: string | null;
+  source_inventory_item_id?: string | null;
 };
 type TransformationLink = { transformation_id: string; race_id?: string; virtue_id?: string; class_id?: string };
 type CharacterTransformationState = {
@@ -465,7 +466,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
   const { data: transformationCatalog = [] } = useQuery<TransformationTemplate[]>({
     queryKey: ["transformations"],
     queryFn: async () => {
-      const { data, error } = await db.from("transformations").select("id,name,description,duration_turns,cooldown_turns,mana_cost,owner_character_id,source_transformation_id,modifiers,effects,end_effects").order("name");
+      const { data, error } = await db.from("transformations").select("id,name,description,duration_turns,cooldown_turns,mana_cost,owner_character_id,source_transformation_id,source_inventory_item_id,modifiers,effects,end_effects").order("name");
       if (error) throw error;
       return data ?? [];
     },
@@ -530,6 +531,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
     return transformationCatalog.filter((transformation) => ids.has(transformation.id) && !overriddenIds.has(transformation.id));
   };
   const [activatingTransformationFor, setActivatingTransformationFor] = useState<string | null>(null);
+  const [endingTransformationFor, setEndingTransformationFor] = useState<string | null>(null);
   const [advancedTransformation, setAdvancedTransformation] = useState<{
     characterId: string; characterName: string; template: TransformationTemplate;
   } | null>(null);
@@ -568,6 +570,37 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
       return false;
     } finally {
       setActivatingTransformationFor(null);
+    }
+  }
+  async function endTransformation(characterId: string, transformationId: string) {
+    if (!battle.active || activatingTransformationFor || endingTransformationFor) return;
+    const name = transformationCatalog.find((item) => item.id === transformationId)?.name ?? "esta transformação";
+    if (!window.confirm(`Destransformar e encerrar "${name}" agora? Os bônus e efeitos ativos da transformação serão retirados.`)) return;
+    setEndingTransformationFor(characterId);
+    try {
+      const { error } = await db.rpc("end_character_transformation", {
+        _character_id: characterId,
+        _transformation_id: transformationId,
+        _battle_id: battle.id,
+      });
+      if (error) throw error;
+      toast.success(`Transformação "${name}" encerrada.`);
+      noteActivity("transformation", "Transformação encerrada manualmente: " + name + ".");
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["battle-character-transformations"] }),
+        qc.invalidateQueries({ queryKey: ["character-transformations"] }),
+        qc.invalidateQueries({ queryKey: ["transformations"] }),
+        qc.invalidateQueries({ queryKey: ["battle-effects"] }),
+        qc.invalidateQueries({ queryKey: ["character-active-effects"] }),
+        qc.invalidateQueries({ queryKey: ["character-abilities"] }),
+        qc.invalidateQueries({ queryKey: ["character-abilities-battle"] }),
+        qc.invalidateQueries({ queryKey: ["character-attributes"] }),
+        qc.invalidateQueries({ queryKey: ["battles"] }),
+      ]);
+    } catch (error) {
+      toast.error("Não foi possível destransformar: " + (error instanceof Error ? error.message : String(error)));
+    } finally {
+      setEndingTransformationFor(null);
     }
   }
   const visibleEffectCharacterIds = useMemo(
@@ -719,6 +752,8 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["character-abilities"] }),
         qc.invalidateQueries({ queryKey: ["character-abilities-battle"] }),
+        qc.invalidateQueries({ queryKey: ["battle-character-transformations"] }),
+        qc.invalidateQueries({ queryKey: ["character-transformations"] }),
       ]);
 
       if (Number.isFinite(confirmedTurn)) {
@@ -768,6 +803,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
         ["character-abilities-battle"],
         ["character-abilities"],
         ["battle-character-public-states"],
+        ["battle-character-transformations"],
       );
     } finally {
       setAdvancingTurnKeys((current) => {
@@ -1015,9 +1051,18 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                 : <HiddenResourceState label="Mana" value={publicState?.mana_state ?? "Carregando..."} />}
 
               {activeTransformationState && (
-                <div className="rounded-md border border-emerald-500/40 bg-emerald-500/5 p-2">
-                  <div className="text-xs font-semibold text-emerald-500">Transformado: {activeTransformation?.name ?? "Transformação ativa"}</div>
-                  <div className="text-[11px] text-muted-foreground">Termina em {activeTransformationRemaining} turno(s)</div>
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-emerald-500/40 bg-emerald-500/5 p-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-semibold text-emerald-500">Transformado: {activeTransformation?.name ?? "Transformação ativa"}</div>
+                    <div className="text-[11px] text-muted-foreground">Termina em {activeTransformationRemaining} turno(s)</div>
+                  </div>
+                  {isOwnFighter && <Button
+                    size="sm" variant="outline" className="min-h-9 border-emerald-500/40 text-emerald-300"
+                    disabled={!battle.active || !!activatingTransformationFor || !!endingTransformationFor}
+                    onClick={() => void endTransformation(f.id, activeTransformationState.transformation_id)}
+                  >
+                    {endingTransformationFor===f.id ? "Encerrando..." : "Destransformar"}
+                  </Button>}
                 </div>
               )}
               <div className="flex flex-wrap gap-1.5 text-[11px]">
@@ -1074,14 +1119,22 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                       return (
                         <div key={transformation.id} className="space-y-2 rounded border border-border/70 p-2">
                           <div className="flex flex-wrap items-center gap-2">
-                            {isOwnFighter && <Button
+                            {isOwnFighter && !isActive && <Button
                               size="sm"
-                              variant={isActive ? "default" : "outline"}
-                              disabled={disabled}
+                              variant="outline"
+                              disabled={disabled || !!endingTransformationFor}
                               onClick={() => void activateTransformation(f.id, transformation.id)}
                             >
                               <Sparkles className="mr-1 h-3.5 w-3.5" />
-                              {isActive ? transformation.name : isCoolingDown ? `${transformation.name} · ${state?.cooldown_remaining}T` : activatingTransformationFor === f.id ? "Ativando…" : transformation.name}
+                              {isCoolingDown ? `${transformation.name} · ${state?.cooldown_remaining}T` : activatingTransformationFor === f.id ? "Ativando…" : transformation.name}
+                            </Button>}
+                            {isOwnFighter && isActive && <Button
+                              size="sm" variant="outline"
+                              className="min-h-11 border-emerald-500/40 text-emerald-300"
+                              disabled={!battle.active || !!activatingTransformationFor || !!endingTransformationFor}
+                              onClick={() => void endTransformation(f.id, transformation.id)}
+                            >
+                              {endingTransformationFor===f.id ? "Encerrando..." : "Destransformar"}
                             </Button>}
                             {isMaster && <Button
                               size="sm" variant="outline" className="min-h-11 border-gold/40 text-gold"
@@ -1137,7 +1190,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                       );
                     })}
                   </div>
-                  {activeTransformationState && <p className="text-[11px] text-muted-foreground">A transformação é encerrada automaticamente quando seu contador chega a zero.</p>}
+                  {activeTransformationState && <p className="text-[11px] text-muted-foreground">A transformação é encerrada automaticamente aos 0 turnos, ou manualmente com Destransformar.</p>}
                 </div>
               )}
 
