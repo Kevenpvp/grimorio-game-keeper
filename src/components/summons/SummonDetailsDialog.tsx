@@ -108,7 +108,7 @@ function AbilityDetails({ability, labels}: {ability:CreatureSkill; labels:Record
           </p>
           {rule.actions.map((action,j)=><p key={j} className="mt-1">
             {action.kind==="status" ? `Acúmulo: ${action.attributes.map(a=>`${action.polarity==="debuff"?"−":"+"}${a.step}${a.mode==="percent"?"%":""} ${labels[a.key]??a.key}/turno`).join(", ")}`
-              :action.kind==="damage" ? `Dano periódico: ${action.damage_source==="dice"?action.dice_expression:action.damage_source==="fixed"?action.fixed_damage+\" fixo\":action.attribute_percent+\"% de \"+(labels[action.attribute_key??""]??action.attribute_key)} (${action.damage_kind})`
+              :action.kind==="damage" ? `Dano periódico: ${action.damage_source==="dice"?action.dice_expression:action.damage_source==="fixed"?`${action.fixed_damage} fixo`:`${action.attribute_percent}% de ${labels[action.attribute_key??""]??action.attribute_key??"atributo"}`} (${action.damage_kind})`
               :action.kind==="dot"?"DoT registrado":"Efeito adicional"}
           </p>)}
         </div>)}
