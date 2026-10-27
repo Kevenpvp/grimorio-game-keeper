@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { dispatchCustomAbilityScriptEvents } from "@/lib/ability-script-runtime";
 import { applyAbilityTargetDamage, isValidAbilityTargetAdjustment, shouldApplyAbilityDirectDamage } from "@/lib/ability-attack-damage";
+import { isAttackExecutionEligible } from "@/lib/attack-execution";
 import { addDefenseIgnore, defenseIgnoreText, ZERO_DEFENSE_IGNORE, type DefenseIgnore } from "@/lib/defense-ignore";
 import { DefenseIgnoreInputs } from "@/components/abilities/DefenseIgnoreInputs";
 import { attackDiceModifier } from "@/lib/combat-dice";
@@ -1535,6 +1536,20 @@ export function CharacterAbilitiesPanel({
                               : "até "+attackConfig.execute_threshold+" HP"})</span>
                           </p>
                           <p className="mt-1 text-muted-foreground">O servidor verifica a condição ao confirmar o acerto, antes do dano direto. Se atingir o limite, HP → 0.</p>
+                          {(() => {
+                            const hp = target.character_attributes?.find(attribute=>attribute.attribute_key==="hp");
+                            if(!hp)return null;
+                            const current=Number(hp.current_value??0);
+                            const maximum=Number(hp.max_value??0);
+                            return <p className="mt-1.5 font-medium">
+                              HP atual: {current}/{maximum} · <span className={
+                                isAttackExecutionEligible(attackConfig,current,maximum)
+                                  ?"text-red-300":"text-muted-foreground"
+                              }>{isAttackExecutionEligible(attackConfig,current,maximum)
+                                ?"Alvo elegível na prévia":"Acima do limite ou já sem HP"}</span>
+                            </p>;
+                          })()}
+                          <p className="mt-1 text-[11px] text-muted-foreground">A prévia pode ficar desatualizada; a decisão final usa o HP atual do servidor.</p>
                         </div>}
                         <label className={`flex min-h-14 cursor-pointer flex-wrap items-center gap-3 rounded-lg border px-3 py-3 text-sm transition-colors ${attackHits[target.id] ? "border-emerald-500/70 bg-emerald-500/10" : "border-border bg-muted/20"}`}>
                           <input type="checkbox" className="h-5 w-5 shrink-0 accent-emerald-500" checked={attackHits[target.id] === true} disabled={attackBusy}
