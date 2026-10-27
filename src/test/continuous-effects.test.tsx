@@ -99,10 +99,11 @@ describe("Efeitos contínuos", () => {
   });
 
   it("seleciona somente os vínculos pertinentes ao turno", () => {
+    const withEffect = { ...defaultContinuousRule(), actions: [{ kind: "status" as const, polarity: "debuff" as const, attributes: [] }] };
     const items = [
-      { id: "1", active: true, rule: { ...defaultContinuousRule(), trigger: "target" }, target_character_id: target, caster_character_id: caster },
-      { id: "2", active: true, rule: { ...defaultContinuousRule(), trigger: "caster" }, target_character_id: target, caster_character_id: caster },
-      { id: "3", active: true, rule: { ...defaultContinuousRule(), trigger: "global" }, target_character_id: target, caster_character_id: caster },
+      { id: "1", active: true, rule: { ...withEffect, trigger: "target" }, target_character_id: target, caster_character_id: caster },
+      { id: "2", active: true, rule: { ...withEffect, trigger: "caster" }, target_character_id: target, caster_character_id: caster },
+      { id: "3", active: true, rule: { ...withEffect, trigger: "global" }, target_character_id: target, caster_character_id: caster },
       { id: "4", active: false, rule: defaultContinuousRule(), target_character_id: target, caster_character_id: caster },
     ] as ContinuousInstance[];
     expect(pendingContinuousInstances(items, target).map(i => i.id)).toEqual(["1"]);
