@@ -1,9 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   defaultContinuousRule, parseContinuousRules, pendingContinuousInstances,
-  previewContinuousDamage, type ContinuousInstance,
+  continuousDamageExpression, continuousDamageAdjusted, type ContinuousInstance,
 } from "@/lib/continuous-effects";
 import { ContinuousRulesEditor } from "@/components/abilities/ContinuousRulesEditor";
 
@@ -91,12 +91,26 @@ describe("Efeitos contínuos", () => {
     expect(pendingContinuousInstances(items, null).map(i => i.id)).toEqual(["3"]);
   });
 
-  it("rola 1d50 com limites corretos", () => {
-    const action = { kind: "damage" as const, dice_count: 1, dice_sides: 50, flat: 0, damage_kind: "true" as const, neutralizable: true };
-    const rand = vi.spyOn(Math, "random").mockReturnValueOnce(0).mockReturnValueOnce(0.9999999);
-    expect(previewContinuousDamage(action)).toBe(1);
-    expect(previewContinuousDamage(action)).toBe(50);
-    rand.mockRestore();
+  it("mantém 1d50 como instrução de rolagem no Discord, sem rolar no site", () => {
+    const [rule] = parseContinuousRules([{name:"Mordida",trigger:"target",actions:[{
+      kind:"damage",dice_count:1,dice_sides:50,flat:0,damage_kind:"true",neutralizable:true,
+    }]}]);
+    const action = rule.actions[0];
+    expect(action.kind).toBe("damage");
+    if(action.kind!=="damage")return;
+    expect(action.damage_source).toBe("dice");
+    expect(continuousDamageExpression(action)).toBe("1d50");
+  });
+
+  it("permite dano fixo e baseado em atributo com bônus e penalidade manual", () => {
+    const [rule] = parseContinuousRules([{name:"Desgraça",trigger:"target",actions:[{
+      kind:"damage",damage_source:"attribute",attribute_key:"strength",attribute_percent:50,
+      fixed_damage:5,damage_kind:"physical",
+    }]}]);
+    expect(rule.actions[0]).toMatchObject({kind:"damage",damage_source:"attribute",attribute_percent:50,fixed_damage:5});
+    expect(continuousDamageAdjusted(50,10,-25)).toBe(45);
+    expect(continuousDamageAdjusted(50,-100,0)).toBe(0);
+    expect(continuousDamageAdjusted(0,0,0)).toBe(0);
   });
 
   it("renderiza o editor mobile sem consultar personagens reais", () => {
