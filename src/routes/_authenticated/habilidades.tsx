@@ -21,6 +21,7 @@ import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEdito
 import { ContinuousRulesEditor } from "@/components/abilities/ContinuousRulesEditor";
 import { parseContinuousRules, type ContinuousRule } from "@/lib/continuous-effects";
 import { AbilityDotEffectsEditor } from "@/components/abilities/SheetAbilityAttackEditor";
+import { AbilityAttackExecutionEditor } from "@/components/abilities/AbilityAttackExecutionEditor";
 import { findRegisteredDotTemplate, registerAbilityDotTemplates } from "@/lib/ability-dot-templates";
 import { DefenseIgnoreInputs } from "@/components/abilities/DefenseIgnoreInputs";
 import { ZERO_DEFENSE_IGNORE, defenseIgnoreText } from "@/lib/defense-ignore";
@@ -470,6 +471,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
                 </>
               )}
             </div>
+            <AbilityAttackExecutionEditor value={attackDamage} onChange={setAttackDamage} disabled={busy}/>
             <div className="rounded-md border border-gold/25 p-3">
               <DefenseIgnoreInputs
                 title="Ignorar defesa garantido pelo ataque"
