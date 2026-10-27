@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Ghost, Plus, Trash2, Shield, Sparkles } from "lucide-react";
+import { Ghost, Plus, Trash2, Shield, Sparkles, Eye } from "lucide-react";
+import { SummonDetailsDialog } from "@/components/summons/SummonDetailsDialog";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { SearchableGrantPicker } from "@/components/ui/searchable-grant-picker";
@@ -85,8 +86,9 @@ function SummonStatsFields({ title, help, value, onChange }: {
   );
 }
 
-function SummonGrantCard({ grant, master, templateOptions, onRefresh }: {
+function SummonGrantCard({ grant, master, templateOptions, onRefresh, onViewDetails }: {
   grant: SummonGrant; master: boolean; templateOptions: CharacterOption[]; onRefresh: () => void;
+  onViewDetails: (grantId:string) => void;
 }) {
   const [name, setName] = useState(grant.display_name);
   const [customStats, setCustomStats] = useState<Stats>(grant.custom_stats ?? {});
@@ -110,7 +112,7 @@ function SummonGrantCard({ grant, master, templateOptions, onRefresh }: {
     setBorrowedIds(grant.borrowed_assignment_ids ?? []);
   }, [grant.id, grant.display_name, grant.custom_stats, grant.transfer_stats, grant.borrowed_assignment_ids]);
 
-  const templateName = templateOptions.find((item) => item.id === grant.template_character_id)?.name ?? "Criatura cadastrada";
+  const templateName = templateOptions.find((item) => item.id === grant.template_character_id)?.name ?? grant.display_name ?? "Criatura cadastrada";
   async function save() {
     setBusy(true);
     try {
@@ -144,6 +146,10 @@ function SummonGrantCard({ grant, master, templateOptions, onRefresh }: {
         </div>
         {master && <Button size="icon" variant="ghost" disabled={busy} onClick={() => void remove()} aria-label="Remover invocação"><Trash2 className="h-4 w-4"/></Button>}
       </div>
+      <Button type="button" size="sm" variant="outline" className="min-h-11 w-full border-gold/30 text-gold sm:w-auto"
+        onClick={() => onViewDetails(grant.id)}>
+        <Eye className="mr-2 h-4 w-4" /> Ver detalhes da criatura
+      </Button>
       {master ? (
         <>
           <label className="block space-y-1 text-xs">Nome da invocação
@@ -190,6 +196,7 @@ export function SummonGrantsEditor({ characterId, abilityId, master }: {
   const { data: templates = [] } = useSummonTemplates(master);
   const [templateId, setTemplateId] = useState("");
   const [busy, setBusy] = useState(false);
+  const [detailsGrantId, setDetailsGrantId] = useState<string|null>(null);
   const current = grants.filter((grant) => characterId
     ? grant.summoner_character_id === characterId
     : grant.ability_id === abilityId);
@@ -228,7 +235,9 @@ export function SummonGrantsEditor({ characterId, abilityId, master }: {
           : "Criaturas invocadas automaticamente ao ativar esta habilidade durante um combate."}
       </p>
       {!current.length && <p className="text-sm text-muted-foreground">Nenhuma invocação configurada.</p>}
-      {current.map((grant) => <SummonGrantCard key={grant.id} grant={grant} master={master} templateOptions={templates} onRefresh={refresh}/>)}
+      {current.map((grant) => <SummonGrantCard key={grant.id} grant={grant} master={master}
+        templateOptions={templates} onRefresh={refresh} onViewDetails={setDetailsGrantId}/>)}
+      <SummonDetailsDialog grantId={detailsGrantId} onClose={()=>setDetailsGrantId(null)} />
       {master && (
         <div className="flex flex-col gap-2 sm:flex-row">
           <select className="h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-sm" value={templateId} onChange={(event) => setTemplateId(event.target.value)}>
@@ -327,6 +336,7 @@ export function SummonCombatPanel({ characterId, characterName, battleId, master
   const { data: defs = [] } = useDefs();
   const [transferOverrides, setTransferOverrides] = useState<Record<string, Stats>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [detailsGrantId, setDetailsGrantId] = useState<string|null>(null);
   const { data: abilityIds = [] } = useQuery<string[]>({
     queryKey: ["summon-ability-source-ids", characterId],
     enabled: visible,
@@ -391,6 +401,10 @@ export function SummonCombatPanel({ characterId, characterName, battleId, master
               <span className="text-sm font-medium">{g.display_name || "Invocação cadastrada"}</span>
               <span className="text-xs text-muted-foreground">{active ? "Em combate" : g.ability_id ? "Vinculada à habilidade" : "Disponível"}</span>
             </div>
+            <Button type="button" size="sm" variant="outline" className="min-h-11 w-full border-gold/30 text-gold sm:w-auto"
+              onClick={()=>setDetailsGrantId(g.id)}>
+              <Eye className="mr-2 h-4 w-4"/> Ver detalhes da criatura
+            </Button>
             {master && !active && (
               <>
                 <p className="text-xs text-muted-foreground">Ajuste quanto {characterName} emprestará de cada atributo antes de invocar. Os valores retornam ao remover a criatura.</p>
@@ -426,8 +440,15 @@ export function SummonCombatPanel({ characterId, characterName, battleId, master
       })}
       {currentInstances.map(s => master
         ? <SummonInstanceEditor key={s.id} instance={s} name={labelFor(s)} onRefresh={refresh}/>
-        : <p key={s.id} className="rounded-md border p-2 text-xs">{labelFor(s)} está participando do combate.</p>
+        : <div key={s.id} className="space-y-2 rounded-md border border-gold/20 p-3 text-xs">
+            <p>{labelFor(s)} está participando do combate.</p>
+            {s.grant_id && <Button type="button" size="sm" variant="outline" className="min-h-11 w-full sm:w-auto"
+              onClick={()=>setDetailsGrantId(s.grant_id)}>
+              <Eye className="mr-2 h-4 w-4"/> Ver HP, status e habilidades
+            </Button>}
+          </div>
       )}
+      <SummonDetailsDialog grantId={detailsGrantId} onClose={()=>setDetailsGrantId(null)}/>
       {!master && <p className="text-xs text-muted-foreground">Somente o mestre pode invocar ou ajustar os atributos no combate.</p>}
     </section>
   );
