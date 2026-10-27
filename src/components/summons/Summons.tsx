@@ -19,6 +19,7 @@ type SummonGrant = {
   custom_stats: Stats;
   transfer_stats: Stats;
   borrowed_assignment_ids: string[];
+  source_inventory_item_id?: string | null;
 };
 type CharacterOption = { id: string; name: string };
 type AbilityOption = { id: string; name: string };
@@ -235,7 +236,7 @@ export function SummonGrantsEditor({ characterId, abilityId, master }: {
           : "Criaturas invocadas automaticamente ao ativar esta habilidade durante um combate."}
       </p>
       {!current.length && <p className="text-sm text-muted-foreground">Nenhuma invocação configurada.</p>}
-      {current.map((grant) => <SummonGrantCard key={grant.id} grant={grant} master={master}
+      {current.map((grant) => <SummonGrantCard key={grant.id} grant={grant} master={master && !grant.source_inventory_item_id}
         templateOptions={templates} onRefresh={refresh} onViewDetails={setDetailsGrantId}/>)}
       <SummonDetailsDialog grantId={detailsGrantId} onClose={()=>setDetailsGrantId(null)} />
       {master && (

@@ -14,13 +14,16 @@ import { useDefs, useRaces, useClasses, useVirtues } from "@/lib/sheets";
 import type { Json } from "@/integrations/supabase/types";
 import { supabase } from "@/integrations/supabase/client";
 import { usePhotoUrl, type Character } from "@/lib/sheets";
+import { useCharacterInventory } from "@/lib/inventory";
 
-type Transformation = { id: string; name: string; description: string | null; duration_turns: number; cooldown_turns: number; mana_cost: number; modifiers: Json; effects: Json; end_effects: Json; owner_character_id?: string | null; source_transformation_id?: string | null; linked_by_race_id?: string | null; linked_by_virtue_id?: string | null; linked_by_class_id?: string | null };
+type Transformation = { id: string; name: string; description: string | null; duration_turns: number; cooldown_turns: number; mana_cost: number; modifiers: Json; effects: Json; end_effects: Json; owner_character_id?: string | null; source_transformation_id?: string | null; source_inventory_item_id?: string | null; linked_by_race_id?: string | null; linked_by_virtue_id?: string | null; linked_by_class_id?: string | null };
 type CharacterTransformationState = { transformation_id: string; image_path: string | null; active: boolean; cooldown_remaining: number };
 
 export function CharacterTransformationImages({ character, isMaster = false }: { character: Character; isMaster?: boolean }) {
   const db = supabase as any;
   const qc = useQueryClient();
+  const { data: inventory } = useCharacterInventory(character.id);
+  const accessoryName = (id: string | null | undefined) => inventory?.items.find(item => item.id === id)?.item_templates.name ?? "Equipamento";
   const [newTransformationName, setNewTransformationName] = useState("");
   const [creatingTransformation, setCreatingTransformation] = useState(false);
   const [newTransformationTrait, setNewTransformationTrait] = useState<"none" | "race" | "virtue" | "class">("none");
@@ -107,7 +110,7 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
     !transformation.owner_character_id && !transformation.source_transformation_id
   );
   const personalCatalogCopies = catalog.filter((transformation) =>
-    transformation.owner_character_id === character.id && !!transformation.source_transformation_id
+    transformation.owner_character_id === character.id && !!transformation.source_transformation_id && !transformation.source_inventory_item_id
   );
   const grantedCatalogIds = new Set(personalCatalogCopies.map((item) => item.source_transformation_id as string));
 
@@ -280,7 +283,8 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
                     {fromRace && <span className="rounded bg-gold/10 px-2 py-0.5 text-[11px] text-gold">Raça</span>}
                     {fromVirtue && <span className="rounded bg-gold/10 px-2 py-0.5 text-[11px] text-gold">Virtude</span>}
                     {fromClass && <span className="rounded bg-gold/10 px-2 py-0.5 text-[11px] text-gold">Classe</span>}
-                    {transformation.owner_character_id === character.id && <span className="rounded bg-violet-500/10 px-2 py-0.5 text-[11px] text-violet-300">Exclusiva</span>}
+                    {transformation.source_inventory_item_id && <span className="rounded bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-300">💎 Acessório: {accessoryName(transformation.source_inventory_item_id)}</span>}
+                    {transformation.owner_character_id === character.id && !transformation.source_inventory_item_id && <span className="rounded bg-violet-500/10 px-2 py-0.5 text-[11px] text-violet-300">Exclusiva</span>}
                     {state?.active && <span className="rounded bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-500">Ativa</span>}
                   </div>
                 </div>
@@ -312,7 +316,8 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
               transformation={transformation}
               state={states.find((entry) => entry.transformation_id === transformation.id)}
               isMaster={isMaster}
-              isPersonal={transformation.owner_character_id === character.id}
+              isPersonal={transformation.owner_character_id === character.id && !transformation.source_inventory_item_id}
+              itemSourceName={transformation.source_inventory_item_id ? accessoryName(transformation.source_inventory_item_id) : null}
               grantedByRace={raceLinks.some((link) => link.transformation_id === transformation.id || link.transformation_id === transformation.source_transformation_id)}
               grantedByVirtue={virtueLinks.some((link) => link.transformation_id === transformation.id || link.transformation_id === transformation.source_transformation_id)}
               grantedByClass={classLinks.some((link) => link.transformation_id === transformation.id || link.transformation_id === transformation.source_transformation_id)}
@@ -335,7 +340,7 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
 }
 
 function TransformationImageCard({
-  characterId, raceId, virtueId, classId, raceName, virtueName, className, transformation, state, onSaved, isMaster, isPersonal, grantedByRace, grantedByVirtue, grantedByClass, hasCharacterState, defs, damageTypes, races,
+  characterId, raceId, virtueId, classId, raceName, virtueName, className, transformation, state, onSaved, isMaster, isPersonal, itemSourceName, grantedByRace, grantedByVirtue, grantedByClass, hasCharacterState, defs, damageTypes, races,
 }: {
   characterId: string;
   raceId: string | null;
@@ -348,6 +353,7 @@ function TransformationImageCard({
   state?: CharacterTransformationState;
   isMaster: boolean;
   isPersonal: boolean;
+  itemSourceName: string | null;
   grantedByRace: boolean;
   grantedByVirtue: boolean;
   grantedByClass: boolean;
@@ -530,7 +536,8 @@ function TransformationImageCard({
             {grantedByVirtue && <span className="rounded bg-gold/10 px-2 py-0.5 text-[11px] text-gold">Transformação da virtude</span>}
             {grantedByClass && <span className="rounded bg-gold/10 px-2 py-0.5 text-[11px] text-gold">Transformação da classe</span>}
             {isPersonal && <span className="rounded bg-violet-500/10 px-2 py-0.5 text-[11px] text-violet-300">Exclusiva do personagem</span>}
-            {!grantedByRace && !grantedByVirtue && !grantedByClass && !isPersonal && hasCharacterState && <span className="rounded bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">Vinculada à ficha</span>}
+            {itemSourceName && <span className="rounded bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-300">💎 Acessório: {itemSourceName}</span>}
+            {!itemSourceName && !grantedByRace && !grantedByVirtue && !grantedByClass && !isPersonal && hasCharacterState && <span className="rounded bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">Vinculada à ficha</span>}
           </div>
           {state?.active && <p className="mt-1 text-xs font-semibold text-emerald-500">Transformação ativa · {state.cooldown_remaining} turno(s)</p>}
           {transformation.description && <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">{transformation.description}</p>}

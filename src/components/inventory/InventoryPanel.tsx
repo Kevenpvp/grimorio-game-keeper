@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Backpack, Check, Gem, Package, Plus, ShieldCheck, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,19 @@ export function InventoryPanel({ characterId, master = false, combat = false }: 
   const [templateId, setTemplateId] = useState("");
   const [slotsInput, setSlotsInput] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const { data: grantDetails } = useQuery<{
+    abilities: Array<{id:string;name:string}>;
+    transformations: Array<{id:string;name:string}>;
+    summons: Array<{id:string;name:string}>;
+  }>({
+    queryKey: ["inventory-grant-details", selectedId],
+    enabled: !!selectedId,
+    queryFn: async () => {
+      const { data: details, error } = await db.rpc("inventory_item_grant_details", { _item_id: selectedId });
+      if (error) throw error;
+      return details;
+    },
+  });
 
   if (isLoading) return <div className="panel p-4 text-sm text-muted-foreground">Carregando inventário…</div>;
   if (error || !data) return <div role="alert" className="panel border-red-500/40 p-4 text-sm text-red-300">Não foi possível consultar o inventário: {error instanceof Error ? error.message : "Erro desconhecido"}</div>;
@@ -153,6 +166,18 @@ export function InventoryPanel({ characterId, master = false, combat = false }: 
               <p className="font-semibold text-gold">Benefícios enquanto equipado</p>
               <p className="text-muted-foreground">{itemGrantSummary(selected.item_templates)}</p>
               {selected.item_templates.effects.map((effect, index) => <p key={index}>✦ {effect.name || effect.effect_type}</p>)}
+              {!!grantDetails?.abilities.length && <div className="space-y-1 border-t border-gold/20 pt-2">
+                <p className="font-semibold text-gold">Habilidades</p>
+                {grantDetails.abilities.map(entry => <p key={entry.id}>⚡ {entry.name}</p>)}
+              </div>}
+              {!!grantDetails?.transformations.length && <div className="space-y-1 border-t border-gold/20 pt-2">
+                <p className="font-semibold text-gold">Transformações</p>
+                {grantDetails.transformations.map(entry => <p key={entry.id}>✨ {entry.name}</p>)}
+              </div>}
+              {!!grantDetails?.summons.length && <div className="space-y-1 border-t border-gold/20 pt-2">
+                <p className="font-semibold text-gold">Invocações</p>
+                {grantDetails.summons.map(entry => <p key={entry.id}>👻 {entry.name}</p>)}
+              </div>}
             </div>
             {canEquip && <Button className="min-h-11 w-full" variant={selected.equipped ? "outline" : "default"} disabled={busy}
               onClick={() => void run(() => db.rpc("inventory_set_equipped",{_item_id:selected.id,_equipped:!selected.equipped}),
