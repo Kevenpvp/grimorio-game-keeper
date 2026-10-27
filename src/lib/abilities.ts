@@ -112,6 +112,10 @@ export type AbilityAttackDamageConfig = {
   attribute_key: string | null;
   attribute_percent: number;
   fixed_damage: number;
+  /** Execution only triggers on a confirmed hit and only while target has low HP. */
+  execute_enabled: boolean;
+  execute_mode: "percent" | "fixed";
+  execute_threshold: number;
   defense_ignore: DefenseIgnore;
   physical_damage_type_id: string | null;
   damage_type_id: string | null;
@@ -212,6 +216,11 @@ export function parseAbilityAttackDamage(value: unknown): AbilityAttackDamageCon
     attribute_key: typeof raw.attribute_key === "string" && raw.attribute_key ? raw.attribute_key : null,
     attribute_percent: Number.isFinite(attributePercent) ? Math.max(0, Math.min(1000, attributePercent)) : 100,
     fixed_damage: Number.isFinite(fixedDamage) ? Math.max(0, Math.min(1_000_000, fixedDamage)) : 0,
+    execute_enabled: raw.execute_enabled === true,
+    execute_mode: raw.execute_mode === "fixed" ? "fixed" : "percent",
+    execute_threshold: Number.isFinite(Number(raw.execute_threshold))
+      ? Math.max(0, Math.min(raw.execute_mode === "fixed" ? 1_000_000 : 100, Number(raw.execute_threshold)))
+      : 10,
     defense_ignore: parseDefenseIgnore(raw.defense_ignore),
     physical_damage_type_id: typeof raw.physical_damage_type_id === "string" ? raw.physical_damage_type_id : null,
     damage_type_id: typeof raw.damage_type_id === "string" ? raw.damage_type_id : null,
