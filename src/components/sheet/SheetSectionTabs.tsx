@@ -1,9 +1,9 @@
 import { Component, useEffect, useState, type ReactNode } from "react";
 import { reportLovableError } from "@/lib/lovable-error-reporting";
-import { BookOpen, ChartNoAxesCombined, HeartPulse, Layers3, Shield, Sparkles, Swords, Wallet } from "lucide-react";
+import { Backpack, BookOpen, ChartNoAxesCombined, HeartPulse, Layers3, Shield, Sparkles, Swords, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type SheetTabKey = "overview" | "attributes" | "origin" | "abilities" | "transformations" | "resources" | "points";
+export type SheetTabKey = "overview" | "attributes" | "origin" | "abilities" | "transformations" | "resources" | "points" | "inventory";
 
 const tabIcons = {
   overview: BookOpen,
@@ -11,6 +11,7 @@ const tabIcons = {
   points: Wallet,
   origin: Shield,
   abilities: Swords,
+  inventory: Backpack,
   transformations: Sparkles,
   resources: HeartPulse,
 } as const;

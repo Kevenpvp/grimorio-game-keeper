@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   BookOpenText, BookUser, ChevronRight, Compass, Flame, Gem, LogOut,
-  Menu, ScrollText, Shield, Sparkles, Swords, UserRound, WandSparkles, X,
+  Menu, ScrollText, Shield, Sparkles, Swords, UserRound, WandSparkles, X, Backpack,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -17,6 +17,7 @@ const navigation = [
   { to: "/classes", label: "Classes", icon: Shield, masterOnly: true },
   { to: "/virtudes", label: "Virtudes", icon: Gem, masterOnly: true },
   { to: "/habilidades", label: "Habilidades", icon: WandSparkles, masterOnly: true },
+  { to: "/itens", label: "Itens", icon: Backpack, masterOnly: true },
   { to: "/tipos-dano", label: "Tipos de dano", icon: Sparkles, masterOnly: true },
   { to: "/dots", label: "DoTs", icon: Flame, masterOnly: true },
   { to: "/transformacoes", label: "Transformações", icon: ScrollText, masterOnly: true },

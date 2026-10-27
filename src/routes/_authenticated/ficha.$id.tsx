@@ -36,6 +36,7 @@ import { CharacterSheetEffectsManager } from "@/components/sheet/CharacterSheetE
 import { passiveEffectTypeActive, passiveStatusModifiers, statusEffectModifiers, useCharacterAbilities, useCharacterActiveEffects } from "@/lib/abilities";
 import { CharacterAbilitiesManager, CharacterAbilitiesPanel } from "@/components/abilities/CharacterAbilities";
 import { CharacterTransformationImages } from "@/components/transformations/CharacterTransformationImages";
+import { InventoryPanel } from "@/components/inventory/InventoryPanel";
 import { SummonGrantsEditor } from "@/components/summons/Summons";
 
 export const Route = createFileRoute("/_authenticated/ficha/$id")({
@@ -84,6 +85,7 @@ function FichaPage() {
           { key: "origin", label: "Origem" },
           { key: "abilities", label: "Habilidades" },
           { key: "transformations", label: "Transformações" },
+          { key: "inventory", label: "Inventário" },
         ]} />
         <SheetTabPanel tab="overview" active={playerTab}>
           <CharacterSheetView character={data.character} attrs={data.attrs} defs={defs} />
@@ -115,6 +117,9 @@ function FichaPage() {
         </SheetTabPanel>
         <SheetTabPanel tab="transformations" active={playerTab}>
           <CharacterTransformationImages character={data.character} />
+        </SheetTabPanel>
+        <SheetTabPanel tab="inventory" active={playerTab}>
+          <InventoryPanel characterId={data.character.id} />
         </SheetTabPanel>
       </div>
     );
@@ -266,6 +271,7 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
             { key: "origin", label: "Origem" },
             { key: "abilities", label: "Habilidades" },
             { key: "transformations", label: "Transformações" },
+            { key: "inventory", label: "Inventário" },
             { key: "resources", label: "Recursos" },
           ]} />
 
@@ -400,6 +406,10 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
 
           <SheetTabPanel tab="transformations" active={tab}>
             <CharacterTransformationImages character={character} isMaster />
+          </SheetTabPanel>
+
+          <SheetTabPanel tab="inventory" active={tab}>
+            <InventoryPanel characterId={character.id} master />
           </SheetTabPanel>
 
           <SheetTabPanel tab="resources" active={tab}>

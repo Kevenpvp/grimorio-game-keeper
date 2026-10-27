@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { SearchableGrantPicker } from "@/components/ui/searchable-grant-picker";
 import { ContinuousTurnDialog } from "@/components/combat/ContinuousTurnDialog";
+import { InventoryPanel } from "@/components/inventory/InventoryPanel";
 import { pendingContinuousInstances, parseContinuousRules, type ContinuousInstance, type ContinuousDecision } from "@/lib/continuous-effects";
 import { parseAttributeStatusModifiers, type AttributeStatusModifier } from "@/lib/multi-attribute-effects";
 import { Input } from "@/components/ui/input";
@@ -396,7 +397,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
   const qc = useQueryClient();
   const [combatTab, setCombatTab] = useState<CombatTab>("fighters");
   const [actionMode, setActionMode] = useState<"combat" | "abilities" | "dots">("combat");
-  const [detailTab, setDetailTab] = useState<"status" | "abilities" | "summons" | "transformations" | "effects" | "activeEffects">("status");
+  const [detailTab, setDetailTab] = useState<"status" | "abilities" | "summons" | "transformations" | "effects" | "activeEffects" | "inventory">("status");
   const [battleAdminOpen, setBattleAdminOpen] = useState(false);
   const [fighterSearch, setFighterSearch] = useState("");
   const [fighterFilter, setFighterFilter] = useState<"all" | "targets" | "effects" | "critical">("all");
@@ -439,6 +440,16 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
   );
   const fighterIds = useMemo(() => fighters.map((fighter) => fighter.id), [fighters]);
   const db = supabase as any;
+  const { data: battleInventoryOrigins = [] } = useQuery<Array<{id:string;character_id:string;equipped:boolean;item_templates:{name:string}|null}>>({
+    queryKey: ["battle-accessory-origins", battle.id, fighterIds],
+    enabled: fighterIds.length > 0,
+    refetchInterval: 8000,
+    queryFn: async () => {
+      const {data,error}=await db.from("character_inventory").select("id,character_id,equipped,item_templates(name)").in("character_id",fighterIds);
+      if(error)throw error;
+      return data ?? [];
+    },
+  });
   const { data: continuousInstances = [] } = useQuery<ContinuousInstance[]>({
     queryKey:["battle-continuous-instances",battle.id],
     enabled:isMaster && battle.active,
@@ -1031,11 +1042,11 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                     {([
                       ["status", "Status"],
                       ["abilities", "Habilidades"],
-                      ...((isMaster || isOwnFighter) ? [["summons", "Invocações"]] : []),
+                      ...((isMaster || isOwnFighter) ? [["summons", "Invocações"], ["inventory", "Inventário"]] : []),
                       ["transformations", "Transformações"],
                       ...(isMaster ? [["effects", "Recursos e efeitos"]] : []),
                       ["activeEffects", "Efeitos ativos"],
-                    ] as Array<["status" | "abilities" | "summons" | "transformations" | "effects" | "activeEffects", string]>).map(([key, label]) =>
+                    ] as Array<["status" | "abilities" | "summons" | "transformations" | "effects" | "activeEffects" | "inventory", string]>).map(([key, label]) =>
                       <button key={key} type="button" role="tab" aria-selected={detailTab === key}
                         onClick={() => setDetailTab(key)}
                         className={cn("shrink-0 rounded-lg border border-transparent px-3 py-2.5 text-xs font-semibold transition-colors", detailTab === key ? "border-gold/35 bg-gold/15 text-gold" : "text-muted-foreground hover:border-gold/15 hover:bg-gold/5 hover:text-foreground")}>{label}</button>)}
@@ -1088,6 +1099,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                               {detailsOpen ? "Ocultar detalhes" : "Ver mais detalhes"}
                             </Button>
                           </div>
+                          {(transformation as typeof transformation & {source_inventory_item_id?:string|null}).source_inventory_item_id && <span className="rounded bg-amber-500/10 px-2 py-1 text-xs text-amber-300">💎 Acessório: {battleInventoryOrigins.find(item => item.id === (transformation as typeof transformation & {source_inventory_item_id?:string|null}).source_inventory_item_id)?.item_templates?.name ?? "Equipamento"}</span>}
                           {detailsOpen && <div className="space-y-3 rounded bg-muted/30 p-3 text-xs">
                             <div className="space-y-1">
                               <div className="font-semibold text-gold">{transformation.name}</div>
@@ -1150,6 +1162,9 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                       return target ? val(target, attributeKey) : 0;
                     }} />
                   </>}
+                  {detailTab === "inventory" && (isMaster || isOwnFighter) && (
+                    <InventoryPanel characterId={f.id} master={isMaster} combat />
+                  )}
                   {detailTab === "summons" && (isMaster || isOwnFighter) && (
                     <SummonCombatPanel
                       characterId={f.id}
@@ -1175,7 +1190,12 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                     if (effect.source_race_id) return "Raça: " + (races?.find((r) => r.id === effect.source_race_id)?.name ?? "raça");
                     if (effect.source_class_id) return "Classe: " + (classes?.find((c) => c.id === effect.source_class_id)?.name ?? "classe");
                     if (effect.source_virtue_id) return "Virtude: " + (virtues?.find((v) => v.id === effect.source_virtue_id)?.name ?? "virtude");
-                    if (effect.source_character_ability_id) return "Habilidade: " + (battleAbilities.find((ability) => ability.id === effect.source_character_ability_id)?.name ?? "habilidade");
+                    if (effect.source_character_ability_id) {
+                      const assignment = battleAbilities.find((ability) => ability.id === effect.source_character_ability_id) as (typeof battleAbilities[number] & {source_inventory_item_id?:string|null}) | undefined;
+                      const item = battleInventoryOrigins.find(entry => entry.id === assignment?.source_inventory_item_id);
+                      if(item) return "Acessório: " + (item.item_templates?.name ?? "equipamento");
+                      return "Habilidade: " + (assignment?.name ?? "habilidade");
+                    }
                     return effect.is_sheet_permanent ? "Ficha" : "Aplicação manual ou combate";
                   }} />}
                   {detailTab === "effects" && isMaster && <CombatResourceEditor fighter={f} val={val} effects={effects.filter(e => e.character_id === f.id)} defs={defs} onAddEffect={(effect) => void addEffect(f.id, effect)} onRemoveEffect={async (id) => { const { data, error } = await supabase.rpc("remove_manual_character_effect", { _effect_id: id }); if (error) toast.error(error.message); else if (data !== true) toast.error("Este efeito não foi removido."); await qc.invalidateQueries({ queryKey: ["battle-effects", battle.id] }); await qc.invalidateQueries({ queryKey: ["character-active-effects"] }); await qc.invalidateQueries({ queryKey: ["battles"] }); }} hpRegenBlocked={blocked(f.id, "no_regen_hp")} manaRegenBlocked={blocked(f.id, "no_regen_mana") || blocked(f.id, "no_mana")} manaRegenMode={manaRegenSettings[f.id]?.mode ?? "percent"} manaRegenAmount={manaRegenSettings[f.id]?.amount ?? "0"} onManaRegenModeChange={(mode) => setManaRegen(f.id, { mode })} onManaRegenAmountChange={(amount) => setManaRegen(f.id, { amount })} />}

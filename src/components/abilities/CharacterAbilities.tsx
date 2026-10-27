@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
+import { useCharacterInventory } from "@/lib/inventory";
 import { dispatchCustomAbilityScriptEvents } from "@/lib/ability-script-runtime";
 import { applyAbilityTargetDamage, isValidAbilityTargetAdjustment, shouldApplyAbilityDirectDamage } from "@/lib/ability-attack-damage";
 import { isAttackExecutionEligible } from "@/lib/attack-execution";
@@ -394,6 +395,7 @@ export function CharacterAbilitiesPanel({
   const qc = useQueryClient();
   const { data: me } = useMe();
   const { data: loadout, isLoading } = useCharacterAbilities(characterId);
+  const { data: accessoryInventory } = useCharacterInventory(characterId);
   const { data: activeEffects = [] } = useCharacterActiveEffects(characterId, showActiveEffects);
   const { data: defs } = useDefs();
   const { data: damageTypes = [] } = useDamageTypes();
@@ -1193,6 +1195,9 @@ export function CharacterAbilitiesPanel({
                       {ability.granted_by_virtue_id && (
                         <span className="rounded bg-gold/10 px-2 py-1 text-gold">Concedida por virtude</span>
                       )}
+                      {!!(ability as CharacterAbility & {source_inventory_item_id?:string|null}).source_inventory_item_id && (
+                        <span className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-amber-300">💎 Acessório: {accessoryInventory?.items.find(item => item.id === (ability as CharacterAbility & {source_inventory_item_id?:string|null}).source_inventory_item_id)?.item_templates.name ?? "Equipamento"}</span>
+                      )}
                       {ability.passive_effects.filter((effect) => effect.effect_type === "visual_tag").map((tag,index) => (
                         <span key={`tag-${index}`} className="rounded border border-violet-500/40 bg-violet-500/10 px-2 py-1 text-violet-300">🏷️ {tag.name}</span>
                       ))}
@@ -1925,9 +1930,9 @@ export function CharacterAbilitiesManager({ characterId, personalOnly = false }:
   const managedAssigned = personalOnly
     ? assigned.filter((ability) => {
         const row = ability as CharacterAbility & { granted_by_transformation_id?: string | null };
-        return !ability.ability_id && !ability.granted_by_virtue_id && !ability.granted_by_race_id && !row.granted_by_transformation_id;
+        return !ability.ability_id && !ability.granted_by_virtue_id && !ability.granted_by_race_id && !row.granted_by_transformation_id && !(row as typeof row & {source_inventory_item_id?:string|null}).source_inventory_item_id;
       })
-    : assigned;
+    : assigned.filter(ability => !(ability as CharacterAbility & {source_inventory_item_id?:string|null}).source_inventory_item_id);
   const available = personalOnly ? [] : allAbilities.filter((ability) => !assignedIds.has(ability.id));
 
   async function give(ability: Ability) {
