@@ -8,6 +8,7 @@ import { SearchableGrantPicker } from "@/components/ui/searchable-grant-picker";
 import { Input } from "@/components/ui/input";
 import { useDefs } from "@/lib/sheets";
 import { supabase } from "@/integrations/supabase/client";
+import { useCharacterInventory } from "@/lib/inventory";
 
 type Stats = Record<string, number>;
 type SummonGrant = {
@@ -87,8 +88,8 @@ function SummonStatsFields({ title, help, value, onChange }: {
   );
 }
 
-function SummonGrantCard({ grant, master, templateOptions, onRefresh, onViewDetails }: {
-  grant: SummonGrant; master: boolean; templateOptions: CharacterOption[]; onRefresh: () => void;
+function SummonGrantCard({ grant, master, accessoryName, templateOptions, onRefresh, onViewDetails }: {
+  grant: SummonGrant; master: boolean; accessoryName?: string | null; templateOptions: CharacterOption[]; onRefresh: () => void;
   onViewDetails: (grantId:string) => void;
 }) {
   const [name, setName] = useState(grant.display_name);
@@ -144,8 +145,9 @@ function SummonGrantCard({ grant, master, templateOptions, onRefresh, onViewDeta
         <div>
           <p className="font-semibold text-gold">{name || templateName}</p>
           <p className="text-xs text-muted-foreground">Ficha de origem: {templateName}</p>
+          {grant.source_inventory_item_id && <p className="mt-1 text-xs font-semibold text-amber-300">💎 Acessório: {accessoryName ?? "equipamento"} · Editável somente nesta ficha</p>}
         </div>
-        {master && <Button size="icon" variant="ghost" disabled={busy} onClick={() => void remove()} aria-label="Remover invocação"><Trash2 className="h-4 w-4"/></Button>}
+        {master && !grant.source_inventory_item_id && <Button size="icon" variant="ghost" disabled={busy} onClick={() => void remove()} aria-label="Remover invocação"><Trash2 className="h-4 w-4"/></Button>}
       </div>
       <Button type="button" size="sm" variant="outline" className="min-h-11 w-full border-gold/30 text-gold sm:w-auto"
         onClick={() => onViewDetails(grant.id)}>
@@ -153,6 +155,7 @@ function SummonGrantCard({ grant, master, templateOptions, onRefresh, onViewDeta
       </Button>
       {master ? (
         <>
+          {grant.source_inventory_item_id && <p className="text-xs text-muted-foreground">Você pode personalizar nome, atributos, transferência e habilidades emprestadas. Desequipar o acessório remove a concessão, mas mantém esta configuração para quando for equipado novamente.</p>}
           <label className="block space-y-1 text-xs">Nome da invocação
             <Input value={name} onChange={(event) => setName(event.target.value)} placeholder={templateName} />
           </label>
@@ -194,6 +197,7 @@ export function SummonGrantsEditor({ characterId, abilityId, master }: {
 }) {
   const qc = useQueryClient();
   const { data: grants = [] } = useSummonGrants();
+  const { data: inventory } = useCharacterInventory(characterId ?? "");
   const { data: templates = [] } = useSummonTemplates(master);
   const [templateId, setTemplateId] = useState("");
   const [busy, setBusy] = useState(false);
@@ -236,8 +240,11 @@ export function SummonGrantsEditor({ characterId, abilityId, master }: {
           : "Criaturas invocadas automaticamente ao ativar esta habilidade durante um combate."}
       </p>
       {!current.length && <p className="text-sm text-muted-foreground">Nenhuma invocação configurada.</p>}
-      {current.map((grant) => <SummonGrantCard key={grant.id} grant={grant} master={master && !grant.source_inventory_item_id}
-        templateOptions={templates} onRefresh={refresh} onViewDetails={setDetailsGrantId}/>)}
+      {current.map((grant) => <SummonGrantCard key={grant.id} grant={grant} master={master}
+        accessoryName={grant.source_inventory_item_id
+          ? inventory?.items.find(item => item.id === grant.source_inventory_item_id)?.item_templates.name
+          : null}
+        templateOptions={templates} onRefresh={refresh} onViewDetails={setDetailsGrantId}/> )}
       <SummonDetailsDialog grantId={detailsGrantId} onClose={()=>setDetailsGrantId(null)} />
       {master && (
         <div className="flex flex-col gap-2 sm:flex-row">

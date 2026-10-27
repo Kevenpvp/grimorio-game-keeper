@@ -1894,6 +1894,7 @@ export function CharacterAbilitiesManager({ characterId, personalOnly = false }:
   const qc = useQueryClient();
   const { data: allAbilities = [], isLoading: catalogLoading } = useAbilities();
   const { data: assigned = [], isLoading: assignedLoading } = useCharacterAbilities(characterId);
+  const { data: inventory } = useCharacterInventory(characterId);
   const { data: races = [] } = useRaces();
   const { data: classes = [] } = useClasses();
   const { data: virtues = [] } = useVirtues();
@@ -1932,7 +1933,10 @@ export function CharacterAbilitiesManager({ characterId, personalOnly = false }:
         const row = ability as CharacterAbility & { granted_by_transformation_id?: string | null };
         return !ability.ability_id && !ability.granted_by_virtue_id && !ability.granted_by_race_id && !row.granted_by_transformation_id && !(row as typeof row & {source_inventory_item_id?:string|null}).source_inventory_item_id;
       })
-    : assigned.filter(ability => !(ability as CharacterAbility & {source_inventory_item_id?:string|null}).source_inventory_item_id);
+    : assigned.filter(ability =>
+        !(ability as CharacterAbility & { source_inventory_item_id?: string | null }).source_inventory_item_id
+        || ability.ability_id !== null
+      );
   const available = personalOnly ? [] : allAbilities.filter((ability) => !assignedIds.has(ability.id));
 
   async function give(ability: Ability) {
@@ -2066,7 +2070,13 @@ export function CharacterAbilitiesManager({ characterId, personalOnly = false }:
             <p className="text-xs text-muted-foreground">{allAbilities.length ? "Todas as habilidades do catálogo já foram atribuídas." : "O mestre ainda não cadastrou habilidades."}</p>
           ) : null}
           <div className="space-y-3">
-            {managedAssigned.map((ability) => <AssignedAbilityEditor key={ability.id} ability={ability} defs={defs!} />)}
+            {managedAssigned.map((ability) => {
+              const sourceId = (ability as CharacterAbility & { source_inventory_item_id?: string | null }).source_inventory_item_id;
+              const accessoryName = sourceId
+                ? inventory?.items.find(item => item.id === sourceId)?.item_templates.name ?? "acessório equipado"
+                : null;
+              return <AssignedAbilityEditor key={ability.id} ability={ability} defs={defs!} accessoryName={accessoryName} />;
+            })}
           </div>
         </div>
       )}
@@ -2074,7 +2084,11 @@ export function CharacterAbilitiesManager({ characterId, personalOnly = false }:
   );
 }
 
-function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; defs: NonNullable<ReturnType<typeof useDefs>["data"]> }) {
+function AssignedAbilityEditor({ ability, defs, accessoryName }: {
+  ability: CharacterAbility;
+  defs: NonNullable<ReturnType<typeof useDefs>["data"]>;
+  accessoryName?: string | null;
+}) {
   const qc = useQueryClient();
   const { data: availableCatalogAbilities = [] } = useAbilities();
   const [name, setName] = useState(ability.name);
@@ -2250,6 +2264,7 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
   }
 
   async function remove() {
+    if (accessoryName) { toast.error("Para remover esta habilidade, desequipe o acessório."); return; }
     if (!confirm(`Remover "${ability.name}" desta ficha?`)) return;
     const { error } = await supabase.from("character_abilities").delete().eq("id", ability.id);
     if (error) { toast.error(error.message); return; }
@@ -2264,6 +2279,9 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="font-semibold">{ability.name}</div>
+          {accessoryName && (
+            <p className="mt-1 text-xs font-semibold text-amber-300">💎 Acessório: {accessoryName} · Personalização exclusiva desta ficha</p>
+          )}
           <div className="text-xs text-muted-foreground">{ability.is_magical ? "Habilidade Mágica · " : "Não mágica · "}{ability.active_duration_remaining > 0 ? `Em duração: ${ability.active_duration_remaining} turno(s) · ` : ""}{ability.granted_by_virtue_id ? "Concedida por virtude · " : ""}{ability.can_activate ? `Cooldown atual: ${ability.cooldown_remaining}/${ability.cooldown_turns}` : "Não ativável · efeitos passivos permanentes"}</div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
@@ -2277,7 +2295,7 @@ function AssignedAbilityEditor({ ability, defs }: { ability: CharacterAbility; d
             {expanded ? <ChevronUp className="mr-1 h-4 w-4" /> : <ChevronDown className="mr-1 h-4 w-4" />}
             {expanded ? "Minimizar" : "Maximizar"}
           </Button>
-          <Button size="icon" variant="ghost" aria-label="Remover habilidade desta ficha" onClick={() => void remove()}><Trash2 className="h-4 w-4" /></Button>
+          {!accessoryName && <Button size="icon" variant="ghost" aria-label="Remover habilidade desta ficha" onClick={() => void remove()}><Trash2 className="h-4 w-4" /></Button>}
         </div>
       </div>
       {expanded && (

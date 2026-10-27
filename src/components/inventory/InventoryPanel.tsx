@@ -166,6 +166,10 @@ export function InventoryPanel({ characterId, master = false, combat = false }: 
               <p className="font-semibold text-gold">Benefícios enquanto equipado</p>
               <p className="text-muted-foreground">{itemGrantSummary(selected.item_templates)}</p>
               {selected.item_templates.effects.map((effect, index) => <p key={index}>✦ {effect.name || effect.effect_type}</p>)}
+              {master && !combat && (selected.item_templates.ability_ids.length > 0 || selected.item_templates.transformation_ids.length > 0 || selected.item_templates.summon_character_ids.length > 0) &&
+                <p className="rounded-lg border border-amber-500/25 bg-amber-500/5 p-2 text-amber-200">
+                  Para personalizar só nesta ficha, abra as abas Habilidades ou Transformações. As invocações ficam na seção Habilidades. As configurações serão preservadas mesmo após desequipar.
+                </p>}
               {!!grantDetails?.abilities.length && <div className="space-y-1 border-t border-gold/20 pt-2">
                 <p className="font-semibold text-gold">Habilidades</p>
                 {grantDetails.abilities.map(entry => <p key={entry.id}>⚡ {entry.name}</p>)}

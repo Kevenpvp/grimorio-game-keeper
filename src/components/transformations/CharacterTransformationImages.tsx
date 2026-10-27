@@ -316,7 +316,7 @@ export function CharacterTransformationImages({ character, isMaster = false }: {
               transformation={transformation}
               state={states.find((entry) => entry.transformation_id === transformation.id)}
               isMaster={isMaster}
-              isPersonal={transformation.owner_character_id === character.id && !transformation.source_inventory_item_id}
+              isPersonal={transformation.owner_character_id === character.id}
               itemSourceName={transformation.source_inventory_item_id ? accessoryName(transformation.source_inventory_item_id) : null}
               grantedByRace={raceLinks.some((link) => link.transformation_id === transformation.id || link.transformation_id === transformation.source_transformation_id)}
               grantedByVirtue={virtueLinks.some((link) => link.transformation_id === transformation.id || link.transformation_id === transformation.source_transformation_id)}
@@ -438,9 +438,9 @@ function TransformationImageCard({
       modifiers: cleanModifiers,
       effects: effects.map((effect) => ({ ...effect, duration: Math.max(1, effect.duration) })) as unknown as Json,
       end_effects: endEffects.map((effect) => ({ ...effect, duration: Math.max(1, effect.duration) })) as unknown as Json,
-      linked_by_race_id: personalTraitLink === "race" ? raceId : null,
-      linked_by_virtue_id: personalTraitLink === "virtue" ? virtueId : null,
-      linked_by_class_id: personalTraitLink === "class" ? classId : null,
+      linked_by_race_id: itemSourceName ? null : personalTraitLink === "race" ? raceId : null,
+      linked_by_virtue_id: itemSourceName ? null : personalTraitLink === "virtue" ? virtueId : null,
+      linked_by_class_id: itemSourceName ? null : personalTraitLink === "class" ? classId : null,
       updated_at: new Date().toISOString(),
     };
 
@@ -622,13 +622,14 @@ function TransformationImageCard({
       </div>
       {isMaster && editPersonal && (
         <div className="mt-3 w-full basis-full space-y-3 rounded-md border border-gold/30 p-3">
+          {itemSourceName && <p className="text-xs text-amber-300">💎 Esta cópia pertence ao acessório {itemSourceName}. As mudanças valem só para esta ficha e serão preservadas ao desequipar e reequipar.</p>}
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1"><Label>Nome</Label><Input value={name} onChange={(event) => setName(event.target.value)} /></div>
             <div className="space-y-1"><Label>Duração (turnos)</Label><Input type="number" min={1} max={1000} value={duration} onChange={(event) => setDuration(event.target.value)} /></div>
             <div className="space-y-1"><Label>Cooldown (turnos)</Label><Input type="number" min={1} max={1000} value={cooldown} onChange={(event) => setCooldown(event.target.value)} /></div>
             <div className="space-y-1"><Label>Custo de Mana</Label><Input type="number" min={0} max={1000000} value={manaCost} onChange={(event) => setManaCost(event.target.value)} /></div>
             <div className="space-y-1 sm:col-span-2"><Label>Descrição</Label><Textarea rows={2} value={description} onChange={(event) => setDescription(event.target.value)} /></div>
-            {isMaster && <label className="block space-y-1 text-xs font-medium sm:col-span-2">Vincular transformação à característica
+            {isMaster && !itemSourceName && <label className="block space-y-1 text-xs font-medium sm:col-span-2">Vincular transformação à característica
               <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={personalTraitLink} onChange={(event) => setPersonalTraitLink(event.target.value as typeof personalTraitLink)}>
                 <option value="none">Sem vínculo automático</option>
                 {raceId && <option value="race">Raça: {raceName}</option>}
@@ -684,7 +685,7 @@ function TransformationImageCard({
             />
             {abilityCatalog.length === 0 && <p className="text-xs text-muted-foreground">Nenhuma habilidade do catálogo disponível.</p>}
           </div>
-          <Button type="button" onClick={() => void saveTransformation()}>{isPersonal ? "Salvar transformação" : "Personalizar transformação nesta ficha"}</Button>
+          <Button type="button" onClick={() => void saveTransformation()}>{itemSourceName ? "Salvar personalização do acessório" : isPersonal ? "Salvar transformação" : "Personalizar transformação nesta ficha"}</Button>
         </div>
       )}
     </div>
