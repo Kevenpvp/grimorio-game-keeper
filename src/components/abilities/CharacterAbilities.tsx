@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { dispatchCustomAbilityScriptEvents } from "@/lib/ability-script-runtime";
-import { applyAbilityTargetDamage, isValidAbilityTargetAdjustment } from "@/lib/ability-attack-damage";
+import { applyAbilityTargetDamage, isValidAbilityTargetAdjustment, shouldApplyAbilityDirectDamage } from "@/lib/ability-attack-damage";
 import { addDefenseIgnore, defenseIgnoreText, ZERO_DEFENSE_IGNORE, type DefenseIgnore } from "@/lib/defense-ignore";
 import { DefenseIgnoreInputs } from "@/components/abilities/DefenseIgnoreInputs";
 import { attackDiceModifier } from "@/lib/combat-dice";
@@ -804,6 +804,14 @@ export function CharacterAbilitiesPanel({
         const extraRaw = Number(attackExtraDamage[target.id] ?? 0);
         const extraPercent = Number(attackExtraDamagePercent[target.id] ?? 0);
         const finalBaseDamage = applyAbilityTargetDamage(attackBaseDamage, extraRaw, extraPercent);
+        // A pure status / grapple attack must never lose HP from flat attacker
+        // bonuses, target vulnerabilities, or negative defenses when its raw
+        // damage is zero. Activation already handled hit effects and links.
+        if (!shouldApplyAbilityDirectDamage(finalBaseDamage)) {
+          results[target.id] = "Dano base 0 → dano final 0; sem dano direto ao HP. " +
+            "Os efeitos, DoTs e vínculos do acerto continuam sendo aplicados normalmente.";
+          continue;
+        }
         const selectedIgnoreGroups = attackEffectGroups.filter((group) =>
           (attackEffectHits[target.id] ?? []).includes(group.id));
         const defenseIgnore = addDefenseIgnore(
