@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
 import { DefenseIgnoreInputs } from "@/components/abilities/DefenseIgnoreInputs";
+import { AbilityAttackExecutionEditor } from "@/components/abilities/AbilityAttackExecutionEditor";
 import { ZERO_DEFENSE_IGNORE } from "@/lib/defense-ignore";
 import { useDamageTypes, useDotTemplates, type AbilityDotEffect, type AbilityAttackEffectGroup, type AbilityAttackDamageConfig, type AbilityAttackDamageKind } from "@/lib/abilities";
 import type { useDefs } from "@/lib/sheets";
@@ -293,6 +294,7 @@ export function SheetAbilityAttackEditor({
                 </>
               )}
             </div>
+            <AbilityAttackExecutionEditor value={attackDamage} onChange={setAttackDamage}/>
             <div className="rounded-md border border-gold/25 p-3">
               <DefenseIgnoreInputs
                 title="Ignorar defesa garantido pelo ataque"
