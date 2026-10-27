@@ -30,6 +30,21 @@ describe("Duração e encerramento das transformações", () => {
     expect(combat).toContain('db.rpc("end_character_transformation"');
   });
 
+  it("confirma Destransformar no modal estilizado sem abrir alerta nativo do navegador", () => {
+    const request = combat.slice(
+      combat.indexOf("function requestEndTransformation("),
+      combat.indexOf("const visibleEffectCharacterIds = useMemo("),
+    );
+    expect(request).toContain("setPendingEndTransformation({");
+    expect(request).not.toContain("window.confirm(");
+    expect(combat).toContain("<AlertDialog");
+    expect(combat).toContain("<AlertDialogContent");
+    expect(combat).toContain("Encerrar transformação?");
+    expect(combat).toContain("Manter transformação");
+    expect(combat).toContain("onClick={() => void endTransformation()}");
+    expect(combat).toContain("setPendingEndTransformation(null);");
+  });
+
   it("exibe Destransformar na ficha de combate e atualiza o contador após passar o turno", () => {
     expect(combat).toContain("activeTransformationState.transformation_id");
     expect(combat).toContain("Destransformar");

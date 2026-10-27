@@ -5,6 +5,15 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronUp, Crosshair, Dices, Plus, Swords, Trash2, Copy, Footprints, RotateCw, Minus, Brain, Activity, Sparkles, Users, LayoutDashboard, ScrollText, Search, Settings2, Zap, ShieldAlert, ShieldCheck, Skull, Droplets, Hourglass, Crown, Repeat2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { SearchableGrantPicker } from "@/components/ui/searchable-grant-picker";
 import { ContinuousTurnDialog } from "@/components/combat/ContinuousTurnDialog";
 import { InventoryPanel } from "@/components/inventory/InventoryPanel";
@@ -532,6 +541,12 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
   };
   const [activatingTransformationFor, setActivatingTransformationFor] = useState<string | null>(null);
   const [endingTransformationFor, setEndingTransformationFor] = useState<string | null>(null);
+  const [pendingEndTransformation, setPendingEndTransformation] = useState<{
+    characterId: string;
+    transformationId: string;
+    characterName: string;
+    transformationName: string;
+  } | null>(null);
   const [advancedTransformation, setAdvancedTransformation] = useState<{
     characterId: string; characterName: string; template: TransformationTemplate;
   } | null>(null);
@@ -572,10 +587,19 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
       setActivatingTransformationFor(null);
     }
   }
-  async function endTransformation(characterId: string, transformationId: string) {
+  function requestEndTransformation(characterId: string, transformationId: string) {
     if (!battle.active || activatingTransformationFor || endingTransformationFor) return;
-    const name = transformationCatalog.find((item) => item.id === transformationId)?.name ?? "esta transformação";
-    if (!window.confirm(`Destransformar e encerrar "${name}" agora? Os bônus e efeitos ativos da transformação serão retirados.`)) return;
+    setPendingEndTransformation({
+      characterId,
+      transformationId,
+      characterName: fighters.find((fighter) => fighter.id === characterId)?.name ?? "Personagem",
+      transformationName: transformationCatalog.find((item) => item.id === transformationId)?.name ?? "Transformação ativa",
+    });
+  }
+  async function endTransformation() {
+    const pending = pendingEndTransformation;
+    if (!pending || !battle.active || activatingTransformationFor || endingTransformationFor) return;
+    const { characterId, transformationId, transformationName: name } = pending;
     setEndingTransformationFor(characterId);
     try {
       const { error } = await db.rpc("end_character_transformation", {
@@ -584,6 +608,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
         _battle_id: battle.id,
       });
       if (error) throw error;
+      setPendingEndTransformation(null);
       toast.success(`Transformação "${name}" encerrada.`);
       noteActivity("transformation", "Transformação encerrada manualmente: " + name + ".");
       await Promise.all([
@@ -983,6 +1008,54 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
         onCancel={()=>setPendingContinuousTurn(null)}
         onConfirm={(choices)=>{void advanceCombatTurn(pendingContinuousTurn.characterId,choices);}}
       />}
+      <AlertDialog
+        open={pendingEndTransformation !== null}
+        onOpenChange={(open) => {
+          if (!open && !endingTransformationFor) setPendingEndTransformation(null);
+        }}
+      >
+        <AlertDialogContent className="w-[calc(100%-2rem)] max-w-md gap-5 overflow-hidden rounded-2xl border border-gold/45 bg-[#140e0b] p-5 text-foreground shadow-[0_24px_90px_rgba(0,0,0,.85)] sm:p-6">
+          <AlertDialogHeader className="items-center space-y-3 text-center sm:text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-gold/35 bg-gold/10 shadow-[0_0_28px_rgba(231,183,93,.12)]">
+              <Sparkles className="h-7 w-7 text-gold" aria-hidden="true" />
+            </div>
+            <AlertDialogTitle className="font-display text-xl font-bold text-gold sm:text-2xl">
+              Encerrar transformação?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2 text-center text-sm leading-relaxed text-muted-foreground">
+              <span className="block">
+                <span className="font-semibold text-foreground">{pendingEndTransformation?.characterName}</span>
+                {" deixará a forma "}
+                <span className="font-semibold text-gold">{pendingEndTransformation?.transformationName}</span>.
+              </span>
+              <span className="block">
+                Os bônus e efeitos ativos dessa transformação serão retirados. Os efeitos de encerramento configurados serão aplicados.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="rounded-xl border border-gold/20 bg-gold/5 px-3 py-2.5 text-center text-xs text-muted-foreground">
+            <Hourglass className="mr-1 inline h-3.5 w-3.5 text-gold" aria-hidden="true" />
+            A recarga continua normalmente após destransformar.
+          </div>
+          <AlertDialogFooter className="flex-col gap-2 sm:flex-row sm:gap-3">
+            <AlertDialogCancel
+              disabled={endingTransformationFor !== null}
+              className="mt-0 min-h-11 flex-1 border-gold/25 bg-transparent text-foreground hover:bg-gold/10 hover:text-gold"
+            >
+              Manter transformação
+            </AlertDialogCancel>
+            <Button
+              type="button"
+              className="min-h-11 flex-1 bg-gold font-semibold text-[#160f0b] hover:bg-gold/85"
+              disabled={endingTransformationFor !== null}
+              onClick={() => void endTransformation()}
+            >
+              <Sparkles className="mr-1.5 h-4 w-4" aria-hidden="true" />
+              {endingTransformationFor ? "Destransformando..." : "Destransformar"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <CombatNavigation active={combatTab} onSelect={setCombatTab} />
       <div className={cn("gap-4", (combatTab === "fighters" || combatTab === "actions") && "xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] xl:items-start")}>
       {(combatTab === "fighters" || combatTab === "actions") && <section className={cn("min-w-0 space-y-3", combatTab !== "fighters" && "hidden xl:block")} aria-label="Combatentes da batalha">
@@ -1059,7 +1132,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                   {isOwnFighter && <Button
                     size="sm" variant="outline" className="min-h-9 border-emerald-500/40 text-emerald-300"
                     disabled={!battle.active || !!activatingTransformationFor || !!endingTransformationFor}
-                    onClick={() => void endTransformation(f.id, activeTransformationState.transformation_id)}
+                    onClick={() => requestEndTransformation(f.id, activeTransformationState.transformation_id)}
                   >
                     {endingTransformationFor===f.id ? "Encerrando..." : "Destransformar"}
                   </Button>}
@@ -1132,7 +1205,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                               size="sm" variant="outline"
                               className="min-h-11 border-emerald-500/40 text-emerald-300"
                               disabled={!battle.active || !!activatingTransformationFor || !!endingTransformationFor}
-                              onClick={() => void endTransformation(f.id, transformation.id)}
+                              onClick={() => requestEndTransformation(f.id, transformation.id)}
                             >
                               {endingTransformationFor===f.id ? "Encerrando..." : "Destransformar"}
                             </Button>}
