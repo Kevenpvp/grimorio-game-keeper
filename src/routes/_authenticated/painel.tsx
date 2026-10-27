@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
-import { computeValue, physicalAttributePoints, traitMods, useCharacter, useCharacterLive, useDefs, useMe, useRaces, useVirtues, useClasses } from "@/lib/sheets";
+import { useCharacter, useCharacterLive, useDefs, useMe } from "@/lib/sheets";
 import { CharacterSheetView, Portrait } from "@/components/sheet/CharacterSheetView";
 import { StatBar } from "@/components/sheet/StatBar";
 import { PointsDistribution } from "@/components/sheet/PointsDistribution";
@@ -88,9 +88,26 @@ function MasterDashboard() {
   const navigate = useNavigate();
   const [q, setQ] = useState("");
   const { data: defs } = useDefs();
-  const { data: races = [] } = useRaces();
-  const { data: classes = [] } = useClasses();
-  const { data: virtues = [] } = useVirtues();
+  // Get the exact effective maximum from the server, rather than duplicating
+  // RPG modifiers incompletely in the small dashboard cards.
+  const {
+    data: resourceMaxima = [],
+    isLoading: maximaLoading,
+    error: maximaError,
+  } = useQuery<Array<{ character_id: string; hp_max: number; mana_max: number }>>({
+    queryKey: ["master-character-resource-maxima"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("list_character_resource_maxima");
+      if (error) throw error;
+      return data ?? [];
+    },
+    refetchInterval: 8000,
+    refetchOnWindowFocus: true,
+  });
+  const maximaByCharacter = useMemo(
+    () => new Map(resourceMaxima.map((item) => [item.character_id, item])),
+    [resourceMaxima],
+  );
   const { data: list, isLoading } = useQuery({
     queryKey: ["characters"],
     queryFn: async () => {
@@ -102,6 +119,8 @@ function MasterDashboard() {
       if (error) throw error;
       return data;
     },
+    refetchInterval: 8000,
+    refetchOnWindowFocus: true,
   });
 
   const filtered = useMemo(() => {
@@ -134,7 +153,9 @@ function MasterDashboard() {
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input className="pl-9" placeholder="Buscar personagem ou jogador" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
-      {isLoading ? (
+      {maximaError ? (
+        <p role="alert" className="text-destructive">Não foi possível consultar a Mana e o HP máximos: {maximaError.message}</p>
+      ) : isLoading || maximaLoading ? (
         <p className="text-muted-foreground">Carregando…</p>
       ) : filtered.length === 0 ? (
         <p className="text-muted-foreground">Nenhuma ficha encontrada.</p>
@@ -143,28 +164,9 @@ function MasterDashboard() {
           {filtered.map((c) => {
             const hp = c.character_attributes.find((a) => a.attribute_key === "hp");
             const mana = c.character_attributes.find((a) => a.attribute_key === "mana");
-            const modifiers = { ...traitMods(races.find((race) => race.id === c.race_id)) };
-            for (const [key, value] of Object.entries(traitMods(classes.find((classTrait) => classTrait.id === c.class_id)))) {
-              modifiers[key] = (modifiers[key] ?? 0) + value;
-              if (modifiers[key] === 0) delete modifiers[key];
-            }
-            for (const [key, value] of Object.entries(traitMods(virtues.find((virtue) => virtue.id === c.virtue_id)))) {
-              modifiers[key] = (modifiers[key] ?? 0) + value;
-              if (modifiers[key] === 0) delete modifiers[key];
-            }
-            const effectiveMax = (key: string, attr: typeof hp) => {
-              if (!attr) return 0;
-              const def = defs?.find((item) => item.key === key);
-              if (!def) return attr.max_value ?? 0;
-              const modifier = modifiers[key] ?? 0;
-              const rawMax = def.accepts_points
-                ? computeValue(def, (attr.points ?? 0) + modifier + physicalAttributePoints(c, key)) + (attr.bonus ?? 0)
-                : (attr.max_value ?? 0) + modifier + (attr.bonus ?? 0);
-              const max = Math.floor(rawMax);
-              return key === "hp" ? Math.max(1, max) : Math.max(0, max);
-            };
-            const hpMax = effectiveMax("hp", hp);
-            const manaMax = effectiveMax("mana", mana);
+            const authoritativeMaxima = maximaByCharacter.get(c.id);
+            const hpMax = Number(authoritativeMaxima?.hp_max ?? 0);
+            const manaMax = Number(authoritativeMaxima?.mana_max ?? 0);
             return (
               <Link
                 key={c.id}
