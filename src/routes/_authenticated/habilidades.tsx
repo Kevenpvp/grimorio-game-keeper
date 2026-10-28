@@ -19,6 +19,7 @@ import {
 import { useDefs, useMe } from "@/lib/sheets";
 import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
 import { ContinuousRulesEditor } from "@/components/abilities/ContinuousRulesEditor";
+import { SustainedCostsEditor, parseSustainedCosts, validateSustainedCosts, type SustainedCost } from "@/components/abilities/SustainedCostsEditor";
 import { parseContinuousRules, type ContinuousRule } from "@/lib/continuous-effects";
 import { AbilityDotEffectsEditor } from "@/components/abilities/SheetAbilityAttackEditor";
 import { AbilityAttackExecutionEditor } from "@/components/abilities/AbilityAttackExecutionEditor";
@@ -105,6 +106,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
   const [customAttributes, setCustomAttributes] = useState<CustomAbilityAttribute[]>(() => parseCustomAbilityAttributes(ability.custom_attributes));
   const [canActivate, setCanActivate] = useState(ability.can_activate);
   const [toggleMode, setToggleMode] = useState(ability.toggle_mode);
+  const [sustainCosts, setSustainCosts] = useState<SustainedCost[]>(() => parseSustainedCosts((ability as Ability & { sustain_costs?: unknown }).sustain_costs));
   const [isMagical, setIsMagical] = useState(ability.is_magical);
   const [attackEnabled, setAttackEnabled] = useState(ability.attack_enabled);
   const [attackDamage, setAttackDamage] = useState<AbilityAttackDamageConfig>(() => parseAbilityAttackDamage(ability.attack_damage));
@@ -135,6 +137,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
     setCustomAttributes(parseCustomAbilityAttributes(ability.custom_attributes));
     setCanActivate(ability.can_activate);
     setToggleMode(ability.toggle_mode);
+    setSustainCosts(parseSustainedCosts((ability as Ability & { sustain_costs?: unknown }).sustain_costs));
     setIsMagical(ability.is_magical);
     setAttackEnabled(ability.attack_enabled);
     setAttackDamage(parseAbilityAttackDamage(ability.attack_damage));
@@ -158,6 +161,8 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
     const mana = Math.floor(Number(manaCost));
     const separateAttackMana = attackManaCost.trim() === "" ? null : Number(attackManaCost);
     if (!name.trim()) { toast.error("Informe o nome da habilidade"); return; }
+    const sustainError = validateSustainedCosts(sustainCosts);
+    if (canActivate && toggleMode && sustainError) { toast.error(sustainError); return; }
     if (!Number.isInteger(activeDuration) || activeDuration < 0 || activeDuration > 1000) { toast.error("Duração deve ser de 0 a 1000 turnos."); return; }
     if (!Number.isFinite(mana) || mana < 0) { toast.error("O custo de Mana não pode ser negativo"); return; }
     if (separateAttackMana !== null && (!Number.isInteger(separateAttackMana) || separateAttackMana < 0 || separateAttackMana > 1000000)) {
@@ -268,6 +273,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
       continuous_rules: continuousRules as unknown as Json,
       can_activate: canActivate,
       toggle_mode: canActivate && toggleMode,
+      sustain_costs: canActivate && toggleMode ? sustainCosts : [],
       is_magical: isMagical,
       attack_enabled: effectiveAttackEnabled,
       attack_damage: {
@@ -367,6 +373,11 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
             <input className="mt-1 shrink-0" type="checkbox" checked={toggleMode} onChange={(e) => { setToggleMode(e.target.checked); if (e.target.checked) setAttackEnabled(false); }} />
             <span className="min-w-0"><strong className="block">Habilidade sustentada (ligar/desligar)</strong><span className="mt-1 block text-xs text-muted-foreground">Liga os efeitos ao ativar e mantém até desligar; ao desligar, começa a recarga e dispara efeitos de encerramento. Só funciona no combate e sem ataque/DoTs de ativação.</span></span>
           </label>
+        )}
+        {canActivate && toggleMode && (
+          <div className="sm:col-span-2 xl:col-span-3">
+            <SustainedCostsEditor value={sustainCosts} onChange={setSustainCosts} />
+          </div>
         )}
         {canActivate && (
           <label className="flex min-h-10 items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">

@@ -20,6 +20,7 @@ import { useDefs, useMe, useRaces, useClasses, useVirtues } from "@/lib/sheets";
 import { parseAbilityEffects, parseAbilityAttackDamage, parseAbilityAttackEffectGroups, parseAbilityDotEffects, useAbilities, useCharacterAbilities, useCharacterActiveEffects, useDamageTypes, useDotTemplates, type Ability, type AbilityEffectDefinition, type CharacterAbility, type AbilityDotEffect, type AbilityAttackDamageConfig, type AbilityAttackEffectGroup } from "@/lib/abilities";
 import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
 import { ContinuousRulesEditor } from "@/components/abilities/ContinuousRulesEditor";
+import { SustainedCostsEditor, parseSustainedCosts, validateSustainedCosts, sustainedCostsSummary, type SustainedCost } from "@/components/abilities/SustainedCostsEditor";
 import { parseContinuousRules, type ContinuousRule, type ContinuousInstance } from "@/lib/continuous-effects";
 import { planContinuousTargetTransfer, validateTransferSelection, type TransferRequirement } from "@/lib/continuous-target-transfer";
 import { parseAttributeStatusModifiers } from "@/lib/multi-attribute-effects";
@@ -1206,6 +1207,11 @@ export function CharacterAbilitiesPanel({
                       </span>
                       {ability.can_activate && ability.self_target_only && <span className="rounded bg-muted px-2 py-1">Só em si mesmo</span>}
                       {ability.toggle_mode && <span className={`rounded px-2 py-1 ${ability.toggle_active ? "bg-emerald-500/15 text-emerald-500" : "bg-muted text-muted-foreground"}`}>Sustentada: {ability.toggle_active ? "Ligada" : "Desligada"}</span>}
+                      {ability.toggle_mode && sustainedCostsSummary((ability as CharacterAbility & {sustain_costs?:unknown}).sustain_costs) && (
+                        <span className="rounded border border-rose-500/30 bg-rose-500/10 px-2 py-1 text-rose-300">
+                          Drena/turno: {sustainedCostsSummary((ability as CharacterAbility & {sustain_costs?:unknown}).sustain_costs)}
+                        </span>
+                      )}
                       {Boolean((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle) && (
                         <span className={`rounded px-2 py-1 ${mode === "combat" && usedOnceAbilityIds.includes(ability.id) ? "bg-muted text-muted-foreground" : "bg-amber-500/10 text-amber-400"}`}>
                           {mode === "combat" && usedOnceAbilityIds.includes(ability.id) ? "Já usada neste combate" : "1 uso por combate"}
@@ -1957,6 +1963,7 @@ export function CharacterAbilitiesManager({ characterId, personalOnly = false }:
       passive_effects: ability.passive_effects,
       end_effects: ability.end_effects,
       continuous_rules: (ability as Ability & { continuous_rules?: unknown }).continuous_rules ?? [],
+      sustain_costs: (ability as Ability & { sustain_costs?: unknown }).sustain_costs ?? [],
       once_per_battle: Boolean((ability as Ability & { once_per_battle?: boolean }).once_per_battle),
     });
     if (error) { toast.error(error.message); return; }
@@ -2096,6 +2103,7 @@ function AssignedAbilityEditor({ ability, defs, accessoryName }: {
   const [personalScript,setPersonalScript] = useState((ability as CharacterAbility & { custom_script_key?:string|null }).custom_script_key ?? "");
   const [canActivate, setCanActivate] = useState(ability.can_activate);
   const [toggleMode, setToggleMode] = useState(ability.toggle_mode);
+  const [sustainCosts, setSustainCosts] = useState<SustainedCost[]>(() => parseSustainedCosts((ability as CharacterAbility & {sustain_costs?:unknown}).sustain_costs));
   const [oncePerBattle, setOncePerBattle] = useState(Boolean((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle));
   const [isMagical, setIsMagical] = useState(ability.is_magical);
   const [selfTargetOnly, setSelfTargetOnly] = useState(ability.self_target_only);
@@ -2124,6 +2132,7 @@ function AssignedAbilityEditor({ ability, defs, accessoryName }: {
     setPersonalScript((ability as CharacterAbility & { custom_script_key?:string|null }).custom_script_key ?? "");
     setCanActivate(ability.can_activate);
     setToggleMode(ability.toggle_mode);
+    setSustainCosts(parseSustainedCosts((ability as CharacterAbility & {sustain_costs?:unknown}).sustain_costs));
     setOncePerBattle(Boolean((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle));
     setIsMagical(ability.is_magical);
     setSelfTargetOnly(ability.self_target_only);
@@ -2147,6 +2156,8 @@ function AssignedAbilityEditor({ ability, defs, accessoryName }: {
     const cost = Math.floor(Number(manaCost));
     const attackCost = attackManaCost.trim() === "" ? null : Number(attackManaCost);
     if (!name.trim()) { toast.error("Informe o nome"); return; }
+    const sustainError = validateSustainedCosts(sustainCosts);
+    if (canActivate && toggleMode && sustainError) { toast.error(sustainError); return; }
     if (ability.toggle_active) { toast.error("Desative esta habilidade antes de alterar sua configuração."); return; }
     if (toggleMode && !canActivate) { toast.error("Habilidade sustentada precisa ser ativável."); return; }
     const catalogDefinition = availableCatalogAbilities.find((row) => row.id === ability.ability_id);
@@ -2212,6 +2223,7 @@ function AssignedAbilityEditor({ ability, defs, accessoryName }: {
       description: description.trim() || null,
       can_activate: canActivate,
       toggle_mode: canActivate && toggleMode,
+      sustain_costs: canActivate && toggleMode ? sustainCosts : [],
       is_magical: isMagical,
       self_target_only: canActivate && selfTargetOnly,
       is_passive: !canActivate,
@@ -2320,6 +2332,11 @@ function AssignedAbilityEditor({ ability, defs, accessoryName }: {
             <input type="checkbox" checked={toggleMode} onChange={(e) => setToggleMode(e.target.checked)} disabled={ability.toggle_active} />
             <span>Habilidade sustentada (ligar/desligar)<span className="block text-xs text-muted-foreground">Os efeitos ao ativar continuam funcionando até o mestre desativar. A recarga começa ao desligar.</span></span>
           </label>
+        )}
+        {canActivate && toggleMode && (
+          <div className="sm:col-span-2">
+            <SustainedCostsEditor value={sustainCosts} onChange={setSustainCosts} disabled={ability.toggle_active} />
+          </div>
         )}
         {canActivate && (
           <label className="flex min-h-10 items-center gap-2 rounded-md border border-border px-3 py-2 text-sm sm:col-span-2">
