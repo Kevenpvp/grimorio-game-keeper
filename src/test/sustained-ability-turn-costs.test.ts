@@ -46,7 +46,7 @@ describe("Custos sustentados", () => {
     expect(sheet).toContain("Drena/turno:");
     expect(migration).toContain("assign_catalog_sustain_costs");
     expect(migration).toContain("update_catalog_sustain_costs");
-    expect(migration).toContain("'sustain_costs',ca.sustain_costs");
+    expect(migration).toContain("''sustain_costs'',ca.sustain_costs");
     expect(migration).toContain("sustain_costs=COALESCE(_entry.value->''sustain_costs'',ca.sustain_costs)");
   });
 
