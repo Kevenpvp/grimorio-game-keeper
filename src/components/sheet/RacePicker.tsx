@@ -126,12 +126,11 @@ export function RacePicker({ character, isMaster }: { character: Character; isMa
     setPendingVirtueId(character.virtue_id);
   }, [character.id, character.race_id, character.virtue_id]);
 
-  // Each trait is locked independently as soon as it has been confirmed.
-  // Players can finish an unchosen Virtue without reopening the Race picker.
-  const canChooseRace = isMaster || !character.race_id;
-  const canChooseVirtue = isMaster || !character.virtue_id;
+  // The master exclusively controls every origin choice.
+  const canChooseRace = isMaster;
+  const canChooseVirtue = isMaster;
 
-  if (!races || !virtues || !defs) return null;
+  if (!isMaster || !races || !virtues || !defs) return null;
   if (!canChooseRace && !canChooseVirtue) return null;
 
   async function refreshAfterConfirmation(message: string) {
@@ -147,7 +146,7 @@ export function RacePicker({ character, isMaster }: { character: Character; isMa
   }
 
   async function confirmRace() {
-    if (!canChooseRace) return;
+    if (!isMaster || !canChooseRace) return;
     if (!isMaster && !pendingRaceId) {
       toast.error("Selecione uma raça antes de confirmar");
       return;
@@ -168,7 +167,7 @@ export function RacePicker({ character, isMaster }: { character: Character; isMa
   }
 
   async function confirmVirtue() {
-    if (!canChooseVirtue) return;
+    if (!isMaster || !canChooseVirtue) return;
     if (!isMaster && !character.race_id) {
       toast.error("Confirme sua raça antes de escolher a virtude");
       return;

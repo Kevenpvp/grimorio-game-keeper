@@ -29,6 +29,7 @@ import { PhysicalPointsDistribution } from "@/components/sheet/PhysicalPointsDis
 import { QuickMasterAttributes } from "@/components/sheet/QuickMasterAttributes";
 import { RacePicker } from "@/components/sheet/RacePicker";
 import { ClassPicker } from "@/components/sheet/ClassPicker";
+import { CharacterOriginOverview } from "@/components/sheet/CharacterOriginOverview";
 import { AttrIcon, barTone } from "@/components/sheet/icons";
 import { StatBar } from "@/components/sheet/StatBar";
 import { DamageApplier } from "@/components/combat/DamageApplier";
@@ -104,11 +105,7 @@ function FichaPage() {
           )}
         </SheetTabPanel>
         <SheetTabPanel tab="origin" active={playerTab}>
-          <RacePicker character={data.character} isMaster={false} />
-          <ClassPicker character={data.character} isMaster={false} />
-          {data.character.race_id && data.character.virtue_id && data.character.class_id && (
-            <p className="panel p-4 text-xs text-muted-foreground">Raça, Virtude e Classe já estão confirmadas. Seus bônus aparecem no Resumo.</p>
-          )}
+          <CharacterOriginOverview character={data.character} />
         </SheetTabPanel>
         <SheetTabPanel tab="abilities" active={playerTab}>
           <CharacterAbilitiesManager characterId={data.character.id} personalOnly />

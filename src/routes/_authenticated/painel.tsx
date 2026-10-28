@@ -11,7 +11,7 @@ import { CharacterSheetView, Portrait } from "@/components/sheet/CharacterSheetV
 import { StatBar } from "@/components/sheet/StatBar";
 import { PointsDistribution } from "@/components/sheet/PointsDistribution";
 import { PhysicalPointsDistribution } from "@/components/sheet/PhysicalPointsDistribution";
-import { RacePicker } from "@/components/sheet/RacePicker";
+import { CharacterOriginOverview } from "@/components/sheet/CharacterOriginOverview";
 import { CharacterAbilitiesPanel } from "@/components/abilities/CharacterAbilities";
 import { SummonGrantsEditor } from "@/components/summons/Summons";
 import { CharacterTransformationImages } from "@/components/transformations/CharacterTransformationImages";
@@ -107,7 +107,7 @@ function PlayerSheet({ id }: { id: string }) {
   if (!data?.character || !defs) return <p className="text-muted-foreground">Carregando…</p>;
   return (
     <div className="space-y-6">
-      <RacePicker character={data.character} isMaster={false} />
+      <CharacterOriginOverview character={data.character} />
       <CharacterTransformationImages character={data.character} />
       <SummonGrantsEditor characterId={data.character.id} master={false} />
       <CharacterAbilitiesPanel characterId={data.character.id} characterName={data.character.name} mode="sheet" canUse />

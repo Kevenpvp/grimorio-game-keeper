@@ -42,10 +42,10 @@ export function ClassPicker({ character, isMaster }: { character: Character; isM
     isMaster,
   });
 
-  if (!classes || !defs) return null;
-  if (!isMaster && character.class_id) return null;
+  if (!isMaster || !classes || !defs) return null;
 
   async function confirmClass() {
+    if (!isMaster) return;
     if (!isMaster && !pendingClassId) {
       toast.error("Selecione uma classe antes de confirmar");
       return;
