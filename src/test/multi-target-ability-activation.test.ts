@@ -29,7 +29,7 @@ describe("Ativar habilidades com vários destinatários", () => {
     expect(panel).toContain("__activation_target_ids: chosenTargets");
     expect(panel).toContain("chosenTargets.map((id) => ({ target_id: id, hit: true, group_ids: [] }))");
     expect(panel).toContain("onConfirm={async (values, selectedIds)");
-    expect(panel).toContain("await activate(activationSetup.ability, values, selectedIds)");
+    expect(panel).toContain("await activate(activationSetup.ability, values, selectedIds, activationSetup.dotEffects)");
     expect(original).toContain("Selecione entre 1 e 25 destinatários");
     expect(original).toContain("Seleção contém destinatários repetidos");
     expect(original).toContain("Todos os destinatários precisam participar do mesmo combate");
