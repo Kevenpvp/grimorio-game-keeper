@@ -29,7 +29,7 @@ import { Portrait } from "@/components/sheet/CharacterSheetView";
 import { StatBar } from "@/components/sheet/StatBar";
 import { cn } from "@/lib/utils";
 import { DamageApplier } from "@/components/combat/DamageApplier";
-import { passiveEffectsForDisplay, type PassiveEffectDisplay } from "@/lib/passive-effect-display";
+import { passiveEffectsForDisplay, unregisteredPassiveEffectsForDisplay, combatEffectBadgeCounts, type PassiveEffectDisplay } from "@/lib/passive-effect-display";
 import { attackDiceModifier, hasActiveStun } from "@/lib/combat-dice";
 import { DamageOverTimeManager } from "@/components/combat/DamageOverTimeManager";
 import { CharacterAbilitiesPanel, effectSummary } from "@/components/abilities/CharacterAbilities";
@@ -1128,8 +1128,10 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
           const isExpanded = expandedFighterIds.has(f.id);
           const fighterEffects = effects.filter((effect) => effect.character_id === f.id);
           const fighterDots = fighterEffects.filter((effect) => effect.effect_type === "damage_over_time").length;
-          const fighterDebuffs = fighterEffects.filter((effect) => effect.polarity === "debuff").length;
-          const fighterBuffs = fighterEffects.filter((effect) => effect.polarity === "buff").length;
+          // Count the same passive ability effects listed under Efeitos ativos.
+          // These are display-only and are NOT added to the battle damage pipeline.
+          const { buffs: fighterBuffs, debuffs: fighterDebuffs } =
+            combatEffectBadgeCounts(fighterEffects, passiveEffectsForDisplay(abilitiesOf(f.id)));
           const fighterSpecial = fighterEffects.filter((effect) => ["stun", "invincible", "magic_prohibition", "no_mana", "mind_control", "invisibility"].includes(effect.effect_type));
           const hp = f.character_attributes.find((a) => a.attribute_key === "hp");
           const mana = f.character_attributes.find((a) => a.attribute_key === "mana");
@@ -1627,13 +1629,7 @@ function ActiveCombatEffectsPanel({ effects, passiveEffects, defs, getSource }: 
   // Passive ability effects already contribute to game calculations through
   // character_abilities. Project them only for display: never write them to
   // battle_effects or add them to the list used by damage/turn calculations.
-  const passiveCards: VisibleCombatEffect[] = passiveEffects
-    .filter((item) => !effects.some((registered) =>
-      registered.source_character_ability_id === item.abilityId
-      && registered.is_sheet_permanent
-      && registered.name === item.effect.name
-      && registered.effect_type === item.effect.effect_type
-    ))
+  const passiveCards: VisibleCombatEffect[] = unregisteredPassiveEffectsForDisplay(passiveEffects, effects)
     .map(({ id, abilityId, abilityName, effect }) => ({
       id,
       battle_id: null,
