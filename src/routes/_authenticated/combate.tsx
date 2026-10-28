@@ -29,12 +29,13 @@ import { Portrait } from "@/components/sheet/CharacterSheetView";
 import { StatBar } from "@/components/sheet/StatBar";
 import { cn } from "@/lib/utils";
 import { DamageApplier } from "@/components/combat/DamageApplier";
+import { passiveEffectsForDisplay, type PassiveEffectDisplay } from "@/lib/passive-effect-display";
 import { attackDiceModifier, hasActiveStun } from "@/lib/combat-dice";
 import { DamageOverTimeManager } from "@/components/combat/DamageOverTimeManager";
 import { CharacterAbilitiesPanel, effectSummary } from "@/components/abilities/CharacterAbilities";
 import { TransformationAdvancedActivationDialog, type TransformationActivationOverrides } from "@/components/transformations/TransformationAdvancedActivationDialog";
 import { SummonCombatPanel } from "@/components/summons/Summons";
-import { parseAbilityEffects, passiveEffectTypeActive, passiveRegenerationModifiers, passiveStatusModifiers, useAbilities, useBattleCharacterAbilities, useCharacterAbilities, useDamageTypes, useDotTemplates } from "@/lib/abilities";
+import { parseAbilityEffects, passiveEffectTypeActive, passiveRegenerationModifiers, passiveStatusModifiers, useAbilities, useBattleCharacterAbilities, useCharacterAbilities, useDamageTypes, useDotTemplates, type AbilityEffectDefinition } from "@/lib/abilities";
 
 export const Route = createFileRoute("/_authenticated/combate")({
   head: () => ({
@@ -1385,7 +1386,11 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                     ))}
                   </div>}
                   </>}
-                  {detailTab === "activeEffects" && <ActiveCombatEffectsPanel effects={effects.filter((e) => e.character_id === f.id)} defs={defs} getSource={(effect) => {
+                  {detailTab === "activeEffects" && <ActiveCombatEffectsPanel
+                    effects={effects.filter((e) => e.character_id === f.id)}
+                    passiveEffects={passiveEffectsForDisplay(abilitiesOf(f.id))}
+                    defs={defs}
+                    getSource={(effect) => {
                     if (effect.source_race_id) return "Raça: " + (races?.find((r) => r.id === effect.source_race_id)?.name ?? "raça");
                     if (effect.source_class_id) return "Classe: " + (classes?.find((c) => c.id === effect.source_class_id)?.name ?? "classe");
                     if (effect.source_virtue_id) return "Virtude: " + (virtues?.find((v) => v.id === effect.source_virtue_id)?.name ?? "virtude");
@@ -1604,14 +1609,51 @@ function activeEffectDetails(effect: BattleEffect, defs: AttributeDef[], damageT
   }
 }
 
-function ActiveCombatEffectsPanel({ effects, defs, getSource }: {
+type VisibleCombatEffect = BattleEffect & {
+  passiveDefinition?: AbilityEffectDefinition;
+  passiveAbilityName?: string;
+};
+
+function ActiveCombatEffectsPanel({ effects, passiveEffects, defs, getSource }: {
   effects: BattleEffect[];
+  passiveEffects: PassiveEffectDisplay[];
   defs: AttributeDef[];
   getSource: (effect: BattleEffect) => string;
 }) {
   const [filter, setFilter] = useState<"all" | "buff" | "debuff" | "dots">("all");
   const { data: damageTypes = [] } = useDamageTypes();
-  const visible = effects.filter((effect) => {
+  const { data: effectRaces = [] } = useRaces();
+
+  // Passive ability effects already contribute to game calculations through
+  // character_abilities. Project them only for display: never write them to
+  // battle_effects or add them to the list used by damage/turn calculations.
+  const passiveCards: VisibleCombatEffect[] = passiveEffects
+    .filter((item) => !effects.some((registered) =>
+      registered.source_character_ability_id === item.abilityId
+      && registered.is_sheet_permanent
+      && registered.name === item.effect.name
+      && registered.effect_type === item.effect.effect_type
+    ))
+    .map(({ id, abilityId, abilityName, effect }) => ({
+      id,
+      battle_id: null,
+      character_id: "",
+      name: effect.name,
+      effect_type: (effect.effect_type === "mana_regeneration" ? "regeneration" : effect.effect_type) as BattleEffect["effect_type"],
+      attribute_key: effect.attribute_key,
+      polarity: effect.polarity,
+      value_mode: effect.value_mode,
+      amount: effect.amount,
+      duration: 1,
+      duration_scope: "individual",
+      until_combat_end: false,
+      is_sheet_permanent: true,
+      source_character_ability_id: abilityId,
+      passiveDefinition: effect,
+      passiveAbilityName: abilityName,
+    }));
+  const allEffects: VisibleCombatEffect[] = [...effects, ...passiveCards];
+  const visible = allEffects.filter((effect) => {
     if (filter === "dots") return effect.effect_type === "damage_over_time";
     if (filter === "all") return true;
     return effect.polarity === filter;
@@ -1622,7 +1664,7 @@ function ActiveCombatEffectsPanel({ effects, defs, getSource }: {
         <div className="flex items-center gap-2.5">
           <span className="rounded-lg border border-gold/30 bg-gold/10 p-2"><Sparkles className="h-5 w-5 text-gold" /></span>
           <div>
-            <h3 className="font-display text-lg text-gold">Efeitos ativos <span className="text-muted-foreground">({effects.length})</span></h3>
+            <h3 className="font-display text-lg text-gold">Efeitos ativos <span className="text-muted-foreground">({allEffects.length})</span></h3>
             <p className="text-xs text-muted-foreground">Descrição, origem e duração de cada efeito.</p>
           </div>
         </div>
@@ -1635,15 +1677,17 @@ function ActiveCombatEffectsPanel({ effects, defs, getSource }: {
         </select>
       </div>
       {visible.length === 0 && <p className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-        {effects.length === 0 ? "Nenhum efeito ativo neste personagem." : "Nenhum efeito corresponde ao filtro."}
+        {allEffects.length === 0 ? "Nenhum efeito ativo neste personagem." : "Nenhum efeito corresponde ao filtro."}
       </p>}
       {visible.map((effect) => {
         const isDot = effect.effect_type === "damage_over_time";
         const positive = effect.polarity === "buff" && !isDot;
         const permanent = !!(effect.source_class_id || effect.source_race_id || effect.source_virtue_id || effect.is_sheet_permanent);
-        const durationText = permanent ? "Permanente" : effect.until_combat_end ? "Até o fim do combate" : effect.duration + " turno(s)";
+        const durationText = effect.passiveDefinition ? "Permanente (passivo)" : permanent ? "Permanente" : effect.until_combat_end ? "Até o fim do combate" : effect.duration + " turno(s)";
         const EffectIcon = isDot ? Droplets : positive ? ShieldCheck : Skull;
-        const source = getSource(effect);
+        const source = getSource(effect) + (effect.passiveDefinition && effect.passiveAbilityName && getSource(effect).startsWith("Acessório:")
+          ? " · Habilidade: " + effect.passiveAbilityName
+          : "");
         return (
           <article key={effect.id} className={cn(
             "grimorio-effects-card relative grid min-w-0 gap-3 overflow-hidden p-3 transition-colors sm:grid-cols-[3rem_minmax(0,1fr)_minmax(7.75rem,auto)] sm:gap-4 sm:p-4",
@@ -1667,17 +1711,26 @@ function ActiveCombatEffectsPanel({ effects, defs, getSource }: {
                   <span className="rounded-md border border-gold/15 bg-black/20 px-2 py-0.5 text-[11px] capitalize text-muted-foreground">
                     {effect.effect_type.replace(/_/g, " ")}
                   </span>
+                  {effect.passiveDefinition && (
+                    <span className="rounded-md border border-gold/35 bg-gold/10 px-2 py-0.5 text-[11px] font-semibold text-gold">
+                      Passivo de habilidade
+                    </span>
+                  )}
                 </div>
               </div>
               <p className="whitespace-pre-wrap break-words text-xs leading-relaxed text-[#cbbfac] sm:text-sm">
-                {activeEffectDetails(effect, defs, damageTypes)}
+                {effect.passiveDefinition
+                  ? effectSummary(effect.passiveDefinition, defs, damageTypes, effectRaces)
+                  : activeEffectDetails(effect, defs, damageTypes)}
               </p>
             </div>
             <div className="flex flex-row flex-wrap gap-x-4 gap-y-2 border-t border-gold/15 pt-2 text-xs text-muted-foreground sm:flex-col sm:justify-center sm:gap-3 sm:border-l sm:border-t-0 sm:pl-3 sm:pt-0">
               <div>
                 <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Duração</p>
                 <p className="flex items-center gap-1.5 font-semibold text-foreground"><Hourglass className="h-3.5 w-3.5 shrink-0 text-gold" /> {durationText}</p>
-                {!permanent && !effect.until_combat_end && <span className="text-[10px] text-muted-foreground">{effect.duration_scope === "global" ? "Turno global" : "Turno individual"}</span>}
+                {effect.passiveDefinition
+                  ? <span className="text-[10px] text-muted-foreground">Enquanto a habilidade estiver concedida à ficha</span>
+                  : !permanent && !effect.until_combat_end && <span className="text-[10px] text-muted-foreground">{effect.duration_scope === "global" ? "Turno global" : "Turno individual"}</span>}
               </div>
               <div className="min-w-0">
                 <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Origem</p>
