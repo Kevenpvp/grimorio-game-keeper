@@ -25,7 +25,7 @@ import { parseContinuousRules, type ContinuousRule, type ContinuousInstance } fr
 import { planContinuousTargetTransfer, validateTransferSelection, type TransferRequirement } from "@/lib/continuous-target-transfer";
 import { parseAttributeStatusModifiers } from "@/lib/multi-attribute-effects";
 import { ActivationEffectValuesDialog, type ActivationEffectOverrides } from "@/components/abilities/ActivationEffectValuesDialog";
-import { SheetAbilityAttackEditor } from "@/components/abilities/SheetAbilityAttackEditor";
+import { SheetAbilityAttackEditor, AbilityDotEffectsEditor } from "@/components/abilities/SheetAbilityAttackEditor";
 import { TemporaryAttackCategoryEditor } from "@/components/abilities/TemporaryAttackCategoryEditor";
 import { TemporaryGuaranteedDotsEditor } from "@/components/abilities/TemporaryGuaranteedDotsEditor";
 import { findRegisteredDotTemplate, registerAbilityDotTemplates } from "@/lib/ability-dot-templates";
@@ -530,6 +530,7 @@ export function CharacterAbilitiesPanel({
     ability: CharacterAbility;
     initialTargetIds: string[];
     effects: AbilityEffectDefinition[];
+    dotEffects: AbilityDotEffect[];
   } | null>(null);
   const [extraManaCosts, setExtraManaCosts] = useState<Record<string, string>>({});
   const [expanded, setExpanded] = useState(true);
@@ -564,6 +565,17 @@ export function CharacterAbilitiesPanel({
   const attackContinuousRules = parseContinuousRules((attackAbility as CharacterAbility & {continuous_rules?:unknown}|undefined)?.continuous_rules);
   const heldAttackTargets = attackContinuousLinks.filter(instance=>instance.character_ability_id===attackAbility?.id);
   const attackCatalogEntry = abilityCatalog.find((catalogAbility) => catalogAbility.id === attackAbility?.ability_id);
+  const { data: activeAttackOverride } = useQuery<{ override_values: { dot_effects?: unknown } | null } | null>({
+    queryKey: ["battle-ability-override", battleId, attackAbility?.id],
+    enabled: mode === "combat" && !!battleId && !!attackAbility && !!me?.isMaster,
+    queryFn: async () => {
+      const { data, error } = await db.from("battle_ability_overrides")
+        .select("override_values").eq("battle_id", battleId!)
+        .eq("character_ability_id", attackAbility!.id).maybeSingle();
+      if (error) throw error;
+      return data ?? null;
+    },
+  });
   // Catalog abilities keep their shared model; exclusive sheet abilities use
   // the attack settings stored directly on character_abilities.
   const attackDefinition = attackAbility?.ability_id
@@ -577,7 +589,13 @@ export function CharacterAbilitiesPanel({
   }
   const attackConfig = attackDefinition?.attack_enabled ? parseAbilityAttackDamage(attackDefinition.attack_damage) : null;
   const attackEffectGroups = attackDefinition?.attack_enabled ? parseAbilityAttackEffectGroups(attackDefinition.attack_effect_groups) : [];
-  const guaranteedAttackDots = attackDefinition?.attack_enabled ? parseAbilityDotEffects(attackDefinition.dot_effects) : [];
+  const guaranteedAttackDots = attackDefinition?.attack_enabled
+    ? parseAbilityDotEffects(
+        Array.isArray(activeAttackOverride?.override_values?.dot_effects)
+          ? activeAttackOverride.override_values.dot_effects
+          : attackDefinition.dot_effects
+      )
+    : [];
   const currentAttackTargets = eligibleAttackTargets.filter((target) => attackTargetIds.includes(target.id));
   const focusedAttackTargetId = currentAttackTargets.some((target) => target.id === attackFocusedTargetId)
     ? attackFocusedTargetId
@@ -706,7 +724,7 @@ export function CharacterAbilitiesPanel({
       toast.error("Por alvo: ajuste fixo inteiro entre -1.000.000 e +1.000.000; percentual entre -100% e +1000%.");
       return;
     }
-    const guaranteedDots = parseAbilityDotEffects(attackDefinition.dot_effects);
+    const guaranteedDots = guaranteedAttackDots;
     // A target-specific ID avoids collisions when two targets use different
     // caster attribute calculations for the same guaranteed DoT.
     const guaranteedDotsForTarget = (targetId: string) => {
@@ -1045,12 +1063,21 @@ export function CharacterAbilitiesPanel({
           ? values.effects
           : ability.effects
       );
+      const baseDots = ability.ability_id
+        ? abilityCatalog.find((entry) => entry.id === ability.ability_id)?.dot_effects
+        : ability.dot_effects;
+      const effectiveDots = parseAbilityDotEffects(
+        values && typeof values === "object" && !Array.isArray(values) && Array.isArray(values.dot_effects)
+          ? values.dot_effects
+          : baseDots
+      );
       // Every activation now opens a recipient picker; editable effect values
       // are shown in the same dialog if this ability requires them.
       setActivationSetup({
         ability,
         initialTargetIds: ability.self_target_only ? [characterId] : [],
         effects: effectiveEffects,
+        dotEffects: effectiveDots,
       });
     } catch (error) {
       toast.error("Não foi possível preparar os efeitos: " + (error instanceof Error ? error.message : String(error)));
@@ -1063,6 +1090,7 @@ export function CharacterAbilitiesPanel({
     ability: CharacterAbility,
     activationOverrides?: ActivationEffectOverrides,
     selectedTargetIds: string[] = [characterId],
+    preparedDots?: AbilityDotEffect[],
   ) {
     if (!canUse || mode !== "combat" || !ability.can_activate || ability.cooldown_turns < 0 || ability.cooldown_remaining > 0 || ability.active_duration_remaining > 0 || busyId || ability.toggle_active) return;
     if ((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle && mode === "combat" && usedOnceAbilityIds.includes(ability.id)) {
@@ -1070,7 +1098,7 @@ export function CharacterAbilitiesPanel({
       return;
     }
     const catalogEntry = abilityCatalog.find((candidate) => candidate.id === ability.ability_id);
-    const guaranteedDots = parseAbilityDotEffects(ability.ability_id ? catalogEntry?.dot_effects : ability.dot_effects);
+    const guaranteedDots = preparedDots ?? parseAbilityDotEffects(ability.ability_id ? catalogEntry?.dot_effects : ability.dot_effects);
     const chosenTargets = [...new Set(ability.self_target_only ? [characterId] : selectedTargetIds)];
     if (!chosenTargets.length || chosenTargets.length > 25 || chosenTargets.some((id) => !targetOptions.some((target) => target.id === id))) {
       toast.error("Selecione entre 1 e 25 destinatários válidos.");
@@ -1091,9 +1119,9 @@ export function CharacterAbilitiesPanel({
       _extra_mana_cost: mode === "combat" && ability.mana_cost > 0
         ? Math.max(0, Math.min(1000000, Math.floor(Number(extraManaCosts[ability.id] ?? 0) || 0)))
         : 0,
-      _dot_target_selections: guaranteedDots.length > 0
-        ? chosenTargets.map((id) => ({ target_id: id, hit: true, group_ids: [] }))
-        : null,
+      // Always send the targets. A temporary battle edit may introduce DoTs
+      // even if the permanent ability has none.
+      _dot_target_selections: chosenTargets.map((id) => ({ target_id: id, hit: true, group_ids: [] })),
       _dot_attribute_values: {
         ...dotAttributeValues,
         __activation_target_ids: chosenTargets,
@@ -1881,7 +1909,7 @@ export function CharacterAbilitiesPanel({
           effects={activationSetup.effects}
           onCancel={() => setActivationSetup(null)}
           onConfirm={async (values, selectedIds) => {
-            const result = await activate(activationSetup.ability, values, selectedIds);
+            const result = await activate(activationSetup.ability, values, selectedIds, activationSetup.dotEffects);
             return result === true;
           }}
         />
@@ -2437,12 +2465,19 @@ function AssignedAbilityEditor({ ability, defs, accessoryName }: {
 
 function BattleAbilityOverrideEditor({ ability, battleId, defs }: { ability: CharacterAbility; battleId: string; defs: NonNullable<ReturnType<typeof useDefs>["data"]> }) {
   const { data: me } = useMe();
+  const { data: catalog = [] } = useAbilities();
+  const { data: damageTypes = [] } = useDamageTypes();
+  const { data: dotTemplates = [] } = useDotTemplates();
+  const baseDots = ability.ability_id
+    ? catalog.find((entry) => entry.id === ability.ability_id)?.dot_effects
+    : ability.dot_effects;
   const qc = useQueryClient();
   const db = supabase as any;
   const [open, setOpen] = useState(false);
   const [manaCost, setManaCost] = useState(String(ability.mana_cost));
   const [effects, setEffects] = useState<AbilityEffectDefinition[]>(parseAbilityEffects(ability.effects));
   const [endEffects, setEndEffects] = useState<AbilityEffectDefinition[]>(parseAbilityEffects(ability.end_effects));
+  const [dotEffects, setDotEffects] = useState<AbilityDotEffect[]>(() => parseAbilityDotEffects(ability.dot_effects));
   const [keepAfterUse, setKeepAfterUse] = useState(false);
   const [saving, setSaving] = useState(false);
   const { data: existing } = useQuery({
@@ -2460,13 +2495,22 @@ function BattleAbilityOverrideEditor({ ability, battleId, defs }: { ability: Cha
     setManaCost(String(values.mana_cost ?? ability.mana_cost));
     setEffects(parseAbilityEffects(values.effects ?? ability.effects));
     setEndEffects(parseAbilityEffects(values.end_effects ?? ability.end_effects));
+    setDotEffects(parseAbilityDotEffects(values.dot_effects ?? baseDots));
     setKeepAfterUse(Boolean(existing?.keep_after_use));
-  }, [existing, ability.id, ability.mana_cost, ability.effects, ability.end_effects]);
+  }, [existing, ability.id, ability.mana_cost, ability.effects, ability.end_effects, baseDots]);
 
   if (!me?.isMaster) return null;
   async function saveOverride() {
     const cost = Math.floor(Number(manaCost));
     if (!Number.isFinite(cost) || cost < 0 || cost > 1000000) { toast.error("O custo de Mana deve ficar entre 0 e 1.000.000"); return; }
+    if (dotEffects.some((dot) => !findRegisteredDotTemplate(dot, dotTemplates))) {
+      toast.error("Selecione um DoT já registrado na página DoTs para cada efeito.");
+      return;
+    }
+    if (dotEffects.some((dot) => dot.damage_mode === "attribute" && !dot.attribute_key)) {
+      toast.error("Escolha o atributo de todos os DoTs baseados em atributo.");
+      return;
+    }
     setSaving(true);
     const { error } = await db.from("battle_ability_overrides").upsert({
       battle_id: battleId,
@@ -2475,6 +2519,7 @@ function BattleAbilityOverrideEditor({ ability, battleId, defs }: { ability: Cha
         mana_cost: cost,
         effects: effects.map((effect) => ({ ...effect, duration: Math.max(1, effect.duration) })),
         end_effects: endEffects.map((effect) => ({ ...effect, duration: Math.max(1, effect.duration) })),
+        dot_effects: registerAbilityDotTemplates(dotEffects, dotTemplates),
       },
       keep_after_use: keepAfterUse,
       updated_at: new Date().toISOString(),
@@ -2509,6 +2554,15 @@ function BattleAbilityOverrideEditor({ ability, battleId, defs }: { ability: Cha
           </div>
           <AbilityEffectsEditor allowActivationCustomization effects={effects} onChange={setEffects} permanent={false} title="Efeitos alterados nesta batalha" description="Os atributos afetados por esses efeitos também são temporários." defs={defs} />
           <AbilityEffectsEditor effects={endEffects} onChange={setEndEffects} permanent={false} title="Efeitos ao terminar" description="Efeitos de encerramento temporários para esta batalha." defs={defs} allowPeriodicHealing={false} />
+          <AbilityDotEffectsEditor
+            dots={dotEffects}
+            onChange={setDotEffects}
+            defs={defs}
+            physicalTypes={damageTypes.filter((type) => type.category === "physical")}
+            magicalTypes={damageTypes.filter((type) => type.category === "magical")}
+            title="DoTs temporários nesta batalha"
+            description="Adicione ou ajuste DoTs registrados, dano fixo, percentual ou por atributo e duração. Substituem os DoTs garantidos da habilidade apenas nesta batalha; aplicam-se aos destinatários da ativação ou do ataque, sem alterar a ficha."
+          />
           <label className="flex items-start gap-2 text-sm">
             <input type="checkbox" className="mt-1" checked={keepAfterUse} onChange={(event) => setKeepAfterUse(event.target.checked)} />
             <span><strong>Manter Alterações</strong><span className="block text-xs text-muted-foreground">Marcado: usar os valores alterados nas próximas ativações. Desmarcado: usar uma vez e restaurar os valores originais.</span></span>
