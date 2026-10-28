@@ -121,6 +121,9 @@ type Fighter = {
   id: string; name: string; player_name: string; photo_path: string | null; race_id: string | null; virtue_id: string | null; class_id: string | null; owner_id: string | null; class_custom_modifiers?: Json;
   race_physical_allocations: Json; virtue_physical_allocations: Json; class_physical_allocations: Json; race_physical_points_granted: number; virtue_physical_points_granted: number; class_physical_points_granted: number;
   body: number; sanity: number; participant_turn_count?: number;
+  mana_regen_enabled?: boolean;
+  mana_regen_mode?: "fixed" | "percent";
+  mana_regen_amount?: number;
   character_attributes: Attr[];
 };
 type TransformationTemplate = {
@@ -273,8 +276,8 @@ function useLiveBattles(isMaster: boolean, userId: string | undefined) {
     refetchOnWindowFocus: "always",
     refetchOnReconnect: "always",
     queryFn: async () => {
-      const masterSelection = "*, battle_participants(sort_order,turn_count, characters(id,name,player_name,photo_path,race_id,virtue_id,class_id,class_custom_modifiers,owner_id,race_physical_allocations,virtue_physical_allocations,class_physical_allocations,race_physical_points_granted,virtue_physical_points_granted,class_physical_points_granted,body,sanity,character_attributes(attribute_key,current_value,max_value,points,bonus)))";
-      const playerSelection = "*, battle_participants(sort_order,turn_count, characters(id,name,player_name,photo_path,owner_id,race_id,virtue_id,class_id))";
+      const masterSelection = "*, battle_participants(sort_order,turn_count,mana_regen_enabled,mana_regen_mode,mana_regen_amount, characters(id,name,player_name,photo_path,race_id,virtue_id,class_id,class_custom_modifiers,owner_id,race_physical_allocations,virtue_physical_allocations,class_physical_allocations,race_physical_points_granted,virtue_physical_points_granted,class_physical_points_granted,body,sanity,character_attributes(attribute_key,current_value,max_value,points,bonus)))";
+      const playerSelection = "*, battle_participants(sort_order,turn_count,mana_regen_enabled,mana_regen_mode,mana_regen_amount, characters(id,name,player_name,photo_path,owner_id,race_id,virtue_id,class_id))";
       const { data, error } = await supabase
         .from("battles")
         .select(isMaster ? masterSelection : playerSelection)
@@ -421,6 +424,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
   }
   const [selectedTargetIds, setSelectedTargetIds] = useState<string[]>(() => battle.target_character_id ? [battle.target_character_id] : []);
   const [manaRegenSettings, setManaRegenSettings] = useState<Record<string, { mode: "percent" | "fixed"; amount: string }>>({});
+  const [savingManaRegen, setSavingManaRegen] = useState<Set<string>>(() => new Set());
   const [advancingTurnKeys, setAdvancingTurnKeys] = useState<Set<string>>(() => new Set());
   const [pendingContinuousTurn,setPendingContinuousTurn] = useState<{ characterId:string|null; title:string; items:ContinuousInstance[] } | null>(null);
   const [stoppingContinuous,setStoppingContinuous] = useState<string|null>(null);
@@ -444,7 +448,14 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
       return nameDiff || idA.localeCompare(idB);
     }).map((p) => {
       const character = p.characters as Fighter;
-      return { ...character, character_attributes: character?.character_attributes ?? [], participant_turn_count: p.turn_count ?? 0 };
+      return {
+        ...character,
+        character_attributes: character?.character_attributes ?? [],
+        participant_turn_count: p.turn_count ?? 0,
+        mana_regen_enabled: p.mana_regen_enabled ?? false,
+        mana_regen_mode: p.mana_regen_mode ?? "fixed",
+        mana_regen_amount: Number(p.mana_regen_amount ?? 40),
+      };
     }).filter((fighter) => !!fighter.id),
     [battle],
   );
@@ -737,17 +748,9 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
         return;
       }
 
-      const manaRegenerationSettingsForTurn: Record<string, { mode: "percent" | "fixed"; amount: number }> = {};
-      for (const fighter of turnFighters) {
-        if (!fighter.character_attributes.some((attribute) => attribute.attribute_key === "mana")) continue;
-        const setting = manaRegenSettings[fighter.id] ?? { mode: "percent" as const, amount: "0" };
-        const amount = Number(setting.amount);
-        if (!Number.isFinite(amount) || amount < 0) {
-          toast.error("Informe uma regeneração de mana válida para " + fighter.name);
-          return;
-        }
-        manaRegenerationSettingsForTurn[fighter.id] = { mode: setting.mode, amount };
-      }
+      // The server uses the enabled checkbox and persisted configuration for
+      // each fighter, avoiding accidental regeneration from stale browser tabs.
+      const manaRegenerationSettingsForTurn: Record<string, never> = {};
 
       const { data: nextTurn, error } = due.length
         ? await db.rpc("confirm_continuous_and_advance",{
@@ -811,10 +814,10 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
 
       if (characterId) {
         const fighter = turnFighters[0];
-        toast.success("Turno individual de " + fighter.name + " avançado para " + nextTurn + "; regeneração configurada aplicada.");
+        toast.success("Turno individual de " + fighter.name + " avançado para " + nextTurn + ".");
         noteActivity("turn", "Turno individual de " + fighter.name + " avançado para " + nextTurn + ".");
       } else {
-        toast.success("Turno " + nextTurn + ": regeneração configurada aplicada.");
+        toast.success("Turno " + nextTurn + " avançado.");
         noteActivity("turn", "Turno geral avançado para " + nextTurn + ".");
       }
 
@@ -883,11 +886,55 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
   };
 
 
-  function setManaRegen(fighterId: string, patch: Partial<{ mode: "percent" | "fixed"; amount: string }>) {
+  function setManaRegen(fighter: Fighter, patch: Partial<{ mode: "percent" | "fixed"; amount: string }>) {
     setManaRegenSettings((current) => ({
       ...current,
-      [fighterId]: { mode: current[fighterId]?.mode ?? "percent", amount: current[fighterId]?.amount ?? "0", ...patch },
+      [fighter.id]: {
+        mode: current[fighter.id]?.mode ?? fighter.mana_regen_mode ?? "fixed",
+        amount: current[fighter.id]?.amount ?? String(fighter.mana_regen_amount ?? 40),
+        ...patch,
+      },
     }));
+  }
+
+  async function saveManaRegen(fighter: Fighter, enabled: boolean, settings?: {mode: "percent" | "fixed"; amount: string}) {
+    if (!isMaster || !battle.active || savingManaRegen.has(fighter.id)) return;
+    const amount = settings ? Number(settings.amount) : Number(fighter.mana_regen_amount ?? 40);
+    const mode = settings?.mode ?? fighter.mana_regen_mode ?? "fixed";
+    if (!Number.isFinite(amount) || amount < 0 || amount > 1000000 || settings?.amount.trim() === "") {
+      toast.error("Informe um valor de regeneração entre 0 e 1.000.000.");
+      return;
+    }
+    setSavingManaRegen((current) => new Set(current).add(fighter.id));
+    try {
+      const { error } = await db.rpc("configure_battle_mana_regeneration", {
+        _battle_id: battle.id,
+        _character_id: fighter.id,
+        _enabled: enabled,
+        _mode: mode,
+        _amount: amount,
+      });
+      if (error) throw error;
+      if (settings) {
+        setManaRegenSettings((current) => {
+          const next = { ...current };
+          delete next[fighter.id];
+          return next;
+        });
+        toast.success("Regeneração de Mana de " + fighter.name + " salva.");
+      } else {
+        toast.success("Regeneração por turno " + (enabled ? "ativada" : "desativada") + " para " + fighter.name + ".");
+      }
+      await qc.invalidateQueries({ queryKey: ["battles"] });
+    } catch (error) {
+      toast.error("Não foi possível configurar a regeneração: " + (error instanceof Error ? error.message : String(error)));
+    } finally {
+      setSavingManaRegen((current) => {
+        const next = new Set(current);
+        next.delete(fighter.id);
+        return next;
+      });
+    }
   }
 
   const actor = fighters.find((f) => f.id === battle.current_character_id);
@@ -1146,6 +1193,32 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                   {effect.effect_type === "invincible" ? "Invencível" : effect.effect_type === "magic_prohibition" ? "Sem magia" : effect.effect_type === "no_mana" ? "Sem mana" : effect.effect_type === "mind_control" ? "Controle mental" : effect.effect_type === "invisibility" ? "Invisível" : "Stun"}
                 </span>)}
               </div>
+              {isMaster && (
+                <label className={cn(
+                  "flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-xs transition-colors",
+                  f.mana_regen_enabled ? "border-purple-400/45 bg-purple-500/10" : "border-border bg-background/40",
+                  (!battle.active || savingManaRegen.has(f.id)) && "cursor-not-allowed opacity-60",
+                )}>
+                  <input
+                    type="checkbox"
+                    aria-label={`Regenerar Mana por Turno de ${f.name}`}
+                    className="h-4 w-4 shrink-0 accent-[#e8b95a]"
+                    checked={!!f.mana_regen_enabled}
+                    disabled={!battle.active || savingManaRegen.has(f.id)}
+                    onChange={(event) => void saveManaRegen(f, event.target.checked)}
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-semibold text-foreground">Regenerar Mana por Turno</span>
+                    <span className="block text-[11px] text-muted-foreground">
+                      {savingManaRegen.has(f.id) ? "Salvando..." : (
+                        (f.mana_regen_enabled ? "Ativo" : "Desligado") + " · +" + Number(f.mana_regen_amount ?? 40) +
+                        (f.mana_regen_mode === "percent" ? "% da Mana máxima" : " Mana fixa") + " por turno"
+                      )}
+                    </span>
+                  </span>
+                  <Droplets aria-hidden="true" className={cn("h-4 w-4 shrink-0", f.mana_regen_enabled ? "text-purple-300" : "text-muted-foreground")} />
+                </label>
+              )}
               <Sheet open={isExpanded} onOpenChange={(open) => setExpandedFighterIds((current) => {
                 const next = new Set(current);
                 if (open) next.add(f.id); else next.delete(f.id);
@@ -1324,7 +1397,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                     }
                     return effect.is_sheet_permanent ? "Ficha" : "Aplicação manual ou combate";
                   }} />}
-                  {detailTab === "effects" && isMaster && <CombatResourceEditor fighter={f} val={val} effects={effects.filter(e => e.character_id === f.id)} defs={defs} onAddEffect={(effect) => void addEffect(f.id, effect)} onRemoveEffect={async (id) => { const { data, error } = await supabase.rpc("remove_manual_character_effect", { _effect_id: id }); if (error) toast.error(error.message); else if (data !== true) toast.error("Este efeito não foi removido."); await qc.invalidateQueries({ queryKey: ["battle-effects", battle.id] }); await qc.invalidateQueries({ queryKey: ["character-active-effects"] }); await qc.invalidateQueries({ queryKey: ["battles"] }); }} hpRegenBlocked={blocked(f.id, "no_regen_hp")} manaRegenBlocked={blocked(f.id, "no_regen_mana") || blocked(f.id, "no_mana")} manaRegenMode={manaRegenSettings[f.id]?.mode ?? "percent"} manaRegenAmount={manaRegenSettings[f.id]?.amount ?? "0"} onManaRegenModeChange={(mode) => setManaRegen(f.id, { mode })} onManaRegenAmountChange={(amount) => setManaRegen(f.id, { amount })} />}
+                  {detailTab === "effects" && isMaster && <CombatResourceEditor fighter={f} val={val} effects={effects.filter(e => e.character_id === f.id)} defs={defs} onAddEffect={(effect) => void addEffect(f.id, effect)} onRemoveEffect={async (id) => { const { data, error } = await supabase.rpc("remove_manual_character_effect", { _effect_id: id }); if (error) toast.error(error.message); else if (data !== true) toast.error("Este efeito não foi removido."); await qc.invalidateQueries({ queryKey: ["battle-effects", battle.id] }); await qc.invalidateQueries({ queryKey: ["character-active-effects"] }); await qc.invalidateQueries({ queryKey: ["battles"] }); }} hpRegenBlocked={blocked(f.id, "no_regen_hp")} manaRegenBlocked={blocked(f.id, "no_regen_mana") || blocked(f.id, "no_mana")} manaRegenMode={manaRegenSettings[f.id]?.mode ?? f.mana_regen_mode ?? "fixed"} manaRegenAmount={manaRegenSettings[f.id]?.amount ?? String(f.mana_regen_amount ?? 40)} manaRegenEnabled={!!f.mana_regen_enabled} manaRegenSaving={savingManaRegen.has(f.id)} onManaRegenModeChange={(mode) => setManaRegen(f, { mode })} onManaRegenAmountChange={(amount) => setManaRegen(f, { amount })} onManaRegenSave={() => void saveManaRegen(f, !!f.mana_regen_enabled, manaRegenSettings[f.id] ?? {mode:f.mana_regen_mode ?? "fixed",amount:String(f.mana_regen_amount ?? 40)})} />}
                   {detailTab === "status" && <div className="flex flex-wrap items-center justify-between gap-2 rounded border border-border p-2">
                     <span className="text-xs text-muted-foreground">Turnos individuais: {f.participant_turn_count ?? 0}</span>
                     {isMaster && <Button size="sm" variant="outline" disabled={!battle.active || advancingTurnKeys.has("__global__") || advancingTurnKeys.has(f.id)} onClick={() => void advanceCombatTurn(f.id)}><RotateCw className="mr-1 h-3.5 w-3.5" /> {advancingTurnKeys.has(f.id) ? "Avançando..." : "Avançar turno"}</Button>}
@@ -1618,7 +1691,7 @@ function ActiveCombatEffectsPanel({ effects, defs, getSource }: {
   );
 }
 
-function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemoveEffect, hpRegenBlocked, manaRegenBlocked, manaRegenMode, manaRegenAmount, onManaRegenModeChange, onManaRegenAmountChange }: { fighter: Fighter; val: (f: Fighter, k: string) => number; effects: BattleEffect[]; defs: AttributeDef[]; onAddEffect: (effect: Omit<BattleEffect, "id" | "battle_id" | "character_id">) => void; onRemoveEffect: (id: string) => void; hpRegenBlocked: boolean; manaRegenBlocked: boolean; manaRegenMode: "percent" | "fixed"; manaRegenAmount: string; onManaRegenModeChange: (mode: "percent" | "fixed") => void; onManaRegenAmountChange: (amount: string) => void }) {
+function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemoveEffect, hpRegenBlocked, manaRegenBlocked, manaRegenMode, manaRegenAmount, manaRegenEnabled, manaRegenSaving, onManaRegenModeChange, onManaRegenAmountChange, onManaRegenSave }: { fighter: Fighter; val: (f: Fighter, k: string) => number; effects: BattleEffect[]; defs: AttributeDef[]; onAddEffect: (effect: Omit<BattleEffect, "id" | "battle_id" | "character_id">) => void; onRemoveEffect: (id: string) => void; hpRegenBlocked: boolean; manaRegenBlocked: boolean; manaRegenMode: "percent" | "fixed"; manaRegenAmount: string; manaRegenEnabled: boolean; manaRegenSaving: boolean; onManaRegenModeChange: (mode: "percent" | "fixed") => void; onManaRegenAmountChange: (amount: string) => void; onManaRegenSave: () => void }) {
   const qc = useQueryClient();
   const { data: characterAbilities = [] } = useCharacterAbilities(fighter.id);
   const [manaDelta, setManaDelta] = useState("10");
@@ -1759,6 +1832,14 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
                 <option value="percent">% da mana máxima</option><option value="fixed">Valor fixo</option>
               </select>
               <Input aria-label="Valor de regeneração de mana" type="number" min="0" value={manaRegenAmount} onChange={(e) => onManaRegenAmountChange(e.target.value)} />
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-muted-foreground">
+                {manaRegenEnabled ? "Ativado no cartão deste combatente." : "Desligado. Marque Regenerar Mana por Turno no cartão do combatente."}
+              </p>
+              <Button size="sm" variant="outline" className="min-h-10" disabled={manaRegenSaving} onClick={onManaRegenSave}>
+                {manaRegenSaving ? "Salvando..." : "Salvar regeneração"}
+              </Button>
             </div>
             <div className="space-y-2 border-t border-border pt-3">
               <div className="text-xs font-medium">Regenerar Mana manualmente</div>
