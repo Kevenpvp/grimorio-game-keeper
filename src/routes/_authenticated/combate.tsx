@@ -1397,7 +1397,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                     }
                     return effect.is_sheet_permanent ? "Ficha" : "Aplicação manual ou combate";
                   }} />}
-                  {detailTab === "effects" && isMaster && <CombatResourceEditor fighter={f} val={val} effects={effects.filter(e => e.character_id === f.id)} defs={defs} onAddEffect={(effect) => void addEffect(f.id, effect)} onRemoveEffect={async (id) => { const { data, error } = await supabase.rpc("remove_manual_character_effect", { _effect_id: id }); if (error) toast.error(error.message); else if (data !== true) toast.error("Este efeito não foi removido."); await qc.invalidateQueries({ queryKey: ["battle-effects", battle.id] }); await qc.invalidateQueries({ queryKey: ["character-active-effects"] }); await qc.invalidateQueries({ queryKey: ["battles"] }); }} hpRegenBlocked={blocked(f.id, "no_regen_hp")} manaRegenBlocked={blocked(f.id, "no_regen_mana") || blocked(f.id, "no_mana")} manaRegenMode={manaRegenSettings[f.id]?.mode ?? f.mana_regen_mode ?? "fixed"} manaRegenAmount={manaRegenSettings[f.id]?.amount ?? String(f.mana_regen_amount ?? 40)} manaRegenEnabled={!!f.mana_regen_enabled} manaRegenSaving={savingManaRegen.has(f.id)} onManaRegenModeChange={(mode) => setManaRegen(f, { mode })} onManaRegenAmountChange={(amount) => setManaRegen(f, { amount })} onManaRegenSave={() => void saveManaRegen(f, !!f.mana_regen_enabled, manaRegenSettings[f.id] ?? {mode:f.mana_regen_mode ?? "fixed",amount:String(f.mana_regen_amount ?? 40)})} />}
+                  {detailTab === "effects" && isMaster && <CombatResourceEditor fighter={f} battleId={battle.id} damageSources={fighters.map(({ id, name }) => ({ id, name }))} val={val} effects={effects.filter(e => e.character_id === f.id)} defs={defs} onAddEffect={(effect) => void addEffect(f.id, effect)} onRemoveEffect={async (id) => { const { data, error } = await supabase.rpc("remove_manual_character_effect", { _effect_id: id }); if (error) toast.error(error.message); else if (data !== true) toast.error("Este efeito não foi removido."); await qc.invalidateQueries({ queryKey: ["battle-effects", battle.id] }); await qc.invalidateQueries({ queryKey: ["character-active-effects"] }); await qc.invalidateQueries({ queryKey: ["battles"] }); }} hpRegenBlocked={blocked(f.id, "no_regen_hp")} manaRegenBlocked={blocked(f.id, "no_regen_mana") || blocked(f.id, "no_mana")} manaRegenMode={manaRegenSettings[f.id]?.mode ?? f.mana_regen_mode ?? "fixed"} manaRegenAmount={manaRegenSettings[f.id]?.amount ?? String(f.mana_regen_amount ?? 40)} manaRegenEnabled={!!f.mana_regen_enabled} manaRegenSaving={savingManaRegen.has(f.id)} onManaRegenModeChange={(mode) => setManaRegen(f, { mode })} onManaRegenAmountChange={(amount) => setManaRegen(f, { amount })} onManaRegenSave={() => void saveManaRegen(f, !!f.mana_regen_enabled, manaRegenSettings[f.id] ?? {mode:f.mana_regen_mode ?? "fixed",amount:String(f.mana_regen_amount ?? 40)})} />}
                   {detailTab === "status" && <div className="flex flex-wrap items-center justify-between gap-2 rounded border border-border p-2">
                     <span className="text-xs text-muted-foreground">Turnos individuais: {f.participant_turn_count ?? 0}</span>
                     {isMaster && <Button size="sm" variant="outline" disabled={!battle.active || advancingTurnKeys.has("__global__") || advancingTurnKeys.has(f.id)} onClick={() => void advanceCombatTurn(f.id)}><RotateCw className="mr-1 h-3.5 w-3.5" /> {advancingTurnKeys.has(f.id) ? "Avançando..." : "Avançar turno"}</Button>}
@@ -1691,7 +1691,7 @@ function ActiveCombatEffectsPanel({ effects, defs, getSource }: {
   );
 }
 
-function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemoveEffect, hpRegenBlocked, manaRegenBlocked, manaRegenMode, manaRegenAmount, manaRegenEnabled, manaRegenSaving, onManaRegenModeChange, onManaRegenAmountChange, onManaRegenSave }: { fighter: Fighter; val: (f: Fighter, k: string) => number; effects: BattleEffect[]; defs: AttributeDef[]; onAddEffect: (effect: Omit<BattleEffect, "id" | "battle_id" | "character_id">) => void; onRemoveEffect: (id: string) => void; hpRegenBlocked: boolean; manaRegenBlocked: boolean; manaRegenMode: "percent" | "fixed"; manaRegenAmount: string; manaRegenEnabled: boolean; manaRegenSaving: boolean; onManaRegenModeChange: (mode: "percent" | "fixed") => void; onManaRegenAmountChange: (amount: string) => void; onManaRegenSave: () => void }) {
+function CombatResourceEditor({ fighter, battleId, damageSources, val, effects, defs, onAddEffect, onRemoveEffect, hpRegenBlocked, manaRegenBlocked, manaRegenMode, manaRegenAmount, manaRegenEnabled, manaRegenSaving, onManaRegenModeChange, onManaRegenAmountChange, onManaRegenSave }: { fighter: Fighter; battleId: string; damageSources: Array<{ id: string; name: string }>; val: (f: Fighter, k: string) => number; effects: BattleEffect[]; defs: AttributeDef[]; onAddEffect: (effect: Omit<BattleEffect, "id" | "battle_id" | "character_id">) => void; onRemoveEffect: (id: string) => void; hpRegenBlocked: boolean; manaRegenBlocked: boolean; manaRegenMode: "percent" | "fixed"; manaRegenAmount: string; manaRegenEnabled: boolean; manaRegenSaving: boolean; onManaRegenModeChange: (mode: "percent" | "fixed") => void; onManaRegenAmountChange: (amount: string) => void; onManaRegenSave: () => void }) {
   const qc = useQueryClient();
   const { data: characterAbilities = [] } = useCharacterAbilities(fighter.id);
   const [manaDelta, setManaDelta] = useState("10");
@@ -1884,6 +1884,22 @@ function CombatResourceEditor({ fighter, val, effects, defs, onAddEffect, onRemo
           <Button size="sm" variant="outline" disabled={busy} onClick={() => void changePercent("body", bodyDelta, 1)}><Plus className="mr-1 h-3 w-3" /> Corpo</Button>
         </div>
       </div>
+        </div>
+      </details>
+      <details className="rounded-md border border-red-500/25">
+        <summary className="flex min-h-11 cursor-pointer select-none items-center gap-2 px-3 py-3 text-sm font-semibold text-red-300 hover:bg-red-500/5 hover:text-red-200">
+          <Swords className="h-4 w-4 shrink-0" aria-hidden="true" /> Aplicar dano em {fighter.name}
+        </summary>
+        <div className="space-y-2 border-t border-border p-2 sm:p-3">
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            Formulário completo de dano para este personagem: físico, mágico, híbrido, verdadeiro,
+            críticos, golpes múltiplos, defesas, mitigação, efeitos e DoTs.
+          </p>
+          <DamageApplier
+            target={{ id: fighter.id, name: fighter.name }}
+            battleId={battleId}
+            sources={damageSources}
+          />
         </div>
       </details>
       <details className="rounded-md border border-border">
