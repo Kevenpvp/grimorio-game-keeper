@@ -147,12 +147,23 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
     setInfo({ name: character.name, player_name: character.player_name, description: character.description ?? "", owner_id: character.owner_id });
   }, [character.id, character.name, character.player_name, character.description, character.owner_id]);
 
-  const { data: profiles } = useQuery({
+  const [profileFilter, setProfileFilter] = useState("");
+  const { data: profiles = [], refetch: refreshProfiles, error: profilesError } = useQuery({
     queryKey: ["profiles"],
     queryFn: async () => {
-      const { data } = await supabase.from("profiles").select("id, display_name, email").order("display_name");
+      const { data, error } = await supabase.from("profiles")
+        .select("id, display_name, email").order("display_name");
+      if (error) throw error;
       return data ?? [];
     },
+    refetchOnWindowFocus: true,
+    refetchInterval: 15000,
+  });
+  const visibleProfiles = profiles.filter((p) => {
+    const search = profileFilter.trim().toLocaleLowerCase("pt-BR");
+    return !search
+      || p.id === info.owner_id
+      || [p.display_name, p.email].some((value) => (value ?? "").toLocaleLowerCase("pt-BR").includes(search));
   });
 
   const { data: sourceCharacters = [] } = useQuery({
@@ -300,16 +311,34 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
               </div>
               <div className="min-w-0 space-y-1.5 sm:col-span-2">
                 <Label>Conta do jogador vinculada</Label>
-                <Select value={info.owner_id ?? "none"} onValueChange={(v) => setInfo({ ...info, owner_id: v === "none" ? null : v })}>
+                <div className="flex items-center gap-2">
+                  <Input
+                    aria-label="Buscar conta por nome ou e-mail"
+                    className="min-w-0 flex-1"
+                    placeholder="Buscar conta por nome ou e-mail…"
+                    value={profileFilter}
+                    onChange={(event) => setProfileFilter(event.target.value)}
+                  />
+                  <Button type="button" variant="outline" size="sm" className="min-h-10 shrink-0"
+                    onClick={() => void refreshProfiles()}>
+                    Atualizar
+                  </Button>
+                </div>
+                {profilesError && <p className="text-xs text-destructive">Falha ao carregar contas: {profilesError.message}</p>}
+                <Select value={info.owner_id ?? "none"} onOpenChange={(open) => { if (open) void refreshProfiles(); }}
+                  onValueChange={(v) => setInfo({ ...info, owner_id: v === "none" ? null : v })}>
                   <SelectTrigger className="min-w-0 max-w-full overflow-hidden [&>span]:min-w-0 [&>span]:truncate [&>svg]:shrink-0"
-                    title={profiles?.find((profile) => profile.id === info.owner_id)?.email ?? undefined}>
+                    title={profiles.find((profile) => profile.id === info.owner_id)?.email ?? undefined}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="max-w-[calc(100vw-2rem)]">
                     <SelectItem value="none">Nenhuma</SelectItem>
-                    {profiles?.map((p) => (
+                    {visibleProfiles.map((p) => (
                       <SelectItem key={p.id} value={p.id}>{p.display_name} {p.email ? `(${p.email})` : ""}</SelectItem>
                     ))}
+                    {visibleProfiles.length === 0 && <p className="px-2 py-3 text-xs text-muted-foreground">
+                      Nenhuma conta encontrada. Clique em Atualizar se o cadastro acabou de ser feito.
+                    </p>}
                   </SelectContent>
                 </Select>
               </div>
