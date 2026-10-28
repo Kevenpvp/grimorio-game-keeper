@@ -111,6 +111,8 @@ export type AbilityAttackDamageConfig = {
   damage_kind: AbilityAttackDamageKind;
   attribute_key: string | null;
   attribute_percent: number;
+  /** Optional extra attribute sources for hybrid damage (legacy primary source stays intact). */
+  additional_attributes?: Array<{ attribute_key: string; attribute_percent: number }>;
   fixed_damage: number;
   /** Execution only triggers on a confirmed hit and only while target has low HP. */
   execute_enabled: boolean;
@@ -211,10 +213,24 @@ export function parseAbilityAttackDamage(value: unknown): AbilityAttackDamageCon
   const magicLevel: DamageMagicLevel = raw.magic_level === "media" || raw.magic_level === "alta" ? raw.magic_level : "baixa";
   const attributePercent = Number(raw.attribute_percent ?? 100);
   const fixedDamage = Number(raw.fixed_damage ?? 0);
+  const primaryKey = typeof raw.attribute_key === "string" && raw.attribute_key ? raw.attribute_key : null;
+  const extraSources: NonNullable<AbilityAttackDamageConfig["additional_attributes"]> = [];
+  const usedKeys = new Set<string>(primaryKey ? [primaryKey] : []);
+  for (const value of Array.isArray(raw.additional_attributes) ? raw.additional_attributes : []) {
+    if (extraSources.length >= 8) break;
+    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+    const source = value as Record<string, unknown>;
+    const key = typeof source.attribute_key === "string" ? source.attribute_key.trim() : "";
+    const percent = Number(source.attribute_percent);
+    if (!key || usedKeys.has(key) || !Number.isFinite(percent) || percent < 0 || percent > 1000) continue;
+    usedKeys.add(key);
+    extraSources.push({ attribute_key: key, attribute_percent: percent });
+  }
   return {
     damage_kind: damageKind,
-    attribute_key: typeof raw.attribute_key === "string" && raw.attribute_key ? raw.attribute_key : null,
+    attribute_key: primaryKey,
     attribute_percent: Number.isFinite(attributePercent) ? Math.max(0, Math.min(1000, attributePercent)) : 100,
+    additional_attributes: extraSources,
     fixed_damage: Number.isFinite(fixedDamage) ? Math.max(0, Math.min(1_000_000, fixedDamage)) : 0,
     execute_enabled: raw.execute_enabled === true,
     execute_mode: raw.execute_mode === "fixed" ? "fixed" : "percent",

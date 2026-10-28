@@ -239,7 +239,11 @@ export function SheetAbilityAttackEditor({
                 <select
                   className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
                   value={attackDamage.attribute_key ?? ""}
-                  onChange={(event) => setAttackDamage((current) => ({ ...current, attribute_key: event.target.value || null }))}
+                  onChange={(event) => setAttackDamage((current) => ({
+                    ...current,
+                    attribute_key: event.target.value || null,
+                    additional_attributes: (current.additional_attributes ?? []).filter((source) => source.attribute_key !== event.target.value),
+                  }))}
                 >
                   <option value="">Nenhum — dano fixo</option>
                   {defs.map((def) => <option key={def.key} value={def.key}>{def.label}</option>)}
@@ -259,6 +263,69 @@ export function SheetAbilityAttackEditor({
                 <Input type="number" min={0} max={1000000} value={attackDamage.fixed_damage}
                   onChange={(event) => setAttackDamage((current) => ({ ...current, fixed_damage: Math.max(0, Math.min(1000000, Number(event.target.value) || 0)) }))} />
               </label>
+              {attackDamage.damage_kind === "hybrid" && (
+                <div className="space-y-3 rounded-xl border border-gold/25 bg-gold/5 p-3 sm:col-span-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <h4 className="text-sm font-semibold text-gold">Fontes adicionais de dano</h4>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Combine atributos no golpe híbrido. Exemplo: 100% de Dano Mágico + 100% de Força + dano fixo.
+                      </p>
+                    </div>
+                    <Button type="button" size="sm" variant="outline" className="min-h-10"
+                      disabled={(attackDamage.additional_attributes ?? []).length >= 8 ||
+                        !defs.some((def) => def.key !== attackDamage.attribute_key &&
+                          !(attackDamage.additional_attributes ?? []).some((source) => source.attribute_key === def.key))}
+                      onClick={() => setAttackDamage((current) => {
+                        const extras = current.additional_attributes ?? [];
+                        const nextKey = defs.find((def) => def.key !== current.attribute_key &&
+                          !extras.some((source) => source.attribute_key === def.key))?.key;
+                        return nextKey ? { ...current, additional_attributes: [...extras, { attribute_key: nextKey, attribute_percent: 100 }] } : current;
+                      })}>
+                      <Plus className="mr-1.5 h-4 w-4" /> Adicionar atributo
+                    </Button>
+                  </div>
+                  {(attackDamage.additional_attributes ?? []).length === 0 && (
+                    <p className="text-xs text-muted-foreground">Nenhuma fonte extra. O ataque usará apenas o atributo principal e o dano fixo.</p>
+                  )}
+                  {(attackDamage.additional_attributes ?? []).map((source, index) => (
+                    <div key={index} className="grid min-w-0 gap-2 rounded-lg border border-border/75 bg-background/40 p-2 sm:grid-cols-[minmax(0,1fr)_130px_auto] sm:items-end">
+                      <label className="min-w-0 space-y-1 text-xs font-medium">
+                        Atributo adicional {index + 1}
+                        <select className="min-h-10 w-full rounded-md border border-input bg-background px-2 text-sm"
+                          value={source.attribute_key}
+                          onChange={(event) => setAttackDamage((current) => ({
+                            ...current,
+                            additional_attributes: (current.additional_attributes ?? []).map((item, i) =>
+                              i === index ? { ...item, attribute_key: event.target.value } : item),
+                          }))}>
+                          {defs.filter((def) => def.key === source.attribute_key ||
+                            (def.key !== attackDamage.attribute_key &&
+                              !(attackDamage.additional_attributes ?? []).some((other, i) => i !== index && other.attribute_key === def.key)))
+                            .map((def) => <option key={def.key} value={def.key}>{def.label}</option>)}
+                        </select>
+                      </label>
+                      <label className="space-y-1 text-xs font-medium">
+                        Percentual (%)
+                        <Input type="number" min={0} max={1000} step={5} value={source.attribute_percent}
+                          onChange={(event) => setAttackDamage((current) => ({
+                            ...current,
+                            additional_attributes: (current.additional_attributes ?? []).map((item, i) =>
+                              i === index ? { ...item, attribute_percent: Math.max(0, Math.min(1000, Number(event.target.value) || 0)) } : item),
+                          }))} />
+                      </label>
+                      <Button type="button" variant="outline" size="sm" className="min-h-10 border-red-500/25 text-red-300"
+                        onClick={() => setAttackDamage((current) => ({
+                          ...current,
+                          additional_attributes: (current.additional_attributes ?? []).filter((_, i) => i !== index),
+                        }))}>
+                        <Trash2 className="mr-1.5 h-4 w-4" /> Remover
+                      </Button>
+                    </div>
+                  ))}
+                  <p className="text-xs text-muted-foreground">As fontes são somadas no dano base. O golpe continua sendo híbrido e passa uma única vez pela defesa e mitigação.</p>
+                </div>
+              )}
               {(attackDamage.damage_kind === "physical" || attackDamage.damage_kind === "hybrid") && (
                 <label className="space-y-1 text-xs font-medium">
                   Tipo de dano físico

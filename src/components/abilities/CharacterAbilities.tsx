@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useCharacterInventory } from "@/lib/inventory";
 import { dispatchCustomAbilityScriptEvents } from "@/lib/ability-script-runtime";
-import { applyAbilityTargetDamage, isValidAbilityTargetAdjustment, shouldApplyAbilityDirectDamage } from "@/lib/ability-attack-damage";
+import { applyAbilityTargetDamage, abilityAttackAttributeSources, calculateAbilityAttackBaseDamage, isValidAbilityTargetAdjustment, shouldApplyAbilityDirectDamage } from "@/lib/ability-attack-damage";
 import { isAttackExecutionEligible } from "@/lib/attack-execution";
 import { addDefenseIgnore, defenseIgnoreText, ZERO_DEFENSE_IGNORE, type DefenseIgnore } from "@/lib/defense-ignore";
 import { DefenseIgnoreInputs } from "@/components/abilities/DefenseIgnoreInputs";
@@ -588,10 +588,7 @@ export function CharacterAbilitiesPanel({
   const confirmedAttackHits = currentAttackTargets.filter((target) => attackHits[target.id] === true).length;
   const statValue = (id: string, key: string) => Math.max(0, Number(getAttributeValue?.(id, key) ?? 0) || 0);
   const attackBaseDamage = attackConfig
-    ? Math.min(1000000, Math.max(0, Math.round(
-        (attackConfig.attribute_key ? statValue(characterId, attackConfig.attribute_key) * attackConfig.attribute_percent / 100 : 0)
-        + attackConfig.fixed_damage
-      )))
+    ? calculateAbilityAttackBaseDamage(attackConfig, (key) => statValue(characterId, key))
     : 0;
   const diceModifier = (mine: number, theirs: number) => Math.max(0, Math.floor((mine - theirs) / 10));
   const diceText = (modifier: number) => `1d20+${modifier}`;
@@ -1722,9 +1719,9 @@ export function CharacterAbilitiesPanel({
                               <div className="text-xs text-muted-foreground">Dano calculado para este alvo</div>
                               <div className="text-lg font-bold text-gold">{damage}</div>
                               <div className="text-[11px] text-muted-foreground">
-                                {attackConfig.attribute_key
-                                  ? `${attackConfig.attribute_percent}% de ${defs?.find((def) => def.key === attackConfig.attribute_key)?.label ?? attackConfig.attribute_key} (${statValue(characterId, attackConfig.attribute_key)})`
-                                  : "Sem atributo de origem"} + {attackConfig.fixed_damage} fixos; ajuste {extra >= 0 ? "+" : ""}{extra} fixo, {percent >= 0 ? "+" : ""}{percent}%; antes de defesa/mitigação
+                                {abilityAttackAttributeSources(attackConfig)
+                                  .map((source) => `${source.attribute_percent}% de ${defs?.find((def) => def.key === source.attribute_key)?.label ?? source.attribute_key} (${statValue(characterId, source.attribute_key)})`)
+                                  .join(" + ") || "Sem atributo de origem"} + {attackConfig.fixed_damage} fixos; ajuste {extra >= 0 ? "+" : ""}{extra} fixo, {percent >= 0 ? "+" : ""}{percent}%; antes de defesa/mitigação
                               </div>
                             </div>
                           </>
