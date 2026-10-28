@@ -25,7 +25,6 @@ import { parseContinuousRules, type ContinuousRule, type ContinuousInstance } fr
 import { planContinuousTargetTransfer, validateTransferSelection, type TransferRequirement } from "@/lib/continuous-target-transfer";
 import { parseAttributeStatusModifiers } from "@/lib/multi-attribute-effects";
 import { ActivationEffectValuesDialog, type ActivationEffectOverrides } from "@/components/abilities/ActivationEffectValuesDialog";
-import { customizableActivationEffects } from "@/lib/activation-effect-values";
 import { SheetAbilityAttackEditor } from "@/components/abilities/SheetAbilityAttackEditor";
 import { TemporaryAttackCategoryEditor } from "@/components/abilities/TemporaryAttackCategoryEditor";
 import { TemporaryGuaranteedDotsEditor } from "@/components/abilities/TemporaryGuaranteedDotsEditor";
@@ -525,12 +524,11 @@ export function CharacterAbilitiesPanel({
     : null;
   const demonioCannotPay = demonioHp !== undefined && demonioHpCost !== null
     && demonioHpCost > 0 && demonioHp.current <= 0;
-  const [targetId, setTargetId] = useState(characterId);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [activationPreparingId, setActivationPreparingId] = useState<string | null>(null);
   const [activationSetup, setActivationSetup] = useState<{
     ability: CharacterAbility;
-    targetId: string;
+    initialTargetIds: string[];
     effects: AbilityEffectDefinition[];
   } | null>(null);
   const [extraManaCosts, setExtraManaCosts] = useState<Record<string, string>>({});
@@ -610,15 +608,10 @@ export function CharacterAbilitiesPanel({
     return values;
   }
 
-  const hasSelectableTargetAbility = loadout?.some((ability) => ability.can_activate && !ability.self_target_only) ?? false;
   const targetOptions = useMemo(() => [
     { id: characterId, name: `${characterName} (si mesmo)` },
     ...targets.filter((target) => target.id !== characterId),
   ], [characterId, characterName, targets]);
-
-  useEffect(() => {
-    setTargetId(characterId);
-  }, [characterId]);
 
   function openAttackDialog(ability: CharacterAbility) {
     if (!canUse || mode !== "combat" || !battleId || !ability.can_activate || ability.cooldown_remaining > 0 || ability.active_duration_remaining > 0 || ability.cooldown_turns < 0) return;
@@ -626,9 +619,7 @@ export function CharacterAbilitiesPanel({
       toast.error("Esta habilidade já foi usada neste combate.");
       return;
     }
-    const preferred = targetId !== characterId && eligibleAttackTargets.some((target) => target.id === targetId)
-      ? [targetId]
-      : eligibleAttackTargets.slice(0, 1).map((target) => target.id);
+    const preferred = eligibleAttackTargets.slice(0, 1).map((target) => target.id);
     setAttackDialogAbilityId(ability.id);
     setAttackTargetIds(preferred);
     setAttackFocusedTargetId(preferred[0] ?? null);
@@ -1035,7 +1026,7 @@ export function CharacterAbilitiesPanel({
     if (!canUse || mode !== "combat" || busyId || activationPreparingId || activationSetup) return;
     if (ability.cooldown_remaining > 0 || ability.active_duration_remaining > 0 || ability.toggle_active) return;
     if (!me?.isMaster || !battleId) {
-      await activate(ability);
+      toast.error("Apenas o mestre pode ativar habilidades no combate.");
       return;
     }
     setActivationPreparingId(ability.id);
@@ -1054,12 +1045,13 @@ export function CharacterAbilitiesPanel({
           ? values.effects
           : ability.effects
       );
-      const chosenTargetId = ability.self_target_only ? characterId : (targetId || characterId);
-      if (customizableActivationEffects(effectiveEffects).length > 0) {
-        setActivationSetup({ ability, targetId: chosenTargetId, effects: effectiveEffects });
-      } else {
-        await activate(ability, undefined, chosenTargetId);
-      }
+      // Every activation now opens a recipient picker; editable effect values
+      // are shown in the same dialog if this ability requires them.
+      setActivationSetup({
+        ability,
+        initialTargetIds: ability.self_target_only ? [characterId] : [],
+        effects: effectiveEffects,
+      });
     } catch (error) {
       toast.error("Não foi possível preparar os efeitos: " + (error instanceof Error ? error.message : String(error)));
     } finally {
@@ -1070,7 +1062,7 @@ export function CharacterAbilitiesPanel({
   async function activate(
     ability: CharacterAbility,
     activationOverrides?: ActivationEffectOverrides,
-    fixedTargetId?: string,
+    selectedTargetIds: string[] = [characterId],
   ) {
     if (!canUse || mode !== "combat" || !ability.can_activate || ability.cooldown_turns < 0 || ability.cooldown_remaining > 0 || ability.active_duration_remaining > 0 || busyId || ability.toggle_active) return;
     if ((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle && mode === "combat" && usedOnceAbilityIds.includes(ability.id)) {
@@ -1079,7 +1071,12 @@ export function CharacterAbilitiesPanel({
     }
     const catalogEntry = abilityCatalog.find((candidate) => candidate.id === ability.ability_id);
     const guaranteedDots = parseAbilityDotEffects(ability.ability_id ? catalogEntry?.dot_effects : ability.dot_effects);
-    const actualTargetId = ability.self_target_only ? characterId : (fixedTargetId ?? targetId ?? characterId);
+    const chosenTargets = [...new Set(ability.self_target_only ? [characterId] : selectedTargetIds)];
+    if (!chosenTargets.length || chosenTargets.length > 25 || chosenTargets.some((id) => !targetOptions.some((target) => target.id === id))) {
+      toast.error("Selecione entre 1 e 25 destinatários válidos.");
+      return;
+    }
+    const actualTargetId = chosenTargets[0];
     if (guaranteedDots.length > 0 && (mode !== "combat" || !battleId)) {
       toast.error("DoTs de habilidades só podem ser aplicados durante um combate ativo.");
       return;
@@ -1094,10 +1091,14 @@ export function CharacterAbilitiesPanel({
       _extra_mana_cost: mode === "combat" && ability.mana_cost > 0
         ? Math.max(0, Math.min(1000000, Math.floor(Number(extraManaCosts[ability.id] ?? 0) || 0)))
         : 0,
-      _dot_target_selections: guaranteedDots.length > 0 ? [{ target_id: actualTargetId, hit: true, group_ids: [] }] : null,
-      _dot_attribute_values: activationOverrides
-        ? { ...dotAttributeValues, __activation_effect_overrides: activationOverrides }
-        : dotAttributeValues,
+      _dot_target_selections: guaranteedDots.length > 0
+        ? chosenTargets.map((id) => ({ target_id: id, hit: true, group_ids: [] }))
+        : null,
+      _dot_attribute_values: {
+        ...dotAttributeValues,
+        __activation_target_ids: chosenTargets,
+        ...(activationOverrides ? { __activation_effect_overrides: activationOverrides } : {}),
+      },
     });
     setBusyId(null);
     if (error) { toast.error(error.message); return; }
@@ -1106,7 +1107,7 @@ export function CharacterAbilitiesPanel({
     }
     // O custo extra é enviado apenas nesta ativação; o valor salvo na ficha nunca muda.
     setExtraManaCosts((current) => ({ ...current, [ability.id]: "0" }));
-    toast.success(`${ability.name} ativada!${typeof spentMana === "number" && spentMana > 0 ? ` Mana gasta: ${spentMana}.` : ""}`);
+    toast.success(`${ability.name} ativada em ${chosenTargets.length} personagem(ns)!${typeof spentMana === "number" && spentMana > 0 ? ` Mana gasta: ${spentMana}.` : ""}`);
     dispatchAndRefreshAbilityEffects(mode === "combat" ? battleId : null);
     await Promise.all([
       qc.invalidateQueries({ queryKey: ["character-abilities", characterId] }),
@@ -1162,14 +1163,6 @@ export function CharacterAbilitiesPanel({
       </div>
       {expanded && (
         <div className="space-y-3">
-          {mode === "combat" && canUse && hasSelectableTargetAbility && targetOptions.length > 1 && (
-            <label className="block space-y-1 text-xs">
-              <span className="font-medium text-muted-foreground">Alvo da próxima habilidade</span>
-              <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={targetId} onChange={(e) => setTargetId(e.target.value)}>
-                {targetOptions.map((target) => <option key={target.id} value={target.id}>{target.name}</option>)}
-              </select>
-            </label>
-          )}
           {showActiveEffects && activeEffects.length > 0 && (
             <div className="space-y-1.5 border-b border-border pb-3">
               <div className="text-xs font-semibold text-muted-foreground">Efeitos ativos no personagem</div>
@@ -1878,13 +1871,17 @@ export function CharacterAbilitiesPanel({
       </Dialog>
       {activationSetup && (
         <ActivationEffectValuesDialog
-          key={`${activationSetup.ability.id}:${activationSetup.targetId}`}
+          key={activationSetup.ability.id}
           abilityName={activationSetup.ability.name}
-          targetName={targetOptions.find((target) => target.id === activationSetup.targetId)?.name ?? characterName}
+          recipients={activationSetup.ability.self_target_only
+            ? targetOptions.filter((target) => target.id === characterId)
+            : targetOptions}
+          selfOnly={activationSetup.ability.self_target_only}
+          initialTargetIds={activationSetup.initialTargetIds}
           effects={activationSetup.effects}
           onCancel={() => setActivationSetup(null)}
-          onConfirm={async (values) => {
-            const result = await activate(activationSetup.ability, values, activationSetup.targetId);
+          onConfirm={async (values, selectedIds) => {
+            const result = await activate(activationSetup.ability, values, selectedIds);
             return result === true;
           }}
         />

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,17 +9,21 @@ import {
 import type { AbilityEffectDefinition } from "@/lib/abilities";
 
 export type ActivationEffectOverrides = Record<string, Record<string, number>>;
+export type ActivationRecipient = { id: string; name: string };
 
 export function ActivationEffectValuesDialog({
-  abilityName, targetName, effects, onCancel, onConfirm,
+  abilityName, recipients, selfOnly = false, initialTargetIds = [], effects, onCancel, onConfirm,
 }: {
   abilityName: string;
-  targetName: string;
+  recipients: ActivationRecipient[];
+  selfOnly?: boolean;
+  initialTargetIds?: string[];
   effects: AbilityEffectDefinition[];
   onCancel: () => void;
-  onConfirm: (values: ActivationEffectOverrides) => Promise<boolean>;
+  onConfirm: (values: ActivationEffectOverrides, targetIds: string[]) => Promise<boolean>;
 }) {
-  const customizable = customizableActivationEffects(effects);
+  const customizable = useMemo(() => customizableActivationEffects(effects), [effects]);
+  const [targetIds, setTargetIds] = useState<string[]>(initialTargetIds);
   const [values, setValues] = useState<Record<string, Record<string, string>>>(() =>
     Object.fromEntries(customizable.map(({ index, fields }) => [
       String(index),
@@ -27,8 +31,18 @@ export function ActivationEffectValuesDialog({
     ]))
   );
   const [pending, setPending] = useState(false);
+  const available = recipients.filter((recipient) => recipient.id.trim().length > 0);
+  const selected = available.filter((recipient) => targetIds.includes(recipient.id));
+  const toggleRecipient = (id: string, checked: boolean) => {
+    if (selfOnly || pending) return;
+    setTargetIds((current) => checked ? [...current, id] : current.filter((other) => other !== id));
+  };
 
   async function confirm() {
+    if (selected.length === 0) {
+      toast.error("Selecione pelo menos um destinatário para a habilidade.");
+      return;
+    }
     const parsed = parseActivationValueOverrides(effects, values);
     if (!parsed) {
       toast.error("Revise os valores dos efeitos. Não use valores negativos ou acima do limite.");
@@ -36,7 +50,7 @@ export function ActivationEffectValuesDialog({
     }
     setPending(true);
     try {
-      const success = await onConfirm(parsed);
+      const success = await onConfirm(parsed, selected.map((recipient) => recipient.id));
       if (success) onCancel();
     } finally {
       setPending(false);
@@ -45,50 +59,95 @@ export function ActivationEffectValuesDialog({
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open && !pending) onCancel(); }}>
-      <DialogContent className="max-h-[90vh] max-w-xl overflow-y-auto">
+      <DialogContent className="max-h-[90vh] w-[calc(100%-1.5rem)] max-w-2xl overflow-y-auto rounded-2xl border-gold/35 bg-background p-4 sm:p-6">
         <DialogHeader>
-          <DialogTitle className="text-gold">Modificar efeitos ao ativar</DialogTitle>
+          <DialogTitle className="font-display text-xl text-gold">Ativar habilidade · {abilityName}</DialogTitle>
           <DialogDescription>
-            {abilityName} · alvo: {targetName}. Escolha os valores desta utilização antes de ativar.
-            Os valores originais cadastrados não serão alterados.
+            Escolha quem receberá os efeitos desta ativação. Você pode selecionar vários personagens.
+            Os efeitos do tipo Caster se aplicam ao próprio usuário quando ele estiver selecionado;
+            Alvo se aplica aos outros destinatários; Ambos respeita as duas opções.
+            O custo de Mana e a recarga são contabilizados uma única vez.
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-3">
-          {customizable.map(({ effect, index, fields }) => (
-            <div key={index} className="space-y-3 rounded-md border border-gold/30 bg-gold/5 p-3">
-              <div className="text-sm font-semibold">{effect.name}</div>
-              <p className="text-xs text-muted-foreground">
-                {effect.value_mode === "percent" ? "Valor em porcentagem." : "Valor fixo, salvo quando indicado."}
-                {" "}Duração: {effect.until_combat_end ? "até o fim do combate" : `${effect.duration} turno(s)`}.
-              </p>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {fields.map((field) => (
-                  <label key={field.key} className="space-y-1 text-xs font-medium">
-                    {field.label}
-                    <Input
-                      type="number" min={0} max={field.max} step="any"
-                      value={values[String(index)]?.[field.key] ?? String(field.initialValue)}
-                      disabled={pending}
-                      onChange={(event) => setValues((current) => ({
-                        ...current,
-                        [String(index)]: {
-                          ...current[String(index)],
-                          [field.key]: event.target.value,
-                        },
-                      }))}
-                    />
-                  </label>
-                ))}
-              </div>
+        <section className="space-y-3 rounded-xl border border-gold/20 bg-gold/5 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold text-gold">Quem receberá os efeitos?</h3>
+            <span className="text-xs text-muted-foreground">{selected.length} selecionado(s)</span>
+          </div>
+          {!selfOnly && available.length > 1 && (
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" size="sm" variant="outline" className="min-h-9"
+                disabled={pending} onClick={() => setTargetIds(available.map((recipient) => recipient.id))}>
+                Selecionar todos
+              </Button>
+              <Button type="button" size="sm" variant="ghost" className="min-h-9"
+                disabled={pending || selected.length === 0} onClick={() => setTargetIds([])}>
+                Limpar seleção
+              </Button>
             </div>
-          ))}
-        </div>
-        <DialogFooter>
-          <Button type="button" variant="outline" disabled={pending} onClick={onCancel}>
+          )}
+          <div className="grid max-h-52 gap-2 overflow-y-auto sm:grid-cols-2">
+            {available.map((recipient) => (
+              <label key={recipient.id}
+                className={`flex min-h-12 cursor-pointer items-center gap-3 rounded-lg border px-3 py-2 text-sm transition-colors ${
+                  targetIds.includes(recipient.id)
+                    ? "border-gold/60 bg-gold/15 text-gold"
+                    : "border-border bg-background/60 text-foreground hover:border-gold/35"
+                }`}>
+                <input type="checkbox" className="h-4 w-4 shrink-0 accent-[#e8b95a]"
+                  disabled={pending || selfOnly} checked={targetIds.includes(recipient.id)}
+                  onChange={(event) => toggleRecipient(recipient.id, event.target.checked)}
+                  aria-label={`Aplicar habilidade em ${recipient.name}`} />
+                <span className="min-w-0 break-words font-medium">{recipient.name}</span>
+              </label>
+            ))}
+          </div>
+          {selfOnly && <p className="text-xs text-muted-foreground">Esta habilidade só pode ser ativada no próprio personagem.</p>}
+          {selected.length === 0 && <p className="text-xs text-amber-300">Selecione ao menos um destinatário para continuar.</p>}
+        </section>
+        {customizable.length > 0 && (
+          <div className="space-y-3">
+            <div>
+              <h3 className="text-sm font-semibold text-gold">Modificar valores nesta ativação</h3>
+              <p className="text-xs text-muted-foreground">Os valores originais cadastrados não serão alterados.</p>
+            </div>
+            {customizable.map(({ effect, index, fields }) => (
+              <div key={index} className="space-y-3 rounded-md border border-gold/30 bg-gold/5 p-3">
+                <div className="text-sm font-semibold">{effect.name}</div>
+                <p className="text-xs text-muted-foreground">
+                  {effect.value_mode === "percent" ? "Valor em porcentagem." : "Valor fixo, salvo quando indicado."}
+                  {" "}Duração: {effect.until_combat_end ? "até o fim do combate" : `${effect.duration} turno(s)`}.
+                </p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {fields.map((field) => (
+                    <label key={field.key} className="space-y-1 text-xs font-medium">
+                      {field.label}
+                      <Input
+                        type="number" min={0} max={field.max} step="any"
+                        value={values[String(index)]?.[field.key] ?? String(field.initialValue)}
+                        disabled={pending}
+                        onChange={(event) => setValues((current) => ({
+                          ...current,
+                          [String(index)]: {
+                            ...current[String(index)],
+                            [field.key]: event.target.value,
+                          },
+                        }))}
+                      />
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        <DialogFooter className="gap-2 sm:gap-3">
+          <Button type="button" variant="outline" className="min-h-11" disabled={pending} onClick={onCancel}>
             Cancelar
           </Button>
-          <Button type="button" disabled={pending} onClick={() => void confirm()}>
-            {pending ? "Ativando..." : "Confirmar e Ativar"}
+          <Button type="button" className="min-h-11" disabled={pending || selected.length === 0}
+            onClick={() => void confirm()}>
+            {pending ? "Ativando..." : `Ativar em ${selected.length} personagem(ns)`}
           </Button>
         </DialogFooter>
       </DialogContent>
