@@ -123,6 +123,24 @@ export function clampNonDefenseAttribute(key: string, value: number): number {
   return key === "phys_def" || key === "mag_def" ? value : Math.max(0, value);
 }
 
+/** Display-only signed stat value. Combat still uses clampNonDefenseAttribute;
+ * showing a penalty (e.g. -3 Força) must not change combat calculations. */
+export function signedAttributeDisplayValue(
+  character: Pick<Character, "body" | "sanity">,
+  key: string,
+  value: number,
+): number {
+  if (!Number.isFinite(value)) return 0;
+  let condition = 100;
+  if (key === "phys_def" || key === "speed" || key === "atk_speed") {
+    condition = clampPct(character.body);
+  } else if (key === "iq" || key === "mental") {
+    condition = clampPct(character.sanity);
+  }
+  const displayed = condition === 100 ? value : Math.round(value * condition) / 100;
+  return displayed === 0 ? 0 : displayed;
+}
+
 /** Calculated value from invested points, using the configurable rule on the definition. */
 export function computeValue(def: AttributeDef, points: number) {
   return Math.round((Number(def.base_value) + points * Number(def.points_multiplier)) * 100) / 100;
@@ -172,6 +190,25 @@ export function physicalAttributePoints(
   return (numberAllocation(character.race_physical_allocations)[key] ?? 0)
     + (numberAllocation(character.virtue_physical_allocations)[key] ?? 0)
     + (numberAllocation(character.class_physical_allocations)[key] ?? 0);
+}
+
+/** Unspent bonuses already counted inside characters.available_points. */
+export function unspentOriginPoints(character: Pick<Character,
+  "race_points_granted" | "virtue_points_granted" | "class_points_granted" |
+  "race_attribute_allocations" | "virtue_attribute_allocations" | "class_attribute_allocations"
+>): number {
+  return Math.max(0, (character.race_points_granted ?? 0) - allocationTotal(character.race_attribute_allocations))
+    + Math.max(0, (character.virtue_points_granted ?? 0) - allocationTotal(character.virtue_attribute_allocations))
+    + Math.max(0, (character.class_points_granted ?? 0) - allocationTotal(character.class_attribute_allocations));
+}
+
+/** Only the free points manually assigned by the master, excluding unspent
+ * race, virtue and class pools. This is a view of the existing balance. */
+export function masterExtraPoints(character: Pick<Character,
+  "available_points" | "race_points_granted" | "virtue_points_granted" | "class_points_granted" |
+  "race_attribute_allocations" | "virtue_attribute_allocations" | "class_attribute_allocations"
+>): number {
+  return Math.max(0, character.available_points - unspentOriginPoints(character));
 }
 
 export function allocationTotal(value: unknown) {

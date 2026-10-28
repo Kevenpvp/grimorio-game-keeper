@@ -19,7 +19,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { dispatchCustomAbilityScriptEvents } from "@/lib/ability-script-runtime";
 import { effectiveHpTotal } from "@/lib/hp-total";
 import {
-  clampPct, clampNonDefenseAttribute, computeValue, conditionAdjustedValue, physicalAttributePoints, useCharacter, useCharacterLive, useCharacterTraitMods, useDefs, useMe,
+  clampPct, clampNonDefenseAttribute, computeValue, conditionAdjustedValue, signedAttributeDisplayValue, masterExtraPoints, unspentOriginPoints, physicalAttributePoints, useCharacter, useCharacterLive, useCharacterTraitMods, useDefs, useMe,
   type AttributeDef, type Character, type CharacterAttr,
 } from "@/lib/sheets";
 import { CharacterSheetView, Portrait } from "@/components/sheet/CharacterSheetView";
@@ -238,7 +238,7 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
             <ArrowLeft className="h-4 w-4" /> Todas as fichas
           </Link>
           <h1 className="max-w-[80vw] truncate font-display text-2xl text-gold sm:text-3xl">{character.name}</h1>
-          <p className="text-xs text-muted-foreground">Ficha do mestre · {character.player_name || "Sem jogador"} · {character.available_points} pontos livres</p>
+          <p className="text-xs text-muted-foreground">Ficha do mestre · {character.player_name || "Sem jogador"} · {masterExtraPoints(character)} pontos extras do mestre · {unspentOriginPoints(character)} pontos de origens disponíveis</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <SavedBadge savedAt={savedAt} />
@@ -372,11 +372,14 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
               onSaved={() => { mark(); refresh(); }}
             />
             <div className="grid gap-3 sm:grid-cols-2">
-              <NumberField label="Pontos disponíveis" icon="sparkles" value={character.available_points}
-                onSave={(v) => updateCharacter({ available_points: v })} />
+              <NumberField label="Pontos extras do mestre" icon="sparkles" value={masterExtraPoints(character)}
+                onSave={(v) => updateCharacter({ available_points: v + unspentOriginPoints(character) })} />
               <NumberField label="Abates" icon="flame" value={character.kills}
                 onSave={(v) => updateCharacter({ kills: v })} />
             </div>
+            <p className="text-xs text-muted-foreground">
+              O campo acima altera apenas os pontos extras do mestre. Os {unspentOriginPoints(character)} ponto(s) disponíveis de raça, classe e virtude continuam separados na distribuição abaixo.
+            </p>
             <div className="grid gap-3 sm:grid-cols-2">
               <PercentEditor label="Corpo" icon="activity" tone={barTone("body")} value={character.body}
                 onSave={(v) => updateCharacter({ body: v })} />
@@ -541,6 +544,11 @@ function AttrEditor({ def, characterId, body, sanity, attr, racePts, virtuePts, 
   const total = noMana ? 0 : def.key === "hp"
     ? effectiveHpTotal(max0, traitPts, bonus0, statusModifier.fixed, statusModifier.percent)
     : conditionAdjustedValue({ body, sanity }, def.key, clampNonDefenseAttribute(def.key, adjustedTotal));
+  // Visual-only: negative non-resource attributes remain visible without
+  // changing the clamped 'total' used to validate resource edits.
+  const visualTotal = def.accepts_points && !def.show_bar
+    ? signedAttributeDisplayValue({ body, sanity }, def.key, adjustedTotal)
+    : total;
   const [cur, setCur] = useState(cur0);
   const [max, setMax] = useState(max0);
   const [bonus, setBonus] = useState(bonus0);
@@ -623,7 +631,7 @@ function AttrEditor({ def, characterId, body, sanity, attr, racePts, virtuePts, 
         </span>
         <span className="tabular text-lg font-bold">
           {def.accepts_points && !def.show_bar ? (
-            total
+            visualTotal
           ) : def.accepts_points ? (
             <>{cur0} <span className="text-sm text-muted-foreground">/ {total}</span></>
           ) : (
@@ -651,7 +659,7 @@ function AttrEditor({ def, characterId, body, sanity, attr, racePts, virtuePts, 
             </div>
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">{def.show_bar ? "Total" : "Valor aplicado"}</Label>
-              <div className="tabular panel px-4 py-1.5 text-center text-sm font-bold text-gold">{total}</div>
+              <div className="tabular panel px-4 py-1.5 text-center text-sm font-bold text-gold">{visualTotal}</div>
             </div>
           </div>
           {def.show_bar && (

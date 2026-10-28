@@ -37,12 +37,17 @@ function Painel() {
 }
 
 function PlayerView({ userId }: { userId: string }) {
-  const { data: mine, isLoading, error } = useQuery({
+  const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null);
+  const { data: mine = [], isLoading, error } = useQuery({
     queryKey: ["my-character", userId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("characters").select("id").eq("owner_id", userId).eq("is_summon_snapshot", false).limit(1).maybeSingle();
+      const { data, error } = await supabase.from("characters")
+        .select("id,name,player_name")
+        .eq("owner_id", userId)
+        .eq("is_summon_snapshot", false)
+        .order("name");
       if (error) throw error;
-      return data;
+      return data ?? [];
     },
   });
   if (isLoading) return <p className="text-muted-foreground">Carregando…</p>;
@@ -54,14 +59,45 @@ function PlayerView({ userId }: { userId: string }) {
       </div>
     );
   }
-  if (!mine)
+  if (mine.length === 0)
     return (
       <div className="panel mx-auto max-w-md p-8 text-center">
         <h1 className="text-xl text-gold">Nenhuma ficha vinculada</h1>
         <p className="mt-2 text-sm text-muted-foreground">Peça ao mestre para vincular seu personagem à sua conta.</p>
       </div>
     );
-  return <PlayerSheet id={mine.id} />;
+  const selected = mine.find((character) => character.id === selectedCharacterId) ?? mine[0];
+  return (
+    <div className="min-w-0 space-y-5">
+      {mine.length > 1 && (
+        <section className="panel space-y-3 border-gold/30 p-3 sm:p-4" aria-label="Selecionar minha ficha">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="font-display text-lg font-bold text-gold">Minhas fichas</h2>
+            <span className="rounded-full border border-gold/25 px-3 py-1 text-xs text-muted-foreground">
+              {mine.length} personagens vinculados
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+            {mine.map((character) => (
+              <button key={character.id} type="button" aria-pressed={character.id === selected.id}
+                className={character.id === selected.id
+                  ? "min-h-14 min-w-0 rounded-xl border border-gold bg-gold/15 p-3 text-left shadow-[0_0_0_1px_rgba(231,183,93,.15)]"
+                  : "min-h-14 min-w-0 rounded-xl border border-gold/20 bg-background/40 p-3 text-left transition-colors hover:border-gold/60"}
+                onClick={() => setSelectedCharacterId(character.id)}>
+                <span className="block truncate text-sm font-semibold text-gold">{character.name}</span>
+                <span className="block truncate text-xs text-muted-foreground">{character.player_name || "Personagem"}</span>
+              </button>
+            ))}
+          </div>
+          <Link to="/ficha/$id" params={{ id: selected.id }}
+            className="inline-flex min-h-10 items-center text-sm font-medium text-gold underline underline-offset-4">
+            Abrir ficha completa de {selected.name}
+          </Link>
+        </section>
+      )}
+      <PlayerSheet key={selected.id} id={selected.id} />
+    </div>
+  );
 }
 
 function PlayerSheet({ id }: { id: string }) {
