@@ -114,6 +114,10 @@ export type AbilityAttackDamageConfig = {
   /** Optional extra attribute sources for hybrid damage (legacy primary source stays intact). */
   additional_attributes?: Array<{ attribute_key: string; attribute_percent: number }>;
   fixed_damage: number;
+  /** Heal the attacker after a confirmed hit, using the final post-mitigation damage. */
+  heal_on_damage_enabled: boolean;
+  heal_on_damage_mode: "percent" | "fixed";
+  heal_on_damage_amount: number;
   /** Execution only triggers on a confirmed hit and only while target has low HP. */
   execute_enabled: boolean;
   execute_mode: "percent" | "fixed";
@@ -232,6 +236,11 @@ export function parseAbilityAttackDamage(value: unknown): AbilityAttackDamageCon
     attribute_percent: Number.isFinite(attributePercent) ? Math.max(0, Math.min(1000, attributePercent)) : 100,
     additional_attributes: extraSources,
     fixed_damage: Number.isFinite(fixedDamage) ? Math.max(0, Math.min(1_000_000, fixedDamage)) : 0,
+    heal_on_damage_enabled: raw.heal_on_damage_enabled === true,
+    heal_on_damage_mode: raw.heal_on_damage_mode === "fixed" ? "fixed" : "percent",
+    heal_on_damage_amount: Number.isFinite(Number(raw.heal_on_damage_amount))
+      ? Math.max(0, Math.min(raw.heal_on_damage_mode === "fixed" ? 1_000_000 : 1000,
+          Number(raw.heal_on_damage_amount))) : 0,
     execute_enabled: raw.execute_enabled === true,
     execute_mode: raw.execute_mode === "fixed" ? "fixed" : "percent",
     execute_threshold: Number.isFinite(Number(raw.execute_threshold))

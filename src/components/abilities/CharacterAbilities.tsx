@@ -26,6 +26,7 @@ import { planContinuousTargetTransfer, validateTransferSelection, type TransferR
 import { parseAttributeStatusModifiers } from "@/lib/multi-attribute-effects";
 import { ActivationEffectValuesDialog, type ActivationEffectOverrides } from "@/components/abilities/ActivationEffectValuesDialog";
 import { SheetAbilityAttackEditor, AbilityDotEffectsEditor } from "@/components/abilities/SheetAbilityAttackEditor";
+import { onHitHealingDescription } from "@/components/abilities/AbilityAttackOnHitHealingEditor";
 import { TemporaryAttackCategoryEditor } from "@/components/abilities/TemporaryAttackCategoryEditor";
 import { TemporaryGuaranteedDotsEditor } from "@/components/abilities/TemporaryGuaranteedDotsEditor";
 import { findRegisteredDotTemplate, registerAbilityDotTemplates } from "@/lib/ability-dot-templates";
@@ -890,7 +891,32 @@ export function CharacterAbilitiesPanel({
           results[target.id] = "Dano enviado, mas sem resultado retornado.";
           continue;
         }
-        results[target.id] = `${attackCriticalHits[target.id] && damageResult.critical_before_defense ? "⚔️ Crítico ×2 antes da defesa · " : ""}Dano base ${finalBaseDamage}${attackCriticalHits[target.id] && damageResult.critical_raw_damage_by_hit?.length ? " → bruto crítico " + damageResult.critical_raw_damage_by_hit.join(", ") : ""} → dano final ${Number(damageResult.total_damage ?? 0)}; HP ${Number(damageResult.hp_before ?? 0)} → ${Number(damageResult.hp_after ?? 0)}.${defenseIgnoreText(defenseIgnore) ? ` Ignorou: ${defenseIgnoreText(defenseIgnore)}.` : ""}`;
+        let healingNote = "";
+        if (attackConfig.heal_on_damage_enabled && attackConfig.heal_on_damage_amount > 0) {
+          const finalDamage = Number(damageResult.total_damage ?? 0);
+          if (!Number.isFinite(finalDamage) || finalDamage < 0) {
+            healingNote = " Cura não aplicada: dano final inválido.";
+          } else if (attackConfig.heal_on_damage_mode === "fixed" || finalDamage > 0) {
+            try {
+              // Never use the raw attack damage here: this result already includes
+              // defense, mitigation, critical and custom damage-script adjustments.
+              // The RPC checks the saved ability config, HP maximum and blocked healing.
+              const { data: healedHp, error: healingError } = await db.rpc(
+                "apply_ability_attack_on_hit_healing", {
+                  _character_ability_id: attackAbility.id,
+                  _battle_id: battleId,
+                  _target_character_id: target.id,
+                  _final_damage: finalDamage,
+                }
+              );
+              if (healingError) throw healingError;
+              healingNote = ` Curar no Dano: +${Number(healedHp ?? 0)} HP ao usuário.`;
+            } catch (healingError) {
+              healingNote = ` Curar no Dano não aplicado: ${friendlyAbilityError(healingError)}.`;
+            }
+          }
+        }
+        results[target.id] = `${attackCriticalHits[target.id] && damageResult.critical_before_defense ? "⚔️ Crítico ×2 antes da defesa · " : ""}Dano base ${finalBaseDamage}${attackCriticalHits[target.id] && damageResult.critical_raw_damage_by_hit?.length ? " → bruto crítico " + damageResult.critical_raw_damage_by_hit.join(", ") : ""} → dano final ${Number(damageResult.total_damage ?? 0)}; HP ${Number(damageResult.hp_before ?? 0)} → ${Number(damageResult.hp_after ?? 0)}.${defenseIgnoreText(defenseIgnore) ? ` Ignorou: ${defenseIgnoreText(defenseIgnore)}.` : ""}${healingNote}`;
       }
 
       // Report the real status effects and DoTs applied during this use, even
@@ -1248,7 +1274,22 @@ export function CharacterAbilitiesPanel({
                         ability.ability_id
                           ? abilityCatalog.some((catalogAbility) => catalogAbility.id === ability.ability_id && catalogAbility.attack_enabled)
                           : ability.attack_enabled
-                      ) && <span className="rounded bg-violet-500/10 px-2 py-1 text-violet-300">Atacar: {attackManaBaseFor(ability)} Mana</span>}
+                      ) && (
+                        <>
+                          <span className="rounded bg-violet-500/10 px-2 py-1 text-violet-300">Atacar: {attackManaBaseFor(ability)} Mana</span>
+                          {(() => {
+                            const configured = ability.ability_id
+                              ? abilityCatalog.find((entry) => entry.id === ability.ability_id)?.attack_damage
+                              : ability.attack_damage;
+                            const description = onHitHealingDescription(parseAbilityAttackDamage(configured));
+                            return description ? (
+                              <span className="rounded border border-emerald-500/35 bg-emerald-500/10 px-2 py-1 text-emerald-300">
+                                {description}
+                              </span>
+                            ) : null;
+                          })()}
+                        </>
+                      )}
                     </div>
                   </div>
                   {mode === "combat" && canUse && ability.can_activate && (
