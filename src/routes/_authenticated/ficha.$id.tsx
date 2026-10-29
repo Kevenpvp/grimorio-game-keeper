@@ -133,6 +133,7 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
   const navigate = useNavigate();
   const { savedAt, mark } = useSaved();
   const [preview, setPreview] = useState(false);
+  const [previewTab, setPreviewTab] = useState<SheetTabKey>("overview");
   const [tab, setTab] = useState<SheetTabKey>("overview");
   const [info, setInfo] = useState({
     name: character.name,
@@ -264,12 +265,34 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
       {preview ? (
         <div className="space-y-4">
           <div className="panel flex flex-wrap items-center justify-between gap-2 p-3">
-            <p className="text-sm text-muted-foreground">Prévia da ficha na visão de jogador.</p>
+            <p className="text-sm text-muted-foreground">
+              Prévia da ficha na visão de jogador. Acesse as mesmas seções disponíveis na conta do jogador, incluindo imagens de transformações e invocações.
+            </p>
             <Button variant="outline" size="sm" onClick={() => setPreview(false)}>Voltar à edição</Button>
           </div>
-          <CharacterSheetView character={character} attrs={attrs} defs={defs} />
-          <SummonGrantsEditor characterId={character.id} master={false} />
-          <CharacterAbilitiesPanel characterId={character.id} characterName={character.name} mode="sheet" canUse />
+          <SheetSectionTabs active={previewTab} onChange={setPreviewTab} tabs={[
+            { key: "overview", label: "Resumo" },
+            { key: "origin", label: "Origem" },
+            { key: "abilities", label: "Habilidades e invocações" },
+            { key: "transformations", label: "Transformações" },
+            { key: "inventory", label: "Inventário" },
+          ]} />
+          <SheetTabPanel tab="overview" active={previewTab}>
+            <CharacterSheetView character={character} attrs={attrs} defs={defs} />
+          </SheetTabPanel>
+          <SheetTabPanel tab="origin" active={previewTab}>
+            <CharacterOriginOverview character={character} />
+          </SheetTabPanel>
+          <SheetTabPanel tab="abilities" active={previewTab}>
+            <SummonGrantsEditor characterId={character.id} master={false} />
+            <CharacterAbilitiesPanel characterId={character.id} characterName={character.name} mode="sheet" canUse={false} />
+          </SheetTabPanel>
+          <SheetTabPanel tab="transformations" active={previewTab}>
+            <CharacterTransformationImages character={character} />
+          </SheetTabPanel>
+          <SheetTabPanel tab="inventory" active={previewTab}>
+            <InventoryPanel characterId={character.id} />
+          </SheetTabPanel>
         </div>
       ) : (
         <>

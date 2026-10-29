@@ -3,13 +3,13 @@ import { Activity, BookOpen, ChevronDown, CircleHelp, Ghost, Heart, ScrollText, 
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { StatBar } from "@/components/sheet/StatBar";
 import { AttrIcon, barTone } from "@/components/sheet/icons";
-import { useDefs, useCharacterTraitMods, computeValue, physicalAttributePoints, conditionAdjustedValue, clampNonDefenseAttribute } from "@/lib/sheets";
+import { useDefs, useCharacterTraitMods, computeValue, physicalAttributePoints, conditionAdjustedValue, clampNonDefenseAttribute, usePhotoUrl } from "@/lib/sheets";
 import { parseAbilityEffects, passiveStatusModifiers, statusEffectModifiers, type AbilityEffectDefinition, type ActiveCharacterEffect, type CharacterAbility } from "@/lib/abilities";
 import { parseContinuousRules } from "@/lib/continuous-effects";
 import { supabase } from "@/integrations/supabase/client";
 
 type Creature = {
-  id: string; name: string; description: string | null;
+  id: string; name: string; description: string | null; photo_path: string | null;
   body: number; sanity: number;
   race_id: string | null; virtue_id: string | null; class_id: string | null;
   class_custom_modifiers: unknown;
@@ -121,6 +121,7 @@ function AbilityDetails({ability, labels}: {ability:CreatureSkill; labels:Record
 function SummonDetailsBody({details}: {details:CreatureDetails}) {
   const { data:defs=[] } = useDefs();
   const c=details.character;
+  const photoUrl=usePhotoUrl(c.photo_path);
   const {mods,race,virtue,classTrait}=useCharacterTraitMods(c.race_id,c.virtue_id,c.class_id,c.class_custom_modifiers);
   const byKey=new Map(details.attributes.map(a=>[a.attribute_key,a]));
   const passiveMods=passiveStatusModifiers(details.abilities.map(a=>({...a,
@@ -148,6 +149,26 @@ function SummonDetailsBody({details}: {details:CreatureDetails}) {
   const mana=values.find(row=>row.def.key==="mana");
   const bars=[hp,mana].filter((row):row is NonNullable<typeof hp>=>!!row);
   return <div className="space-y-5">
+    <section className="flex flex-col gap-4 rounded-xl border border-gold/25 bg-gold/5 p-3 sm:flex-row sm:items-start sm:p-4">
+      <div className="mx-auto flex aspect-[3/4] w-32 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-gold/40 bg-background sm:mx-0 sm:w-40">
+        {photoUrl
+          ? <img src={photoUrl} alt={`Imagem da invocação ${details.name}`}
+              className="h-full w-full object-cover" />
+          : <Ghost className="h-12 w-12 text-gold/40" aria-label="Invocação sem imagem cadastrada" />}
+      </div>
+      <div className="min-w-0 flex-1 space-y-1.5 text-center sm:text-left">
+        <h3 className="break-words font-display text-xl text-gold">{details.name}</h3>
+        {c.name !== details.name && (
+          <p className="text-xs text-muted-foreground">Criatura de origem: {c.name}</p>
+        )}
+        <p className="text-xs text-muted-foreground">
+          {details.is_active ? "Invocada no combate · dados atuais" : "Imagem e ficha original da criatura"}
+        </p>
+        {!c.photo_path && (
+          <p className="text-xs text-muted-foreground">O mestre ainda não cadastrou uma imagem para esta criatura.</p>
+        )}
+      </div>
+    </section>
     <div className="flex flex-wrap gap-2 text-[11px]">
       {race&&<span className="rounded-full border border-gold/25 px-2.5 py-1 text-gold">Raça: {race.name}</span>}
       {virtue&&<span className="rounded-full border border-gold/25 px-2.5 py-1 text-gold">Virtude: {virtue.name}</span>}
