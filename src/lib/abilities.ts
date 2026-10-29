@@ -240,7 +240,7 @@ export function parseAbilityAttackDamage(value: unknown): AbilityAttackDamageCon
     heal_on_damage_mode: raw.heal_on_damage_mode === "fixed" ? "fixed" : "percent",
     heal_on_damage_amount: Number.isFinite(Number(raw.heal_on_damage_amount))
       ? Math.max(0, Math.min(raw.heal_on_damage_mode === "fixed" ? 1_000_000 : 1000,
-          Number(raw.heal_on_damage_amount))) : 0,
+          raw.heal_on_damage_mode === "fixed" ? Math.floor(Number(raw.heal_on_damage_amount)) : Number(raw.heal_on_damage_amount))) : 0,
     execute_enabled: raw.execute_enabled === true,
     execute_mode: raw.execute_mode === "fixed" ? "fixed" : "percent",
     execute_threshold: Number.isFinite(Number(raw.execute_threshold))

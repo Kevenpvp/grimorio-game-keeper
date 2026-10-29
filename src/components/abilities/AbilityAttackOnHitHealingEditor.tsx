@@ -56,7 +56,9 @@ export function AbilityAttackOnHitHealingEditor({ value, onChange, disabled = fa
                 ...current,
                 heal_on_damage_amount: Math.max(0, Math.min(
                   current.heal_on_damage_mode === "percent" ? 1000 : 1000000,
-                  Number(event.target.value) || 0,
+                  current.heal_on_damage_mode === "fixed"
+                    ? Math.floor(Number(event.target.value) || 0)
+                    : Number(event.target.value) || 0,
                 )),
               }))} />
           </label>
