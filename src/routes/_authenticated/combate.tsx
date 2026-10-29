@@ -29,6 +29,7 @@ import { Portrait } from "@/components/sheet/CharacterSheetView";
 import { StatBar } from "@/components/sheet/StatBar";
 import { cn } from "@/lib/utils";
 import { DamageApplier } from "@/components/combat/DamageApplier";
+import { calculateManualCombatHp } from "@/lib/combat-hp-adjustment";
 import { passiveEffectsForDisplay, unregisteredPassiveEffectsForDisplay, combatEffectBadgeCounts, type PassiveEffectDisplay } from "@/lib/passive-effect-display";
 import { attackDiceModifier, hasActiveStun } from "@/lib/combat-dice";
 import { DamageOverTimeManager } from "@/components/combat/DamageOverTimeManager";
@@ -1743,6 +1744,7 @@ function ActiveCombatEffectsPanel({ effects, passiveEffects, defs, getSource }: 
 function CombatResourceEditor({ fighter, battleId, damageSources, val, effects, defs, onAddEffect, onRemoveEffect, hpRegenBlocked, manaRegenBlocked, manaRegenMode, manaRegenAmount, manaRegenEnabled, manaRegenSaving, onManaRegenModeChange, onManaRegenAmountChange, onManaRegenSave }: { fighter: Fighter; battleId: string; damageSources: Array<{ id: string; name: string }>; val: (f: Fighter, k: string) => number; effects: BattleEffect[]; defs: AttributeDef[]; onAddEffect: (effect: Omit<BattleEffect, "id" | "battle_id" | "character_id">) => void; onRemoveEffect: (id: string) => void; hpRegenBlocked: boolean; manaRegenBlocked: boolean; manaRegenMode: "percent" | "fixed"; manaRegenAmount: string; manaRegenEnabled: boolean; manaRegenSaving: boolean; onManaRegenModeChange: (mode: "percent" | "fixed") => void; onManaRegenAmountChange: (amount: string) => void; onManaRegenSave: () => void }) {
   const qc = useQueryClient();
   const { data: characterAbilities = [] } = useCharacterAbilities(fighter.id);
+  const [hpDelta, setHpDelta] = useState("10");
   const [manaDelta, setManaDelta] = useState("10");
   const [manualManaAmount, setManualManaAmount] = useState("10");
   const [sanityDelta, setSanityDelta] = useState("10");
@@ -1853,6 +1855,36 @@ function CombatResourceEditor({ fighter, battleId, damageSources, val, effects, 
     } finally { setBusy(false); }
   }
 
+  async function changeHp(direction: 1 | -1) {
+    const delta = Number(hpDelta);
+    const attr = fighter.character_attributes.find((attribute) => attribute.attribute_key === "hp");
+    if (!attr) { toast.error("Atributo HP não encontrado"); return; }
+    const current = Number(attr.current_value ?? 0);
+    const next = calculateManualCombatHp(current, val(fighter, "hp"), delta, direction);
+    if (next === null) {
+      toast.error("Informe uma quantidade inteira de HP entre 1 e 1.000.000");
+      return;
+    }
+    if (next === current) {
+      toast.info(direction > 0 ? fighter.name + " já está no HP máximo" : fighter.name + " já está com 0 HP");
+      return;
+    }
+    setBusy(true);
+    try {
+      // Alteração manual de HP pelo mestre, sem tratar como regeneração,
+      // dano de habilidade ou mitigação.
+      const { error } = await supabase.from("character_attributes")
+        .update({ current_value: next, updated_at: new Date().toISOString() })
+        .eq("character_id", fighter.id).eq("attribute_key", "hp");
+      if (error) { toast.error(error.message); return; }
+      toast.success("HP de " + fighter.name + ": " + current + " → " + next);
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["battles"] }),
+        qc.invalidateQueries({ queryKey: ["character", fighter.id] }),
+      ]);
+    } finally { setBusy(false); }
+  }
+
   async function changeMana() {
     const delta = Number(manaDelta);
     if (!Number.isFinite(delta) || delta <= 0) { toast.error("Informe uma quantidade positiva"); return; }
@@ -1917,9 +1949,25 @@ function CombatResourceEditor({ fighter, battleId, damageSources, val, effects, 
         </details>
       </div>
       <details className="rounded-md border border-border">
-        <summary className="cursor-pointer select-none px-3 py-3 text-sm font-semibold hover:text-gold">Alterar Mana, Sanidade e Corpo</summary>
+        <summary className="cursor-pointer select-none px-3 py-3 text-sm font-semibold hover:text-gold">Alterar HP, Mana, Sanidade e Corpo</summary>
         <div className="border-t border-border p-3">
-      <div className="grid grid-cols-[1fr_auto] gap-2">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+            <Input aria-label="Quantidade de HP para alterar" type="number" min="1" max="1000000" step="1"
+              value={hpDelta} onChange={(e) => setHpDelta(e.target.value)} />
+            <div className="flex flex-wrap gap-1">
+              <Button size="sm" variant="outline" disabled={busy}
+                aria-label={"Reduzir HP de " + fighter.name}
+                onClick={() => void changeHp(-1)}>
+                <Minus className="mr-1 h-3 w-3" /> HP
+              </Button>
+              <Button size="sm" variant="outline" disabled={busy}
+                aria-label={"Aumentar HP de " + fighter.name}
+                onClick={() => void changeHp(1)}>
+                <Plus className="mr-1 h-3 w-3" /> HP
+              </Button>
+            </div>
+          </div>
+          <div className="mt-3 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
         <Input aria-label="Quantidade de mana a reduzir" type="number" min="1" value={manaDelta} onChange={(e) => setManaDelta(e.target.value)} />
         <Button size="sm" variant="outline" disabled={busy} onClick={() => void changeMana()}><Minus className="mr-1 h-3 w-3" /> − Mana</Button>
         <Input aria-label="Quantidade de sanidade para alterar" type="number" min="1" value={sanityDelta} onChange={(e) => setSanityDelta(e.target.value)} />
