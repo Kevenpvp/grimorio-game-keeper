@@ -17,8 +17,8 @@ describe("máximos de HP e Mana no painel", () => {
   it("obtém o máximo autoritativo do banco, sem ignorar bônus personalizados de classe", () => {
     expect(dashboard).toContain('rpc("list_character_resource_maxima")');
     expect(dashboard).toContain("maximaByCharacter.get(c.id)");
-    expect(dashboard).toContain("authoritativeMaxima?.mana_max");
-    expect(dashboard).toContain("authoritativeMaxima?.hp_max");
+    expect(dashboard).toContain("maxima?.mana_max");
+    expect(dashboard).toContain("maxima?.hp_max");
     expect(dashboard).not.toContain('computeValue(def, (attr.points ?? 0) + modifier');
   });
 
