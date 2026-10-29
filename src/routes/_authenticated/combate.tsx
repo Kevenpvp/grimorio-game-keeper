@@ -26,6 +26,7 @@ import { dispatchCustomAbilityScriptEvents } from "@/lib/ability-script-runtime"
 
 import { computeValue, conditionAdjustedValue, clampNonDefenseAttribute, physicalAttributePoints, traitMods, numberAllocation, useDefs, useMe, useRaces, useVirtues, useClasses, type AttributeDef } from "@/lib/sheets";
 import { Portrait } from "@/components/sheet/CharacterSheetView";
+import { CombatPortraitViewer, type CombatPortrait } from "@/components/combat/CombatPortraitViewer";
 import { StatBar } from "@/components/sheet/StatBar";
 import { cn } from "@/lib/utils";
 import { DamageApplier } from "@/components/combat/DamageApplier";
@@ -411,6 +412,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
   const { data: classes } = useClasses();
   const qc = useQueryClient();
   const [combatTab, setCombatTab] = useState<CombatTab>("fighters");
+  const [previewPortrait, setPreviewPortrait] = useState<CombatPortrait | null>(null);
   const [actionMode, setActionMode] = useState<"combat" | "abilities" | "dots">("combat");
   const [detailTab, setDetailTab] = useState<"status" | "abilities" | "summons" | "transformations" | "effects" | "activeEffects" | "inventory">("status");
   const [battleAdminOpen, setBattleAdminOpen] = useState(false);
@@ -986,6 +988,13 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
   if (!defs) return null;
   return (
     <div className="grimorio-combat relative space-y-4 pb-28 md:pb-8">
+      {previewPortrait && (
+        <CombatPortraitViewer
+          key={previewPortrait.path ?? previewPortrait.name}
+          portrait={previewPortrait}
+          onClose={() => setPreviewPortrait(null)}
+        />
+      )}
       <header className="grimorio-combat-hero panel relative space-y-3 overflow-hidden border-gold/45 p-3 shadow-lg sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
@@ -1158,7 +1167,16 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
               isTarget && "!border-blood ring-1 ring-blood shadow-[0_0_22px_rgba(188,57,67,.13)]",
             )}>
               <div className="flex items-center gap-2">
-                <Portrait path={transformationImage} name={f.name} className="h-12 w-11 shrink-0 rounded-lg border border-gold/40 shadow-[0_0_0_2px_rgba(231,183,93,.06)]" />
+                <button
+                  type="button"
+                  aria-label={`Ampliar imagem de ${f.name}`}
+                  aria-haspopup="dialog"
+                  title={`Ver imagem de ${f.name} em tamanho maior`}
+                  onClick={() => setPreviewPortrait({ name: f.name, path: transformationImage })}
+                  className="shrink-0 cursor-zoom-in rounded-lg transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                >
+                  <Portrait path={transformationImage} name={f.name} className="h-12 w-11 rounded-lg border border-gold/40 shadow-[0_0_0_2px_rgba(231,183,93,.06)]" />
+                </button>
                 <div className="min-w-0 flex-1 space-y-0.5">
                   <div className="truncate font-display text-base font-semibold text-gold">{f.name}</div>
                   <div className="truncate text-[11px] text-muted-foreground">{f.player_name || "NPC"}</div>
