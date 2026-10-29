@@ -8,21 +8,17 @@ import type { AbilityScript, AbilityScriptApi, AbilityScriptContext } from "../t
  * The hit that created a stack never benefits from its own stack, because
  * "causou_dano" runs after the server computes/commits that hit.
  *
- * Advancing an individual turn immediately after a hit preserves the chain;
- * advancing another turn without another landed physical hit resets it.
- * Non-physical damage cannot create stacks or refresh their timer.
+ * The DB turns the hit flag off at each turn advancement. If the player
+ * advances a turn without a new physical hit, the DB immediately removes
+ * the entire buff, regardless of how many hits created the stack.
  */
 const keys = {
   battle: "barrincar_battle_id",
   count: "barrincar_acumulos",
   lastHitTurn: "barrincar_ultimo_acerto_turno",
+  hitThisTurn: "barrincar_acertou_desde_ultimo_avanco",
   effectId: "barrincar_efeito_id",
 } as const;
-
-export function barrincarTurnToReset(lastHit: number, nextTurn: number): boolean {
-  return Number.isInteger(lastHit) && Number.isInteger(nextTurn) &&
-    nextTurn > lastHit + 1;
-}
 
 function turn(context: AbilityScriptContext): number | null {
   const n = context.turno.individual;
@@ -32,21 +28,6 @@ function turn(context: AbilityScriptContext): number | null {
 
 function activeBattle(context: AbilityScriptContext): string | null {
   return context.batalha?.ativa === true ? context.batalha.id : null;
-}
-
-async function reset(context: AbilityScriptContext, api: AbilityScriptApi) {
-  const sameBattle = context.estado[keys.battle] === activeBattle(context);
-  const oldEffectId = sameBattle && typeof context.estado[keys.effectId] === "string"
-    ? context.estado[keys.effectId] as string : null;
-  // Remove the old buff before clearing the stack; no phantom +damage survives.
-  if (oldEffectId) await api.removerEfeito({ efeitoId: oldEffectId });
-  await api.atualizarEstado({
-    [keys.battle]: activeBattle(context),
-    [keys.count]: 0,
-    [keys.lastHitTurn]: null,
-    [keys.effectId]: null,
-  });
-  api.registrarLog("Barrincar: combo encerrado; dano físico voltou ao normal");
 }
 
 const barrincar: AbilityScript = {
@@ -65,10 +46,9 @@ const barrincar: AbilityScript = {
     if (currentTurn === null) return;
 
     const sameBattle = context.estado[keys.battle] === battleId;
-    const previousTurn = Number(context.estado[keys.lastHitTurn]);
-    const stillInCombo = sameBattle && Number.isInteger(previousTurn) &&
-      !barrincarTurnToReset(previousTurn, currentTurn);
-    const previousStacks = stillInCombo
+    // The turn-advance DB trigger owns the reset. Several hits in one turn
+    // only increase the stack; they never extend the number of turns it lasts.
+    const previousStacks = sameBattle
       ? Math.max(0, Math.floor(Number(context.estado[keys.count]) || 0)) : 0;
     const nextStacks = Math.min(20_000, previousStacks + 1);
     const oldEffectId = sameBattle && typeof context.estado[keys.effectId] === "string"
@@ -95,6 +75,7 @@ const barrincar: AbilityScript = {
       [keys.battle]: battleId,
       [keys.count]: nextStacks,
       [keys.lastHitTurn]: currentTurn,
+      [keys.hitThisTurn]: true,
       [keys.effectId]: newEffectId,
     });
     if (oldEffectId) await api.removerEfeito({ efeitoId: oldEffectId });
@@ -106,16 +87,6 @@ const barrincar: AbilityScript = {
     });
   },
 
-  async "turno_avançou"(context, api) {
-    const battleId = activeBattle(context);
-    if (!battleId || context.estado[keys.battle] !== battleId) return;
-    const stacks = Math.max(0, Number(context.estado[keys.count]) || 0);
-    if (stacks <= 0) return;
-    const currentTurn = turn(context);
-    const lastHit = context.estado[keys.lastHitTurn];
-    if (currentTurn === null || typeof lastHit !== "number") return;
-    if (barrincarTurnToReset(lastHit, currentTurn)) await reset(context, api);
-  },
 };
 
 export default barrincar;
