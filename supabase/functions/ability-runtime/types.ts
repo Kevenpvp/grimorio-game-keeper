@@ -87,6 +87,16 @@ export interface AbilityScriptApi {
   atualizarEstado(patch: Record<string, unknown>): Promise<void>;
   /** Synchronize Coração Corrompido's configured temporary Strength bonus; omit to read the saved attribute. */
   sincronizarBonusCoracaoCorrompido(bonusForca?: number): Promise<void>;
+  /** Once per paid Explante activation: add ammo to the item that granted the skill. */
+  recarregarArmaExplante(quantidade: number): Promise<{
+    applied: boolean;
+    ammo_added: number;
+    ammo_before?: number;
+    ammo_after?: number;
+    ammo_max?: number;
+    weapon_name?: string;
+    reason?: string;
+  }>;
   /** Atomically adjust a numeric per-ability state value and enforce a lower bound. */
   ajustarEstadoNumerico(input: { chave: string; delta: number; minimo?: number }): Promise<number>;
   /** Read current and maximum resource values for the Caster or Alvo. */
