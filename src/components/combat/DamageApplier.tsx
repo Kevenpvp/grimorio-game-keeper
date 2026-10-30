@@ -334,6 +334,7 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
         weapon_bonus_mode?: "fixed" | "percent";
         weapon_bonus_amount?: number;
         weapon_raw_damage_by_hit?: number[];
+        florin_bleed?: { applied: boolean; damage: number; mode: string; duration: number };
         hits: number;
         physical_defense: number;
         magical_defense: number;
@@ -430,11 +431,14 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
         ? ` Ajuste por golpe: ${adjustmentFixed >= 0 ? "+" : ""}${adjustmentFixed} fixo, ${adjustmentPercent >= 0 ? "+" : ""}${adjustmentPercent}%.` : "";
       const penetrationSummary = effectiveDamageKind !== "true" && defenseIgnoreText(defenseIgnore)
         ? ` Defesa ignorada: ${defenseIgnoreText(defenseIgnore)}.` : "";
+      const florinSummary = result.florin_bleed?.applied
+        ? ` 🌹 Lágrimas das pétalas: Sangramento de ${result.florin_bleed.damage}${result.florin_bleed.mode === "percent" ? "% do HP máximo" : " HP"} por turno durante ${result.florin_bleed.duration} turnos aplicado; preparação consumida.`
+        : "";
       const weaponSummary = result.weapon_name
         ? ` Arma: ${result.weapon_name} · +${Number(result.weapon_bonus_amount ?? 0)}${result.weapon_bonus_mode === "percent" ? "%" : " fixos"} por golpe (antes da defesa).`
         : "";
       toast.success(
-        `${criticalSummary}${target.name}: ${result.hits} golpe(s) de ${damageDescription}; ${defenseText}; ${result.total_damage} de dano total. HP: ${result.hp_before} → ${result.hp_after}.${manualDamageSummary}${penetrationSummary}${sourceSummary}${reductionSummary}${weaponSummary}${hitSummary}`,
+        `${criticalSummary}${target.name}: ${result.hits} golpe(s) de ${damageDescription}; ${defenseText}; ${result.total_damage} de dano total. HP: ${result.hp_before} → ${result.hp_after}.${manualDamageSummary}${penetrationSummary}${sourceSummary}${reductionSummary}${weaponSummary}${florinSummary}${hitSummary}`,
         { duration: 8000 },
       );
       onDamageApplied?.({ targetId: target.id, totalDamage: result.total_damage, hpBefore: result.hp_before, hpAfter: result.hp_after });
@@ -444,6 +448,7 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
       }
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["battles"] }),
+        qc.invalidateQueries({ queryKey: ["florin-petals", battleId] }),
         qc.invalidateQueries({ queryKey: ["character", target.id] }),
         qc.invalidateQueries({ queryKey: ["characters"] }),
         qc.invalidateQueries({ queryKey: ["my-character"] }),

@@ -22,6 +22,7 @@ export const CUSTOM_ABILITY_SCRIPTS = [
   { key: "coracao_corrompido", label: "Coração Corrompido — usa ForçaBonus enquanto estiver em cooldown e houver superaquecimento" },
   { key: "sedento_por_sangue", label: "Sedento por Sangue — consome HP após turnos e concede invencibilidade com cooldown interno" },
   { key: "barrincar", label: "Barrincar — acumula +5% de dano físico por acerto; reseta após um turno sem acerto" },
+  { key: "lagrimas_petalas", label: "Lágrimas das pétalas — controla stacks e prepara Sangramento no próximo ataque da Espada Florin" },
 ] as const;
 
 export type CustomAbilityScriptKey = (typeof CUSTOM_ABILITY_SCRIPTS)[number]["key"];

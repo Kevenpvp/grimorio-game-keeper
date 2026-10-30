@@ -835,8 +835,32 @@ async function applyDamageWithScripts(
     }
   }
 
+  // The Florin's pending Sangramento is only consumed by a successful hit
+  // with that EXACT equipped weapon, never by arbitrary physical/skill damage.
+  // SQL locks the ability row and applies the registered DoT + clears the
+  // prepared value in one transaction, so repeated requests cannot reuse it.
+  let florinBleed: ObjectValue | null = null;
+  if (weaponInventoryItemId && sourceId && battleId && tracker.total > 0
+      && tracker.isInvincible !== true && sourceId !== targetId) {
+    const { data: bleedResult, error: bleedError } = await userClient.rpc(
+      "consume_florin_weapon_bleed", {
+        _battle_id: battleId,
+        _source_character_id: sourceId,
+        _target_character_id: targetId,
+        _inventory_item_id: weaponInventoryItemId,
+        _final_damage: tracker.total,
+      },
+    );
+    if (bleedError) {
+      hookErrors.push(`Lágrimas das pétalas: ${errorMessage(bleedError).slice(0,400)}`);
+    } else {
+      florinBleed = asObject(bleedResult);
+    }
+  }
+
   return {
     ...base,
+    ...(florinBleed?.applied === true ? { florin_bleed: florinBleed } : {}),
     total_damage: tracker.total,
     hp_after: tracker.hpAfter,
     final_damage_by_hit: tracker.finalValues,

@@ -30,6 +30,7 @@ import { CombatPortraitViewer, type CombatPortrait } from "@/components/combat/C
 import { StatBar } from "@/components/sheet/StatBar";
 import { cn } from "@/lib/utils";
 import { DamageApplier } from "@/components/combat/DamageApplier";
+import { FlorinPetalsControl, type FlorinPetalsState } from "@/components/combat/FlorinPetalsControl";
 import { calculateManualCombatHp } from "@/lib/combat-hp-adjustment";
 import { passiveEffectsForDisplay, unregisteredPassiveEffectsForDisplay, combatEffectBadgeCounts, type PassiveEffectDisplay } from "@/lib/passive-effect-display";
 import { attackDiceModifier, hasActiveStun } from "@/lib/combat-dice";
@@ -466,6 +467,17 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
     [battle],
   );
   const fighterIds = useMemo(() => fighters.map((fighter) => fighter.id), [fighters]);
+  const { data: florinPetals = [] } = useQuery<FlorinPetalsState[]>({
+    queryKey: ["florin-petals", battle.id],
+    enabled: isMaster && battle.active,
+    refetchInterval: 6000,
+    refetchOnWindowFocus: true,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("list_florin_petals_battle", { _battle_id: battle.id });
+      if (error) throw error;
+      return Array.isArray(data) ? data : [];
+    },
+  });
   const db = supabase as any;
   const { data: battleInventoryOrigins = [] } = useQuery<Array<{id:string;character_id:string;equipped:boolean;item_templates:{name:string}|null}>>({
     queryKey: ["battle-accessory-origins", battle.id, fighterIds],
@@ -1294,6 +1306,10 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                   {effect.effect_type === "invincible" ? "Invencível" : effect.effect_type === "magic_prohibition" ? "Sem magia" : effect.effect_type === "no_mana" ? "Sem mana" : effect.effect_type === "mind_control" ? "Controle mental" : effect.effect_type === "invisibility" ? "Invisível" : "Stun"}
                 </span>)}
               </div>
+              {isMaster && florinPetals.filter((state) => state.character_id === f.id).map((state) => (
+                <FlorinPetalsControl key={state.ability_id}
+                  state={state} battleId={battle.id} active={battle.active} />
+              ))}
               {isMaster && (
                 <label className={cn(
                   "flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-xs transition-colors",
