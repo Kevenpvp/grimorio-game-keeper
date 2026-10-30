@@ -347,6 +347,18 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
         ammo_max?: number;
         ammo_used?: number;
         florin_bleed?: { applied: boolean; damage: number; mode: string; duration: number };
+        peste_healing?: {
+          applied: boolean;
+          hits: number;
+          first_heal_percent: number;
+          last_heal_percent: number;
+          next_heal_percent: number;
+          stacks: number;
+          attacker_hp_before: number;
+          attacker_hp_after: number;
+          target_hp_before: number;
+          target_hp_after: number;
+        };
         hits: number;
         physical_defense: number;
         magical_defense: number;
@@ -446,6 +458,9 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
       const florinSummary = result.florin_bleed?.applied
         ? ` 🌹 Lágrimas das pétalas: Sangramento de ${result.florin_bleed.damage}${result.florin_bleed.mode === "percent" ? "% do HP máximo" : " HP"} por turno durante ${result.florin_bleed.duration} turnos aplicado; preparação consumida.`
         : "";
+      const pesteSummary = result.peste_healing?.applied
+        ? ` ☣️ Cura da Peste: ${result.peste_healing.hits} golpe(s) com cura Normal · Baixa; ${result.peste_healing.first_heal_percent}% → ${result.peste_healing.last_heal_percent}% do HP máximo em ambos. HP do usuário: ${result.peste_healing.attacker_hp_before} → ${result.peste_healing.attacker_hp_after}; HP do alvo após a cura: ${result.peste_healing.target_hp_after}. Acúmulos: ${result.peste_healing.stacks}/99; próximo golpe: ${result.peste_healing.next_heal_percent}%.`
+        : "";
       const weaponSummary = result.weapon_name
         ? ` Arma: ${result.weapon_name} · +${Number(result.weapon_bonus_amount ?? 0)}${result.weapon_bonus_mode === "percent" ? "%" : " fixos"} por golpe (antes da defesa).`
         : "";
@@ -453,7 +468,7 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
         ? " Munição: " + result.ammo_before + " → " + result.ammo_after + "/" + result.ammo_max + " (" + result.ammo_used + " consumida(s))."
         : "";
       toast.success(
-        `${criticalSummary}${target.name}: ${result.hits} golpe(s) de ${damageDescription}; ${defenseText}; ${result.total_damage} de dano total. HP: ${result.hp_before} → ${result.hp_after}.${manualDamageSummary}${penetrationSummary}${sourceSummary}${reductionSummary}${weaponSummary}${ammoSummary}${florinSummary}${hitSummary}`,
+        `${criticalSummary}${target.name}: ${result.hits} golpe(s) de ${damageDescription}; ${defenseText}; ${result.total_damage} de dano total. HP: ${result.hp_before} → ${result.hp_after}.${manualDamageSummary}${penetrationSummary}${sourceSummary}${reductionSummary}${weaponSummary}${ammoSummary}${florinSummary}${pesteSummary}${hitSummary}`,
         { duration: 8000 },
       );
       onDamageApplied?.({ targetId: target.id, totalDamage: result.total_damage, hpBefore: result.hp_before, hpAfter: result.hp_after });
