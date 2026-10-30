@@ -68,6 +68,7 @@ function HabilidadesPage() {
 
   const normalizedSearch = search.trim().toLocaleLowerCase("pt-BR");
   const visibleAbilities = abilities
+    .filter((ability) => !(ability as Ability & { weapon_item_template_id?: string | null }).weapon_item_template_id)
     .filter((ability) => ability.name.toLocaleLowerCase("pt-BR").includes(normalizedSearch))
     .slice()
     .sort((a, b) => {
@@ -99,7 +100,7 @@ function HabilidadesPage() {
   );
 }
 
-function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; defs: NonNullable<ReturnType<typeof useDefs>["data"]>; isNew: boolean; onSaved: () => void }) {
+export function AbilityEditor({ ability, defs, isNew, onSaved, hideDelete = false }: { ability: Ability; defs: NonNullable<ReturnType<typeof useDefs>["data"]>; isNew: boolean; onSaved: () => void; hideDelete?: boolean }) {
   const qc = useQueryClient();
   const [name, setName] = useState(ability.name);
   const [description, setDescription] = useState(ability.description ?? "");
@@ -340,6 +341,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
     toast.success("Habilidade salva");
     await qc.invalidateQueries({ queryKey: ["abilities"] });
     await qc.invalidateQueries({ queryKey: ["character-abilities"] });
+    await qc.invalidateQueries({ queryKey: ["inventory-templates"] });
     onSaved();
   }
 
@@ -782,7 +784,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
       {canActivate && <SummonGrantsEditor abilityId={ability.id} master />}
       <div className="flex flex-wrap gap-2 border-t border-border pt-3">
         <Button disabled={busy} onClick={() => void save()}>{busy ? "Salvando..." : isNew ? "Salvar nova habilidade" : "Salvar habilidade"}</Button>
-        <Button disabled={busy} variant="destructive" onClick={() => void remove()}><Trash2 className="mr-1 h-4 w-4" /> Excluir</Button>
+        {!hideDelete && <Button disabled={busy} variant="destructive" onClick={() => void remove()}><Trash2 className="mr-1 h-4 w-4" /> Excluir</Button>}
       </div>
     </section>
   );
