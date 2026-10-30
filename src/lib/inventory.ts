@@ -12,6 +12,8 @@ export type WeaponDamageConfig = {
   physical_damage_type_id: string | null;
   damage_type_id: string | null;
   magic_level: "baixa" | "media" | "alta";
+  uses_ammo: boolean;
+  ammo_max: number;
 };
 export const DEFAULT_WEAPON_DAMAGE: WeaponDamageConfig = {
   damage_kind: "physical",
@@ -20,6 +22,8 @@ export const DEFAULT_WEAPON_DAMAGE: WeaponDamageConfig = {
   physical_damage_type_id: null,
   damage_type_id: null,
   magic_level: "baixa",
+  uses_ammo: false,
+  ammo_max: 10,
 };
 export function parseWeaponDamage(raw: unknown): WeaponDamageConfig {
   const source = raw && typeof raw === "object" && !Array.isArray(raw)
@@ -37,12 +41,16 @@ export function parseWeaponDamage(raw: unknown): WeaponDamageConfig {
       ? source.physical_damage_type_id : null,
     damage_type_id: typeof source.damage_type_id === "string" && source.damage_type_id ? source.damage_type_id : null,
     magic_level: source.magic_level === "media" || source.magic_level === "alta" ? source.magic_level : "baixa",
+    uses_ammo: source.uses_ammo === true,
+    ammo_max: Number.isInteger(Number(source.ammo_max)) && Number(source.ammo_max) >= 1
+      ? Math.min(100000, Number(source.ammo_max)) : 10,
   };
 }
 
 export function weaponDamageSummary(config: WeaponDamageConfig): string {
   const kind = {physical:"Físico",magical:"Mágico",hybrid:"Híbrido",true:"Verdadeiro"}[config.damage_kind];
-  return `${kind} · +${config.bonus_amount}${config.bonus_mode === "percent" ? "%" : " fixo(s)"} por golpe`;
+  return `${kind} · +${config.bonus_amount}${config.bonus_mode === "percent" ? "%" : " fixo(s)"} por golpe` +
+    (config.uses_ammo ? ` · Munição máxima: ${config.ammo_max}` : "");
 }
 
 export type ItemTemplate = {
@@ -65,6 +73,7 @@ export type InventoryItem = {
   item_template_id: string;
   slot_index: number;
   equipped: boolean;
+  ammo_current: number | null;
   item_templates: ItemTemplate;
 };
 
