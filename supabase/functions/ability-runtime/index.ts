@@ -905,9 +905,29 @@ async function applyDamageWithScripts(
     }
   }
 
+  // Attacking with bare hands or any weapon other than the linked gloves
+  // ends that character's Cure da Peste combo. The trusted RPC checks the
+  // equipped weapon identity, so a valid glove attack keeps its stack growth.
+  let pesteReset = 0;
+  if (sourceId && battleId && sourceId !== targetId) {
+    const { data: resetCount, error: resetError } = await service.rpc(
+      "reset_peste_on_non_glove_attack", {
+        _battle_id: battleId,
+        _attacker_id: sourceId,
+        _weapon_inventory_item_id: weaponInventoryItemId,
+      },
+    );
+    if (resetError) {
+      hookErrors.push(`Cura da Peste (reset por outra arma): ${errorMessage(resetError).slice(0, 400)}`);
+    } else {
+      pesteReset = Math.max(0, Number(resetCount ?? 0));
+    }
+  }
+
   return {
     ...base,
     ...(florinBleed?.applied === true ? { florin_bleed: florinBleed } : {}),
+    ...(pesteReset > 0 ? { peste_reset: pesteReset } : {}),
     ...(pesteHealing?.applied === true ? { peste_healing: pesteHealing } : {}),
     total_damage: tracker.total,
     hp_after: pesteHealing?.applied === true
