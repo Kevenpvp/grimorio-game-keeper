@@ -359,6 +359,29 @@ function makeApi(
       context.estado = asObject(data);
     },
 
+    async recarregarArmaExplante(quantidade: number) {
+      if (context.evento !== "habilidade_ativada" || context.habilidade.scriptKey !== "explante") {
+        throw new Error("Recarregar munição por Explante exige sua própria ativação confirmada.");
+      }
+      const amount = finiteNumber(quantidade, "MuniçãoExtra", 0, 100000);
+      if (!Number.isInteger(amount)) throw new Error("MuniçãoExtra precisa ser um número inteiro.");
+      const { data, error } = await service.rpc("explante_reload_linked_weapon", {
+        _event_id: context.idEvento,
+        _amount: amount,
+      });
+      if (error) throw error;
+      const result = asObject(data);
+      return {
+        applied: result.applied === true,
+        ammo_added: Number(result.ammo_added ?? 0),
+        ammo_before: result.ammo_before === undefined ? undefined : Number(result.ammo_before),
+        ammo_after: result.ammo_after === undefined ? undefined : Number(result.ammo_after),
+        ammo_max: result.ammo_max === undefined ? undefined : Number(result.ammo_max),
+        weapon_name: typeof result.weapon_name === "string" ? result.weapon_name : undefined,
+        reason: typeof result.reason === "string" ? result.reason : undefined,
+      };
+    },
+
     async sincronizarBonusCoracaoCorrompido(bonusForca?: number) {
       const { error } = await service.rpc("sync_coracao_corrompido_strength_effect_with_bonus", {
         _character_id: context.caster.id,
