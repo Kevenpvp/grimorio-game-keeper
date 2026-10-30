@@ -1612,9 +1612,13 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                   return fighter ? val(fighter, attributeKey) : 0;
                 }} />
             </div>}
-          {actionMode === "combat" && actor && <Actions battleId={battle.id} actor={actor} targets={targets} fighters={fighters} defs={defs}
+          {/* Preserve weapon, damage dice and per-target selections while switching
+              the Central de Ações tabs. Unmount only on actor/battle change. */}
+          {actor && <div className={actionMode === "combat" ? "" : "hidden"} aria-hidden={actionMode !== "combat"}>
+            <Actions key={battle.id + ":" + actor.id} battleId={battle.id} actor={actor} targets={targets} fighters={fighters} defs={defs}
               val={val} effects={effects} abilitiesOf={abilitiesOf}
-              onDamageApplied={(targetName, total) => noteActivity("damage", targetName + " recebeu " + total + " de dano manual.")} />}
+              onDamageApplied={(targetName, total) => noteActivity("damage", targetName + " recebeu " + total + " de dano manual.")} />
+          </div>}
           {actionMode !== "dots" && !actor && <p className="panel p-5 text-sm text-muted-foreground">Escolha quem está agindo para habilitar ataques, testes, habilidades e controle mental.</p>}
           {actionMode === "dots" && <div className="panel space-y-3 p-4">
             <h3 className="font-display text-lg text-gold">Aplicar DoTs cadastrados</h3>
