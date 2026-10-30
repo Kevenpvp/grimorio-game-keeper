@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Backpack, Check, Gem, Package, Plus, ShieldCheck, Swords, Trash2, X } from "lucide-react";
+import { Backpack, Check, Gem, Package, Plus, ShieldCheck, Swords, Trash2, X, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,64 @@ import { useMe } from "@/lib/sheets";
 import { accessoryPhoto, invalidateInventory, itemGrantSummary, weaponDamageSummary, useCharacterInventory, useItemTemplates } from "@/lib/inventory";
 
 const db = supabase as any;
+
+function WeaponAmmoCounter({ itemId, characterId, current, maximum, master }: {
+  itemId: string; characterId: string; current: number | null; maximum: number; master: boolean;
+}) {
+  const qc = useQueryClient();
+  const [draft, setDraft] = useState(String(current ?? 0));
+  const [busy, setBusy] = useState(false);
+  const available = Math.max(0, Math.min(maximum, Number(current ?? 0)));
+  useEffect(() => { setDraft(String(current ?? 0)); }, [current, itemId]);
+  const percent = maximum > 0 ? (available / maximum) * 100 : 0;
+
+  async function save(amount: number) {
+    if (busy) return;
+    if (!Number.isInteger(amount) || amount < 0 || amount > maximum) {
+      toast.error(`Informe uma munição entre 0 e ${maximum}.`);
+      return;
+    }
+    setBusy(true);
+    try {
+      const { error } = await db.rpc("inventory_set_ammo", { _item_id: itemId, _ammo: amount });
+      if (error) throw error;
+      toast.success(`Munição atualizada: ${amount}/${maximum}`);
+      invalidateInventory(qc, characterId);
+      await qc.invalidateQueries({ queryKey: ["equipped-weapons-for-damage", characterId] });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível atualizar a munição.");
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="space-y-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-amber-200">Munição da arma</p>
+        <span className={`text-base font-bold tabular-nums ${available === 0 ? "text-red-400" : "text-amber-200"}`}>
+          {available} / {maximum}
+        </span>
+      </div>
+      <div role="progressbar" aria-valuenow={available} aria-valuemin={0} aria-valuemax={maximum}
+        aria-label="Munição restante" className="h-2 overflow-hidden rounded-full bg-background/80">
+        <div className={`h-full rounded-full ${available === 0 ? "bg-red-500" : available <= maximum / 4 ? "bg-orange-400" : "bg-amber-400"}`}
+          style={{ width: `${percent}%` }} />
+      </div>
+      {available === 0 && <p className="text-xs font-semibold text-red-300">
+        Sem munição — esta arma não pode ser utilizada para aplicar dano.
+      </p>}
+      {master && (
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+          <Input type="number" min={0} max={maximum} step={1} aria-label="Quantidade atual de munição"
+            value={draft} onChange={event => setDraft(event.target.value)} className="min-w-0" />
+          <Button type="button" size="sm" variant="outline" className="min-h-10" disabled={busy}
+            onClick={() => void save(Number(draft))}>Salvar</Button>
+          <Button type="button" size="sm" className="col-span-2 min-h-10 sm:col-span-1" disabled={busy || available === maximum}
+            onClick={() => void save(maximum)}><RefreshCw className="mr-1.5 h-4 w-4" /> Recarregar</Button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function InventoryPanel({ characterId, master = false, combat = false }: {
   characterId: string; master?: boolean; combat?: boolean;
@@ -89,6 +147,8 @@ export function InventoryPanel({ characterId, master = false, combat = false }: 
                 className="flex min-h-11 items-center gap-2 rounded-lg border border-emerald-600/30 bg-background/65 px-2 py-1 text-left text-xs hover:border-gold/55">
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md bg-gold/10">{img(item.item_templates.image_path, item.item_templates.name)}</span>
                 <span className="max-w-36 truncate font-medium">{item.item_templates.name}</span>
+                {item.item_templates.item_type === "weapon" && item.item_templates.weapon_damage.uses_ammo &&
+                  <span className="shrink-0 text-[10px] tabular-nums text-amber-300">{item.ammo_current ?? 0}/{item.item_templates.weapon_damage.ammo_max}</span>}
               </button>
             ))}
           </div>
@@ -107,6 +167,8 @@ export function InventoryPanel({ characterId, master = false, combat = false }: 
               </div>
               <p className="mt-2 truncate text-[11px] font-semibold">{item.item_templates.name}</p>
               <p className="mt-0.5 text-[10px] text-gold/70">{item.item_templates.item_type === "weapon" ? "Arma" : "Acessório"}</p>
+              {item.item_templates.item_type === "weapon" && item.item_templates.weapon_damage.uses_ammo &&
+                <p className={`mt-0.5 text-[10px] font-bold tabular-nums ${!item.ammo_current ? "text-red-400" : "text-amber-300"}`}>Munição: {item.ammo_current ?? 0}/{item.item_templates.weapon_damage.ammo_max}</p>}
               <p className={"mt-0.5 text-[10px] " + (item.equipped ? "text-emerald-300" : "text-muted-foreground")}>{item.equipped ? "Equipado" : "Guardado"}</p>
             </button>
           ) : (
@@ -191,6 +253,9 @@ export function InventoryPanel({ characterId, master = false, combat = false }: 
                 {grantDetails.summons.map(entry => <p key={entry.id}>👻 {entry.name}</p>)}
               </div>}
             </div>
+            {selected.item_templates.item_type === "weapon" && selected.item_templates.weapon_damage.uses_ammo &&
+              <WeaponAmmoCounter itemId={selected.id} characterId={characterId}
+                current={selected.ammo_current} maximum={selected.item_templates.weapon_damage.ammo_max} master={master} />}
             {canEquip && <Button className="min-h-11 w-full" variant={selected.equipped ? "outline" : "default"} disabled={busy}
               onClick={() => void run(() => db.rpc("inventory_set_equipped",{_item_id:selected.id,_equipped:!selected.equipped}),
                 selected.equipped ? "Equipamento desequipado" : "Equipamento equipado")}>
