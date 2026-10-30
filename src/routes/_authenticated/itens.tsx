@@ -18,6 +18,32 @@ const db = supabase as any;
 type Option = { id: string; name: string };
 type GrantKey = "ability_ids" | "transformation_ids" | "summon_character_ids";
 
+type WeaponAbilityDefinition = Ability & {
+  source_ability_id?: string | null;
+  weapon_item_template_id?: string | null;
+};
+
+/**
+ * A catalog skill and its per-weapon copies refer to the same original
+ * ability, so a weapon must only grant one of them. Prefer its own private
+ * copy if both IDs were selected in an older UI state.
+ */
+function uniqueWeaponAbilityIds(ids: string[], definitions: Ability[], weaponId: string): string[] {
+  const catalog = new Map(definitions.map((ability) => [ability.id, ability as WeaponAbilityDefinition]));
+  const selected = new Map<string, string>();
+  for (const id of ids) {
+    const ability = catalog.get(id);
+    const rootId = ability?.source_ability_id ?? id;
+    const oldId = selected.get(rootId);
+    if (!oldId || (ability?.weapon_item_template_id === weaponId &&
+      catalog.get(oldId)?.weapon_item_template_id !== weaponId)) {
+      selected.set(rootId, id);
+    }
+  }
+  return [...selected.values()];
+}
+
+
 export const Route = createFileRoute("/_authenticated/itens")({
   head: () => ({ meta: [
     { title: "Itens e acessórios — Grimório" },
@@ -80,6 +106,13 @@ function ItemEditor({ item, abilities, abilityDefinitions, transformations, crea
   const [description, setDescription] = useState(item.description);
   const [effects, setEffects] = useState<AbilityEffectDefinition[]>(item.effects);
   const [abilityIds, setAbilityIds] = useState<string[]>(item.ability_ids);
+  const displayedAbilityIds = itemType === "weapon"
+    ? uniqueWeaponAbilityIds(abilityIds, abilityDefinitions, item.id)
+    : abilityIds;
+  const selectedAbilityRoots = new Set(displayedAbilityIds.map((id) => {
+    const ability = abilityDefinitions.find((entry) => entry.id === id) as WeaponAbilityDefinition | undefined;
+    return ability?.source_ability_id ?? id;
+  }));
   const [transformationIds, setTransformationIds] = useState<string[]>(item.transformation_ids);
   const [summonIds, setSummonIds] = useState<string[]>(item.summon_character_ids);
   const [busy, setBusy] = useState(false);
@@ -132,7 +165,7 @@ function ItemEditor({ item, abilities, abilityDefinitions, transformations, crea
     if (error) { toast.error(error.message); return false; }
     if (itemType === "weapon") {
       const { data: ids, error: abilitiesError } = await db.rpc("inventory_weapon_set_abilities", {
-        _item_template_id: item.id, _requested_ids: abilityIds,
+        _item_template_id: item.id, _requested_ids: displayedAbilityIds,
       });
       if (abilitiesError) {
         toast.error("Item salvo, mas não foi possível vincular as habilidades da arma: " + abilitiesError.message);
@@ -346,10 +379,16 @@ function ItemEditor({ item, abilities, abilityDefinitions, transformations, crea
             permanentNote="Ativo apenas enquanto este item estiver equipado." />
         </div>
         <GrantedResources title="Habilidades concedidas" options={[
-          ...abilities,
-          ...abilityDefinitions.filter((entry) => (entry as Ability & { weapon_item_template_id?: string | null }).weapon_item_template_id === item.id)
-            .map(({ id, name }) => ({ id, name })),
-        ]} values={abilityIds} onChange={setAbilityIds} />
+          ...abilities.filter((entry) => itemType !== "weapon" ||
+            !selectedAbilityRoots.has(entry.id) || displayedAbilityIds.includes(entry.id)),
+          ...(itemType === "weapon"
+            ? abilityDefinitions.filter((entry) =>
+              (entry as WeaponAbilityDefinition).weapon_item_template_id === item.id
+            ).map(({ id, name }) => ({ id, name }))
+            : []),
+        ]} values={displayedAbilityIds}
+          onChange={(next) => setAbilityIds(itemType === "weapon"
+            ? uniqueWeaponAbilityIds(next, abilityDefinitions, item.id) : next)} />
         {itemType === "weapon" && (
           <section className="space-y-3 rounded-xl border border-violet-500/30 bg-violet-500/5 p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
