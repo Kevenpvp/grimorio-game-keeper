@@ -108,6 +108,9 @@ function ItemEditor({ item, abilities, transformations, creatures, defs }: {
   async function save(path = photoPath) {
     if (!name.trim()) { toast.error("Informe o nome do item"); return false; }
     if (itemType === "weapon") {
+      if (weaponDamage.uses_ammo && (!Number.isInteger(weaponDamage.ammo_max) || weaponDamage.ammo_max < 1 || weaponDamage.ammo_max > 100000)) {
+        toast.error("A munição máxima precisa ser um inteiro entre 1 e 100000."); return false;
+      }
       if ((weaponDamage.damage_kind === "magical" || weaponDamage.damage_kind === "hybrid") &&
         !damageTypes.some((entry) => entry.id === weaponDamage.damage_type_id && entry.category === "magical")) {
         toast.error("Selecione o tipo de dano mágico da arma."); return false;
@@ -281,6 +284,25 @@ function ItemEditor({ item, abilities, transformations, creatures, defs }: {
                   </label>
                 </>
               )}
+            </div>
+            <div className="space-y-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
+              <label className="flex min-h-11 items-center gap-3 text-sm font-semibold text-amber-200">
+                <input type="checkbox" checked={weaponDamage.uses_ammo}
+                  onChange={event => setWeaponDamage(current => ({ ...current, uses_ammo: event.target.checked }))}
+                  className="h-5 w-5 shrink-0 accent-amber-500" />
+                <span>Esta arma utiliza munição</span>
+              </label>
+              {weaponDamage.uses_ammo && <>
+                <label className="block space-y-1 text-xs font-semibold">Munição máxima (mínimo: 0)
+                  <Input type="number" min={1} max={100000} step={1} value={weaponDamage.ammo_max}
+                    onChange={event => setWeaponDamage(current => ({ ...current, ammo_max: Number(event.target.value) }))}
+                    aria-label="Munição máxima da arma" />
+                </label>
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  Cada exemplar começa cheio, com limite de {weaponDamage.ammo_max || 0}. Cada golpe em Aplicar Dano Em consome 1 munição.
+                  Quando acabar, o mestre poderá recarregar no inventário.
+                </p>
+              </>}
             </div>
             <p className="text-xs font-medium text-gold">{weaponDamageSummary(weaponDamage)} · por golpe acertado</p>
           </section>
