@@ -52,6 +52,32 @@ function friendlyAbilityError(error: unknown): string {
 /** Visible on the character sheet and in combat; only uses persistent script
  * state and the character's individual turn, never the ability's toggle cooldown.
  */
+function isPesteCuraAbility(
+  ability: CharacterAbility,
+  catalog: Array<{ id: string; custom_script_key?: string | null }>,
+): boolean {
+  return ability.custom_script_key === "cura_da_peste" ||
+    catalog.some((entry) => entry.id === ability.ability_id && entry.custom_script_key === "cura_da_peste");
+}
+
+function PesteCuraStacks({ ability, battleId }: { ability: CharacterAbility; battleId?: string | null }) {
+  const state = ability.custom_state && typeof ability.custom_state === "object" && !Array.isArray(ability.custom_state)
+    ? ability.custom_state as Record<string, unknown> : {};
+  const sameBattle = !battleId || state.peste_battle_id === battleId;
+  const storedPercent = Number(sameBattle ? state.peste_next_heal_percent : 1);
+  const nextPercent = Number.isFinite(storedPercent) ? Math.max(1, Math.min(100, Math.floor(storedPercent))) : 1;
+  const stacks = nextPercent - 1;
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1.5 rounded-lg border border-emerald-500/35 bg-emerald-500/10 px-2.5 py-1.5 text-xs font-semibold text-emerald-300"
+      title="Cada golpe confirmado com as Luvas da Peste cura o usuário e o alvo em 1% crescente do HP máximo. Um turno sem acertar ou o fim do combate reinicia em 1%.">
+      <span>☣️ Cura da Peste</span>
+      <span className="rounded bg-background/50 px-1.5 py-0.5">Acúmulos: {stacks}/99</span>
+      <span>Próximo golpe: {nextPercent}% do HP máx. (ambos)</span>
+      <span className="font-normal text-emerald-200/75">Normal · Baixa</span>
+    </span>
+  );
+}
+
 function SedentoInvincibilityInfo({
   ability, mode, battleId, individualTurn, activeEffects,
 }: {
@@ -1265,6 +1291,9 @@ export function CharacterAbilitiesPanel({
                       {!!(ability as CharacterAbility & {source_inventory_item_id?:string|null}).source_inventory_item_id && (
                         <span className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-amber-300">{accessoryInventory?.items.find(item => item.id === (ability as CharacterAbility & {source_inventory_item_id?:string|null}).source_inventory_item_id)?.item_templates.item_type === "weapon" ? "⚔️ Arma" : "💎 Acessório"}: {accessoryInventory?.items.find(item => item.id === (ability as CharacterAbility & {source_inventory_item_id?:string|null}).source_inventory_item_id)?.item_templates.name ?? "Equipamento"}</span>
                       )}
+                      {isPesteCuraAbility(ability, abilityCatalog) && (
+                        <PesteCuraStacks ability={ability} battleId={mode === "combat" ? battleId : null} />
+                      )}
                       {ability.passive_effects.filter((effect) => effect.effect_type === "visual_tag").map((tag,index) => (
                         <span key={`tag-${index}`} className="rounded border border-violet-500/40 bg-violet-500/10 px-2 py-1 text-violet-300">🏷️ {tag.name}</span>
                       ))}
@@ -2401,6 +2430,9 @@ function AssignedAbilityEditor({ ability, defs, accessoryName }: {
             <p className="mt-1 text-xs font-semibold text-amber-300">⚔️ {accessoryName} · Personalização exclusiva desta ficha</p>
           )}
           <div className="text-xs text-muted-foreground">{ability.is_magical ? "Habilidade Mágica · " : "Não mágica · "}{ability.active_duration_remaining > 0 ? `Em duração: ${ability.active_duration_remaining} turno(s) · ` : ""}{ability.granted_by_virtue_id ? "Concedida por virtude · " : ""}{ability.can_activate ? `Cooldown atual: ${ability.cooldown_remaining}/${ability.cooldown_turns}` : "Não ativável · efeitos passivos permanentes"}</div>
+          {isPesteCuraAbility(ability, availableCatalogAbilities) && (
+            <div className="mt-2"><PesteCuraStacks ability={ability} /></div>
+          )}
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <Button
