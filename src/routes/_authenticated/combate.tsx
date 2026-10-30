@@ -1,7 +1,7 @@
 import type { Json } from "@/integrations/supabase/types";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient, type QueryClient, type QueryKey } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronUp, Crosshair, Dices, Plus, Swords, Trash2, Copy, Footprints, RotateCw, Minus, Brain, Activity, Sparkles, Users, LayoutDashboard, ScrollText, Search, Settings2, Zap, ShieldAlert, ShieldCheck, Skull, Droplets, Hourglass, Crown, Repeat2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -429,6 +429,8 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
   const [selectedTargetIds, setSelectedTargetIds] = useState<string[]>(() => battle.target_character_id ? [battle.target_character_id] : []);
   const [manaRegenSettings, setManaRegenSettings] = useState<Record<string, { mode: "percent" | "fixed"; amount: string }>>({});
   const [savingManaRegen, setSavingManaRegen] = useState<Set<string>>(() => new Set());
+  const [regeneratingManaIds, setRegeneratingManaIds] = useState<Set<string>>(() => new Set());
+  const regeneratingManaInFlight = useRef<Set<string>>(new Set());
   const [advancingTurnKeys, setAdvancingTurnKeys] = useState<Set<string>>(() => new Set());
   const [pendingContinuousTurn,setPendingContinuousTurn] = useState<{ characterId:string|null; title:string; items:ContinuousInstance[] } | null>(null);
   const [stoppingContinuous,setStoppingContinuous] = useState<string|null>(null);
@@ -941,6 +943,83 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
     }
   }
 
+  // Apply only the configured per-turn Mana regeneration; no turn counter,
+  // cooldown, DoT, duration, or other turn-bound mechanics are processed.
+  async function regenerateManaOnly(fighter: Fighter) {
+    if (!isMaster || !battle.active || !fighter.mana_regen_enabled ||
+        savingManaRegen.has(fighter.id) || advancingTurnKeys.size > 0 ||
+        regeneratingManaInFlight.current.has(fighter.id)) return;
+
+    if (blocked(fighter.id, "no_regen_mana") || blocked(fighter.id, "no_mana")) {
+      toast.error("A regeneração de Mana está bloqueada por um efeito ativo.");
+      return;
+    }
+
+    const manaAttribute = fighter.character_attributes.find((attr) => attr.attribute_key === "mana");
+    if (!manaAttribute) {
+      toast.error("Este personagem não possui o atributo Mana.");
+      return;
+    }
+
+    const configuredAmount = Number(fighter.mana_regen_amount ?? 40);
+    if (!Number.isFinite(configuredAmount) || configuredAmount < 0) {
+      toast.error("A configuração de regeneração de Mana é inválida.");
+      return;
+    }
+
+    const maxMana = Math.max(0, val(fighter, "mana"));
+    const currentMana = Number(manaAttribute.current_value ?? 0);
+    if (currentMana >= maxMana) {
+      toast.info(fighter.name + " já está com a Mana máxima.");
+      return;
+    }
+
+    // Use the saved setting and the same buff/debuff and passive modifiers as
+    // the turn regeneration. Percentage bases are rounded up before modifiers.
+    const baseRegen = fighter.mana_regen_mode === "percent"
+      ? Math.ceil(maxMana * configuredAmount / 100)
+      : Math.floor(configuredAmount);
+    const adjustedRegen = regenValue(fighter.id, "mana", baseRegen);
+    const nextMana = Math.min(maxMana, Math.max(0, currentMana + adjustedRegen));
+    if (nextMana <= currentMana) {
+      toast.info("Nenhuma Mana será regenerada com a configuração e os efeitos atuais.");
+      return;
+    }
+
+    regeneratingManaInFlight.current.add(fighter.id);
+    setRegeneratingManaIds((current) => new Set(current).add(fighter.id));
+    try {
+      // Compare the previously observed Mana to avoid overwriting a newer
+      // resource change from another master, ability, or turn advancement.
+      const { data, error } = await supabase.from("character_attributes")
+        .update({ current_value: nextMana, updated_at: new Date().toISOString() })
+        .eq("character_id", fighter.id)
+        .eq("attribute_key", "mana")
+        .eq("current_value", currentMana)
+        .select("current_value");
+      if (error) throw error;
+      if (!data?.length) {
+        toast.error("A Mana foi alterada por outra ação. Valores atualizados; tente novamente.");
+        return;
+      }
+
+      const gained = Number(data[0].current_value) - currentMana;
+      toast.success(fighter.name + " regenerou " + gained + " de Mana, sem avançar o turno.");
+      noteActivity("effect", fighter.name + " regenerou " + gained + " de Mana (sem avançar turno).");
+    } catch (error) {
+      toast.error("Não foi possível regenerar a Mana: " + (error instanceof Error ? error.message : String(error)));
+    } finally {
+      await qc.invalidateQueries({ queryKey: ["battles"] });
+      scheduleCombatRefresh(qc, ["battle-character-public-states"], ["character", fighter.id]);
+      regeneratingManaInFlight.current.delete(fighter.id);
+      setRegeneratingManaIds((current) => {
+        const next = new Set(current);
+        next.delete(fighter.id);
+        return next;
+      });
+    }
+  }
+
   const actor = fighters.find((f) => f.id === battle.current_character_id);
   const targets = fighters.filter((f) => selectedTargetIds.includes(f.id) && f.id !== actor?.id);
 
@@ -1240,6 +1319,23 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
                   </span>
                   <Droplets aria-hidden="true" className={cn("h-4 w-4 shrink-0", f.mana_regen_enabled ? "text-purple-300" : "text-muted-foreground")} />
                 </label>
+              )}
+              {isMaster && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="min-h-9 w-full border-purple-400/35 text-purple-200 hover:bg-purple-500/10"
+                  aria-label={`Regenerar apenas a Mana de ${f.name} sem avançar o turno`}
+                  title={f.mana_regen_enabled
+                    ? "Aplica somente a regeneração de Mana configurada, sem avançar turnos ou efeitos."
+                    : "Ative Regenerar Mana por Turno para usar este botão."}
+                  disabled={!battle.active || !f.mana_regen_enabled || savingManaRegen.has(f.id) ||
+                    regeneratingManaIds.has(f.id) || advancingTurnKeys.size > 0}
+                  onClick={() => void regenerateManaOnly(f)}
+                >
+                  <Droplets className="mr-2 h-4 w-4" />
+                  {regeneratingManaIds.has(f.id) ? "Regenerando Mana..." : "Regenerar Mana agora (sem avançar turno)"}
+                </Button>
               )}
               <Sheet open={isExpanded} onOpenChange={(open) => setExpandedFighterIds((current) => {
                 const next = new Set(current);
