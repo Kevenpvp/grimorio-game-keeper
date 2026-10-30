@@ -1290,6 +1290,11 @@ export function CharacterAbilitiesPanel({
                       )}
                       {ability.active_duration_remaining > 0 && <span className="rounded bg-sky-500/15 px-2 py-1 text-sky-400">Duração: {ability.active_duration_remaining} turno(s) · recarga após terminar</span>}
                       {ability.can_activate && <span className="rounded bg-muted px-2 py-1">Ativar: {ability.mana_cost} Mana</span>}
+                      {ability.can_activate && parseSustainedCosts((ability as CharacterAbility & { activation_costs?: unknown }).activation_costs).some((cost) => cost.amount > 0) && (
+                        <span className="rounded border border-rose-500/30 bg-rose-500/10 px-2 py-1 text-rose-200">
+                          Custo adicional: {sustainedCostsSummary((ability as CharacterAbility & { activation_costs?: unknown }).activation_costs)}
+                        </span>
+                      )}
                       {ability.can_activate && !ability.toggle_mode && (
                         ability.ability_id
                           ? abilityCatalog.some((catalogAbility) => catalogAbility.id === ability.ability_id && catalogAbility.attack_enabled)
@@ -2054,6 +2059,7 @@ export function CharacterAbilitiesManager({ characterId, personalOnly = false }:
       end_effects: ability.end_effects,
       continuous_rules: (ability as Ability & { continuous_rules?: unknown }).continuous_rules ?? [],
       sustain_costs: (ability as Ability & { sustain_costs?: unknown }).sustain_costs ?? [],
+      activation_costs: (ability as Ability & { activation_costs?: unknown }).activation_costs ?? [],
       once_per_battle: Boolean((ability as Ability & { once_per_battle?: boolean }).once_per_battle),
     });
     if (error) { toast.error(error.message); return; }
@@ -2194,6 +2200,7 @@ function AssignedAbilityEditor({ ability, defs, accessoryName }: {
   const [canActivate, setCanActivate] = useState(ability.can_activate);
   const [toggleMode, setToggleMode] = useState(ability.toggle_mode);
   const [sustainCosts, setSustainCosts] = useState<SustainedCost[]>(() => parseSustainedCosts((ability as CharacterAbility & {sustain_costs?:unknown}).sustain_costs));
+  const [activationCosts, setActivationCosts] = useState<SustainedCost[]>(() => parseSustainedCosts((ability as CharacterAbility & { activation_costs?: unknown }).activation_costs).filter((cost) => cost.resource !== "mana"));
   const [oncePerBattle, setOncePerBattle] = useState(Boolean((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle));
   const [isMagical, setIsMagical] = useState(ability.is_magical);
   const [selfTargetOnly, setSelfTargetOnly] = useState(ability.self_target_only);
@@ -2223,6 +2230,7 @@ function AssignedAbilityEditor({ ability, defs, accessoryName }: {
     setCanActivate(ability.can_activate);
     setToggleMode(ability.toggle_mode);
     setSustainCosts(parseSustainedCosts((ability as CharacterAbility & {sustain_costs?:unknown}).sustain_costs));
+    setActivationCosts(parseSustainedCosts((ability as CharacterAbility & { activation_costs?: unknown }).activation_costs).filter((cost) => cost.resource !== "mana"));
     setOncePerBattle(Boolean((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle));
     setIsMagical(ability.is_magical);
     setSelfTargetOnly(ability.self_target_only);
@@ -2248,6 +2256,8 @@ function AssignedAbilityEditor({ ability, defs, accessoryName }: {
     if (!name.trim()) { toast.error("Informe o nome"); return; }
     const sustainError = validateSustainedCosts(sustainCosts);
     if (canActivate && toggleMode && sustainError) { toast.error(sustainError); return; }
+    const activationError = validateSustainedCosts(activationCosts);
+    if (canActivate && activationError) { toast.error(activationError); return; }
     if (ability.toggle_active) { toast.error("Desative esta habilidade antes de alterar sua configuração."); return; }
     if (toggleMode && !canActivate) { toast.error("Habilidade sustentada precisa ser ativável."); return; }
     const catalogDefinition = availableCatalogAbilities.find((row) => row.id === ability.ability_id);
@@ -2314,6 +2324,7 @@ function AssignedAbilityEditor({ ability, defs, accessoryName }: {
       can_activate: canActivate,
       toggle_mode: canActivate && toggleMode,
       sustain_costs: canActivate && toggleMode ? sustainCosts : [],
+      activation_costs: canActivate ? activationCosts : [],
       is_magical: isMagical,
       self_target_only: canActivate && selfTargetOnly,
       is_passive: !canActivate,
@@ -2426,6 +2437,11 @@ function AssignedAbilityEditor({ ability, defs, accessoryName }: {
         {canActivate && toggleMode && (
           <div className="sm:col-span-2">
             <SustainedCostsEditor value={sustainCosts} onChange={setSustainCosts} disabled={ability.toggle_active} />
+          </div>
+        )}
+        {canActivate && (
+          <div className="sm:col-span-2">
+            <SustainedCostsEditor usage="activation" value={activationCosts} onChange={setActivationCosts} disabled={ability.toggle_active} />
           </div>
         )}
         {canActivate && (

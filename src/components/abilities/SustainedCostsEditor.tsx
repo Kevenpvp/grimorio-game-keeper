@@ -63,10 +63,12 @@ export function sustainedCostsSummary(value: unknown): string {
   }).join(" · ");
 }
 
-export function SustainedCostsEditor({ value, onChange, disabled = false }: {
+export function SustainedCostsEditor({ value, onChange, disabled = false, usage = "turn" }: {
   value: SustainedCost[];
   onChange: (next: SustainedCost[]) => void;
   disabled?: boolean;
+  /** "activation" means a one-time cost when pressing Ativar or Atacar. */
+  usage?: "turn" | "activation";
 }) {
   const update = (resource: SustainedResource, patch: Partial<SustainedCost>) =>
     onChange(value.map((item) => item.resource === resource ? { ...item, ...patch } : item));
@@ -74,15 +76,15 @@ export function SustainedCostsEditor({ value, onChange, disabled = false }: {
   return (
     <section className="space-y-3 rounded-xl border border-violet-500/35 bg-violet-500/5 p-3 sm:p-4">
       <div>
-        <h3 className="font-semibold text-gold">Consumo por turno</h3>
+        <h3 className="font-semibold text-gold">{usage === "activation" ? "Custos adicionais ao usar" : "Consumo por turno"}</h3>
         <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-          Enquanto a habilidade estiver ligada, esses recursos serão drenados a cada turno do personagem.
-          Mana e HP usam quantidade fixa ou % do máximo; Corpo e Sanidade somente porcentagem (pontos de 0 a 100).
-          Se um recurso chegar a zero, a habilidade é desligada e começa sua recarga.
+          {usage === "activation"
+            ? "Além da Mana configurada, cobra HP, Corpo ou Sanidade uma vez ao usar Ativar ou Atacar. HP aceita valor fixo ou % do HP máximo; Corpo e Sanidade usam pontos percentuais (0 a 100). Se não houver recurso suficiente, a habilidade não será usada."
+            : "Enquanto a habilidade estiver ligada, esses recursos serão drenados a cada turno do personagem. Mana e HP usam quantidade fixa ou % do máximo; Corpo e Sanidade somente porcentagem (pontos de 0 a 100). Se um recurso chegar a zero, a habilidade é desligada e começa sua recarga."}
         </p>
       </div>
       <div className="space-y-2">
-        {RESOURCE_CONFIG.map(({ resource, label, Icon, modes }) => {
+        {RESOURCE_CONFIG.filter(({ resource }) => usage === "turn" || resource !== "mana").map(({ resource, label, Icon, modes }) => {
           const selected = value.find((entry) => entry.resource === resource);
           const enabled = !!selected;
           return (
@@ -102,7 +104,7 @@ export function SustainedCostsEditor({ value, onChange, disabled = false }: {
                   <div className="space-y-1">
                     <Label className="text-xs">Tipo de consumo</Label>
                     {modes.length === 1
-                      ? <div className="flex min-h-10 items-center rounded-lg border border-border px-3 text-xs text-muted-foreground">% por turno</div>
+                      ? <div className="flex min-h-10 items-center rounded-lg border border-border px-3 text-xs text-muted-foreground">% do recurso</div>
                       : <select disabled={disabled} aria-label={`Tipo de consumo de ${label}`}
                           className="min-h-10 w-full rounded-lg border border-input bg-background px-2 text-sm"
                           value={selected.mode}
@@ -113,10 +115,10 @@ export function SustainedCostsEditor({ value, onChange, disabled = false }: {
                     }
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Quantidade por turno {selected.mode === "percent" ? "(%)" : "(pontos)"}</Label>
+                    <Label className="text-xs">{usage === "activation" ? "Custo por utilização" : "Quantidade por turno"} {selected.mode === "percent" ? "(%)" : "(pontos)"}</Label>
                     <Input
                       disabled={disabled}
-                      aria-label={`Consumo de ${label} por turno`}
+                      aria-label={`Consumo de ${label} ${usage === "activation" ? "ao usar" : "por turno"}`}
                       type="number" min={0} max={selected.mode === "percent" ? 100 : 1000000}
                       step={selected.mode === "percent" ? "0.1" : "1"}
                       value={selected.amount}
@@ -130,7 +132,9 @@ export function SustainedCostsEditor({ value, onChange, disabled = false }: {
         })}
       </div>
       <p className="text-[11px] text-muted-foreground">
-        O custo de Ativar continua separado. O consumo por turno só acontece enquanto esta habilidade sustentada estiver ligada, e não atinge o alvo.
+        {usage === "activation"
+          ? "O gasto é pago pelo personagem que usa a habilidade, nunca pelo alvo. Em ataques com múltiplos alvos, cobra apenas na primeira utilização, mesmo que todos esquivem. Os recursos são descontados junto com a Mana."
+          : "O custo de Ativar continua separado. O consumo por turno só acontece enquanto esta habilidade sustentada estiver ligada, e não atinge o alvo."}
       </p>
     </section>
   );

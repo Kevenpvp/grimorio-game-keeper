@@ -108,6 +108,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
   const [canActivate, setCanActivate] = useState(ability.can_activate);
   const [toggleMode, setToggleMode] = useState(ability.toggle_mode);
   const [sustainCosts, setSustainCosts] = useState<SustainedCost[]>(() => parseSustainedCosts((ability as Ability & { sustain_costs?: unknown }).sustain_costs));
+  const [activationCosts, setActivationCosts] = useState<SustainedCost[]>(() => parseSustainedCosts((ability as Ability & { activation_costs?: unknown }).activation_costs).filter((cost) => cost.resource !== "mana"));
   const [isMagical, setIsMagical] = useState(ability.is_magical);
   const [attackEnabled, setAttackEnabled] = useState(ability.attack_enabled);
   const [attackDamage, setAttackDamage] = useState<AbilityAttackDamageConfig>(() => parseAbilityAttackDamage(ability.attack_damage));
@@ -139,6 +140,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
     setCanActivate(ability.can_activate);
     setToggleMode(ability.toggle_mode);
     setSustainCosts(parseSustainedCosts((ability as Ability & { sustain_costs?: unknown }).sustain_costs));
+    setActivationCosts(parseSustainedCosts((ability as Ability & { activation_costs?: unknown }).activation_costs).filter((cost) => cost.resource !== "mana"));
     setIsMagical(ability.is_magical);
     setAttackEnabled(ability.attack_enabled);
     setAttackDamage(parseAbilityAttackDamage(ability.attack_damage));
@@ -164,6 +166,8 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
     if (!name.trim()) { toast.error("Informe o nome da habilidade"); return; }
     const sustainError = validateSustainedCosts(sustainCosts);
     if (canActivate && toggleMode && sustainError) { toast.error(sustainError); return; }
+    const activationError = validateSustainedCosts(activationCosts);
+    if (canActivate && activationError) { toast.error(activationError); return; }
     if (!Number.isInteger(activeDuration) || activeDuration < 0 || activeDuration > 1000) { toast.error("Duração deve ser de 0 a 1000 turnos."); return; }
     if (!Number.isFinite(mana) || mana < 0) { toast.error("O custo de Mana não pode ser negativo"); return; }
     if (separateAttackMana !== null && (!Number.isInteger(separateAttackMana) || separateAttackMana < 0 || separateAttackMana > 1000000)) {
@@ -275,6 +279,7 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
       can_activate: canActivate,
       toggle_mode: canActivate && toggleMode,
       sustain_costs: canActivate && toggleMode ? sustainCosts : [],
+      activation_costs: canActivate ? activationCosts : [],
       is_magical: isMagical,
       attack_enabled: effectiveAttackEnabled,
       attack_damage: {
@@ -378,6 +383,11 @@ function AbilityEditor({ ability, defs, isNew, onSaved }: { ability: Ability; de
         {canActivate && toggleMode && (
           <div className="sm:col-span-2 xl:col-span-3">
             <SustainedCostsEditor value={sustainCosts} onChange={setSustainCosts} />
+          </div>
+        )}
+        {canActivate && (
+          <div className="sm:col-span-2 xl:col-span-3">
+            <SustainedCostsEditor usage="activation" value={activationCosts} onChange={setActivationCosts} />
           </div>
         )}
         {canActivate && (
