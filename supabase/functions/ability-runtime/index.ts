@@ -755,7 +755,9 @@ async function applyDamageWithScripts(
     throw new Error("Dano crítico: máximo 500000 de dano bruto por golpe (1000000 após ×2).");
   }
   const call: DamageCall = { battleId, targetId, sourceId, kind, typeId, physicalTypeId, magicLevel, rawValues, critical };
-  const { data, error } = await userClient.rpc("apply_battle_damage", {
+  const { data, error } = await userClient.rpc(
+    weaponInventoryItemId ? "apply_battle_damage_with_weapon_ammo" : "apply_battle_damage", {
+
     _battle_id: battleId,
     _character_id: targetId,
     _damage_kind: kind,
@@ -765,6 +767,7 @@ async function applyDamageWithScripts(
     _source_character_id: sourceId,
     _physical_damage_type_id: physicalTypeId,
     ...(defenseIgnore !== null ? { _defense_ignore: defenseIgnore } : {}),
+    ...(weaponInventoryItemId ? { _weapon_inventory_item_id: weaponInventoryItemId } : {}),
   });
   if (error) throw error;
   const base = asObject(data) as DamageRpcResult;
