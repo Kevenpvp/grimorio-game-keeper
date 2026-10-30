@@ -884,11 +884,34 @@ async function applyDamageWithScripts(
     }
   }
 
+  // Cura da Peste is intentionally resolved AFTER every regular damage hook.
+  // A causou_dano script may rewrite the target's HP; healing before those
+  // hooks would otherwise get overwritten and silently lost.
+  let pesteHealing: ObjectValue | null = null;
+  if (weaponInventoryItemId && sourceId && battleId && sourceId !== targetId) {
+    const { data: healed, error: healError } = await service.rpc(
+      "apply_peste_gloves_on_weapon_hit", {
+        _battle_id: battleId,
+        _attacker_id: sourceId,
+        _target_id: targetId,
+        _weapon_item_id: weaponInventoryItemId,
+        _hit_count: rawValues.length,
+      },
+    );
+    if (healError) {
+      hookErrors.push(`Cura da Peste: ${errorMessage(healError).slice(0, 400)}`);
+    } else if (healed && typeof healed === "object") {
+      pesteHealing = asObject(healed);
+    }
+  }
+
   return {
     ...base,
     ...(florinBleed?.applied === true ? { florin_bleed: florinBleed } : {}),
+    ...(pesteHealing?.applied === true ? { peste_healing: pesteHealing } : {}),
     total_damage: tracker.total,
-    hp_after: tracker.hpAfter,
+    hp_after: pesteHealing?.applied === true
+      ? Number(pesteHealing.target_hp_after ?? tracker.hpAfter) : tracker.hpAfter,
     final_damage_by_hit: tracker.finalValues,
     critical_damage: critical,
     critical_before_defense: critical,
