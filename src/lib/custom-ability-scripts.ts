@@ -24,6 +24,7 @@ export const CUSTOM_ABILITY_SCRIPTS = [
   { key: "barrincar", label: "Barrincar — acumula +5% de dano físico por acerto; reseta após um turno sem acerto" },
   { key: "lagrimas_petalas", label: "Lágrimas das pétalas — controla stacks e prepara Sangramento no próximo ataque da Espada Florin" },
   { key: "explante", label: "Explante — usa MuniçãoExtra para recarregar a arma equipada que concedeu a habilidade" },
+  { key: "cura_da_peste", label: "Cura da Peste — golpes com a Luva curam ambos em 1% crescente até 100% e acumulam stacks" },
 ] as const;
 
 export type CustomAbilityScriptKey = (typeof CUSTOM_ABILITY_SCRIPTS)[number]["key"];
