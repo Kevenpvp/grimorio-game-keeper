@@ -63,27 +63,30 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
   // cards. The selected attacker, not the target, provides these quick values.
   const sourceId = sourceCharacterId || undefined;
   const { data: equippedWeapons = [], isLoading: loadingWeapons } = useQuery<Array<{
-    id: string; name: string; weapon_damage: WeaponDamageConfig;
+    id: string; name: string; weapon_damage: WeaponDamageConfig; ammo_current: number | null;
   }>>({
     queryKey: ["equipped-weapons-for-damage", sourceId],
     enabled: !!sourceId,
     refetchInterval: 8000,
     queryFn: async () => {
       const { data, error } = await (supabase as any).from("character_inventory")
-        .select("id,item_templates(name,item_type,weapon_damage)")
+        .select("id,ammo_current,item_templates(name,item_type,weapon_damage)")
         .eq("character_id", sourceId!).eq("equipped", true);
       if (error) throw error;
-      return (data ?? []).flatMap((entry: { id: string; item_templates: unknown }) => {
+      return (data ?? []).flatMap((entry: { id: string; ammo_current: number | null; item_templates: unknown }) => {
         const template = entry.item_templates as unknown as {
           name: string; item_type: string; weapon_damage: unknown;
         } | null;
         return template?.item_type === "weapon"
-          ? [{ id: entry.id, name: template.name, weapon_damage: parseWeaponDamage(template.weapon_damage) }]
+          ? [{ id: entry.id, name: template.name, weapon_damage: parseWeaponDamage(template.weapon_damage), ammo_current: entry.ammo_current }]
           : [];
       });
     },
   });
   const selectedWeapon = equippedWeapons.find((item) => item.id === weaponInventoryItemId) ?? null;
+  const plannedHits = damageMode === "repeat" ? Number(repeatCount) : damageList.split(/[,;\s]+/).filter(Boolean).length;
+  const availableAmmo = selectedWeapon?.weapon_damage.uses_ammo ? Math.max(0, selectedWeapon.ammo_current ?? 0) : null;
+  const ammoInsufficient = availableAmmo !== null && (!Number.isInteger(plannedHits) || plannedHits > availableAmmo);
   const { data: sourceSheet, isPending: sourceSheetLoading, error: sourceSheetError } = useCharacter(sourceId);
   const source = sourceSheet?.character;
   const sourceAttributes = sourceSheet?.attrs ?? [];
@@ -263,6 +266,11 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
         return;
       }
     }
+    if (selectedWeapon?.weapon_damage.uses_ammo && values.length > (selectedWeapon.ammo_current ?? 0)) {
+      toast.error("Munição insuficiente: " + (selectedWeapon.ammo_current ?? 0) + " disponível(is), " + values.length + " necessária(s).");
+      setCriticalDamage(false);
+      return;
+    }
     const adjustmentFixed = Number(extraDamageFixed);
     const adjustmentPercent = Number(extraDamagePercent);
     if (!isValidAbilityTargetAdjustment(adjustmentFixed, adjustmentPercent)) {
@@ -334,6 +342,10 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
         weapon_bonus_mode?: "fixed" | "percent";
         weapon_bonus_amount?: number;
         weapon_raw_damage_by_hit?: number[];
+        ammo_before?: number;
+        ammo_after?: number;
+        ammo_max?: number;
+        ammo_used?: number;
         florin_bleed?: { applied: boolean; damage: number; mode: string; duration: number };
         hits: number;
         physical_defense: number;
@@ -437,8 +449,11 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
       const weaponSummary = result.weapon_name
         ? ` Arma: ${result.weapon_name} · +${Number(result.weapon_bonus_amount ?? 0)}${result.weapon_bonus_mode === "percent" ? "%" : " fixos"} por golpe (antes da defesa).`
         : "";
+      const ammoSummary = result.ammo_after !== undefined
+        ? " Munição: " + result.ammo_before + " → " + result.ammo_after + "/" + result.ammo_max + " (" + result.ammo_used + " consumida(s))."
+        : "";
       toast.success(
-        `${criticalSummary}${target.name}: ${result.hits} golpe(s) de ${damageDescription}; ${defenseText}; ${result.total_damage} de dano total. HP: ${result.hp_before} → ${result.hp_after}.${manualDamageSummary}${penetrationSummary}${sourceSummary}${reductionSummary}${weaponSummary}${florinSummary}${hitSummary}`,
+        `${criticalSummary}${target.name}: ${result.hits} golpe(s) de ${damageDescription}; ${defenseText}; ${result.total_damage} de dano total. HP: ${result.hp_before} → ${result.hp_after}.${manualDamageSummary}${penetrationSummary}${sourceSummary}${reductionSummary}${weaponSummary}${ammoSummary}${florinSummary}${hitSummary}`,
         { duration: 8000 },
       );
       onDamageApplied?.({ targetId: target.id, totalDamage: result.total_damage, hpBefore: result.hp_before, hpAfter: result.hp_after });
@@ -464,6 +479,10 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
         qc.invalidateQueries({ queryKey: ["battle-effects"] }),
         qc.invalidateQueries({ queryKey: ["character-active-effects", target.id] }),
         qc.invalidateQueries({ queryKey: ["demonio-interno-hp"] }),
+        ...(effectiveSourceCharacterId ? [
+          qc.invalidateQueries({ queryKey: ["equipped-weapons-for-damage", effectiveSourceCharacterId] }),
+          qc.invalidateQueries({ queryKey: ["inventory", effectiveSourceCharacterId] }),
+        ] : []),
       ]);
       if (effects.length > 0 || dots.length > 0) {
         try { await applyConfiguredEffects(effectiveSourceCharacterId); }
@@ -514,7 +533,7 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
           }}>
           <option value="">{!sourceId ? "Selecione quem está atacando primeiro" : loadingWeapons ? "Carregando armas…" : "Sem arma — dano manual normal"}</option>
           {equippedWeapons.map((weapon) => (
-            <option key={weapon.id} value={weapon.id}>{weapon.name} · {weaponDamageSummary(weapon.weapon_damage)}</option>
+            <option key={weapon.id} value={weapon.id}>{weapon.name} · {weaponDamageSummary(weapon.weapon_damage)}{weapon.weapon_damage.uses_ammo ? " · " + (weapon.ammo_current ?? 0) + "/" + weapon.weapon_damage.ammo_max + ((weapon.ammo_current ?? 0) === 0 ? " (sem munição)" : "") : ""}</option>
           ))}
         </select>
         {selectedWeapon && (
@@ -522,6 +541,13 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
             {weaponDamageSummary(selectedWeapon.weapon_damage)}. O sistema acrescenta o bônus a cada golpe,
             aplica a categoria e os tipos cadastrados na arma e calcula defesa, mitigação e críticos normalmente.
           </p>
+        )}
+        {selectedWeapon?.weapon_damage.uses_ammo && (
+          <div role="status" className={"rounded-lg border px-3 py-2 text-sm " + (ammoInsufficient ? "border-red-500/40 bg-red-500/10 text-red-300" : "border-amber-500/25 bg-amber-500/5 text-amber-200")}>
+            <span className="font-semibold">Munição: {availableAmmo}/{selectedWeapon.weapon_damage.ammo_max}</span>
+            <span className="ml-2 text-xs"> · {plannedHits} golpe(s) previstos, 1 munição por golpe</span>
+            {ammoInsufficient && <p className="mt-1 text-xs font-semibold">Munição insuficiente. Recarregue a arma no inventário ou reduza os golpes.</p>}
+          </div>
         )}
         {sourceId && !loadingWeapons && equippedWeapons.length === 0 && (
           <p className="text-xs text-muted-foreground">Este atacante não possui armas equipadas no inventário.</p>
@@ -746,7 +772,7 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
           </div>
         </div>
       </details>
-      <Button disabled={applyingDamage || applyingEffectsOnly
+      <Button disabled={applyingDamage || applyingEffectsOnly || ammoInsufficient
         || (needsMagic && (!selectedMagicDamageTypeId || magicalDamageTypes.length === 0))
         || (needsPhysical && physicalDamageTypes.length > 0 && !selectedPhysicalDamageTypeId)
         || (loadingTypes && (needsMagic || needsPhysical))}
