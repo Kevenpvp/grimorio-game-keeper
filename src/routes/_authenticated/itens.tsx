@@ -43,6 +43,41 @@ function uniqueWeaponAbilityIds(ids: string[], definitions: Ability[], weaponId:
   return [...selected.values()];
 }
 
+/** Show one choice per original skill, preferring this weapon's exclusive copy.
+ * Keep the already selected ID in the options so chip labels never disappear.
+ */
+function weaponAbilityPickerOptions(
+  globalOptions: Option[],
+  definitions: Ability[],
+  weaponId: string,
+  selectedIds: string[],
+): Option[] {
+  const byId = new Map(definitions.map((ability) => [ability.id, ability as WeaponAbilityDefinition]));
+  const selected = new Set(selectedIds);
+  const options: Option[] = [
+    ...globalOptions,
+    ...definitions
+      .filter((ability) => (ability as WeaponAbilityDefinition).weapon_item_template_id === weaponId)
+      .map(({ id, name }) => ({ id, name })),
+  ];
+  const picked = new Map<string, Option>();
+  for (const option of options) {
+    const ability = byId.get(option.id);
+    const root = ability?.source_ability_id ?? option.id;
+    const previous = picked.get(root);
+    if (!previous) {
+      picked.set(root, option);
+      continue;
+    }
+    if ((selected.has(option.id) && !selected.has(previous.id)) ||
+      (!selected.has(previous.id) && ability?.weapon_item_template_id === weaponId &&
+       byId.get(previous.id)?.weapon_item_template_id !== weaponId)) {
+      picked.set(root, option);
+    }
+  }
+  return [...picked.values()];
+}
+
 
 export const Route = createFileRoute("/_authenticated/itens")({
   head: () => ({ meta: [
@@ -109,10 +144,7 @@ function ItemEditor({ item, abilities, abilityDefinitions, transformations, crea
   const displayedAbilityIds = itemType === "weapon"
     ? uniqueWeaponAbilityIds(abilityIds, abilityDefinitions, item.id)
     : abilityIds;
-  const selectedAbilityRoots = new Set(displayedAbilityIds.map((id) => {
-    const ability = abilityDefinitions.find((entry) => entry.id === id) as WeaponAbilityDefinition | undefined;
-    return ability?.source_ability_id ?? id;
-  }));
+
   const [transformationIds, setTransformationIds] = useState<string[]>(item.transformation_ids);
   const [summonIds, setSummonIds] = useState<string[]>(item.summon_character_ids);
   const [busy, setBusy] = useState(false);
@@ -378,15 +410,11 @@ function ItemEditor({ item, abilities, abilityDefinitions, transformations, crea
             description="Efeitos passivos do sistema de habilidades. São removidos quando o acessório é desequipado."
             permanentNote="Ativo apenas enquanto este item estiver equipado." />
         </div>
-        <GrantedResources title="Habilidades concedidas" options={[
-          ...abilities.filter((entry) => itemType !== "weapon" ||
-            !selectedAbilityRoots.has(entry.id) || displayedAbilityIds.includes(entry.id)),
-          ...(itemType === "weapon"
-            ? abilityDefinitions.filter((entry) =>
-              (entry as WeaponAbilityDefinition).weapon_item_template_id === item.id
-            ).map(({ id, name }) => ({ id, name }))
-            : []),
-        ]} values={displayedAbilityIds}
+        <GrantedResources title="Habilidades concedidas"
+          options={itemType === "weapon"
+            ? weaponAbilityPickerOptions(abilities, abilityDefinitions, item.id, displayedAbilityIds)
+            : abilities}
+          values={displayedAbilityIds}
           onChange={(next) => setAbilityIds(itemType === "weapon"
             ? uniqueWeaponAbilityIds(next, abilityDefinitions, item.id) : next)} />
         {itemType === "weapon" && (
