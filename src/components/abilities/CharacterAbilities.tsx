@@ -1081,6 +1081,8 @@ export function CharacterAbilitiesPanel({
         qc.invalidateQueries({ queryKey: ["character-active-effects", characterId] }),
         qc.invalidateQueries({ queryKey: ["battle-effects"] }),
         qc.invalidateQueries({ queryKey: ["character-abilities", characterId] }),
+        qc.invalidateQueries({ queryKey: ["inventory", characterId] }),
+        qc.invalidateQueries({ queryKey: ["equipped-weapons-for-damage", characterId] }),
         qc.invalidateQueries({ queryKey: ["battles"] }),
       ]);
     });
