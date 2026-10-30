@@ -60,21 +60,79 @@ function isPesteCuraAbility(
     catalog.some((entry) => entry.id === ability.ability_id && entry.custom_script_key === "cura_da_peste");
 }
 
-function PesteCuraStacks({ ability, battleId }: { ability: CharacterAbility; battleId?: string | null }) {
+function PesteCuraStacks({ ability, battleId, master = false }: {
+  ability: CharacterAbility;
+  battleId?: string | null;
+  master?: boolean;
+}) {
+  const qc = useQueryClient();
   const state = ability.custom_state && typeof ability.custom_state === "object" && !Array.isArray(ability.custom_state)
     ? ability.custom_state as Record<string, unknown> : {};
   const sameBattle = !battleId || state.peste_battle_id === battleId;
   const storedPercent = Number(sameBattle ? state.peste_next_heal_percent : 1);
   const nextPercent = Number.isFinite(storedPercent) ? Math.max(1, Math.min(100, Math.floor(storedPercent))) : 1;
   const stacks = nextPercent - 1;
+  const [editedStacks, setEditedStacks] = useState(String(stacks));
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setEditedStacks(String(stacks));
+  }, [ability.id, stacks, battleId]);
+
+  async function changeStacks(next: number) {
+    if (!master || !battleId || saving || !Number.isInteger(next) || next < 0 || next > 99) return;
+    setSaving(true);
+    try {
+      const { error } = await (supabase as any).rpc("set_peste_healing_stacks", {
+        _character_ability_id: ability.id,
+        _battle_id: battleId,
+        _stacks: next,
+      });
+      if (error) throw error;
+      setEditedStacks(String(next));
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["character-abilities", ability.character_id] }),
+        qc.invalidateQueries({ queryKey: ["character-abilities-battle"] }),
+      ]);
+      toast.success(`Cura da Peste: ${next}/99 acúmulos · próximo golpe cura ${next + 1}%.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível ajustar os acúmulos.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const parsedInput = editedStacks.trim() === "" ? NaN : Number(editedStacks);
+  const validInput = Number.isInteger(parsedInput) && parsedInput >= 0 && parsedInput <= 99;
+
   return (
-    <span className="inline-flex flex-wrap items-center gap-1.5 rounded-lg border border-emerald-500/35 bg-emerald-500/10 px-2.5 py-1.5 text-xs font-semibold text-emerald-300"
-      title="Cada golpe confirmado com as Luvas da Peste cura o usuário e o alvo em 1% crescente do HP máximo. Um turno sem acertar ou o fim do combate reinicia em 1%.">
-      <span>☣️ Cura da Peste</span>
-      <span className="rounded bg-background/50 px-1.5 py-0.5">Acúmulos: {stacks}/99</span>
-      <span>Próximo golpe: {nextPercent}% do HP máx. (ambos)</span>
-      <span className="font-normal text-emerald-200/75">Normal · Baixa</span>
-    </span>
+    <div className="w-full min-w-0 space-y-2 rounded-lg border border-emerald-500/35 bg-emerald-500/10 px-2.5 py-2 text-xs text-emerald-300"
+      title="Cada golpe com as Luvas da Peste cura usuário e alvo em 1% crescente do HP máximo. Ataques sem as luvas, turnos sem acerto ou o fim do combate reiniciam a cura.">
+      <div className="flex flex-wrap items-center gap-1.5 font-semibold">
+        <span>☣️ Cura da Peste</span>
+        <span className="rounded bg-background/50 px-1.5 py-0.5">Acúmulos: {stacks}/99</span>
+        <span>Próximo golpe: {nextPercent}% do HP máx. (ambos)</span>
+        <span className="font-normal text-emerald-200/75">Normal · Baixa</span>
+      </div>
+      {master && battleId && (
+        <div className="flex flex-wrap items-center gap-2 border-t border-emerald-500/20 pt-2">
+          <span className="shrink-0 font-medium">Mestre · corrigir acúmulos:</span>
+          <Button type="button" size="sm" variant="outline" className="h-9 min-w-9 border-emerald-500/35"
+            disabled={saving || stacks === 0} aria-label="Diminuir um acúmulo da Cura da Peste"
+            onClick={() => void changeStacks(Math.max(0, stacks - 1))}>−1</Button>
+          <Input type="number" inputMode="numeric" min={0} max={99} step={1}
+            aria-label="Quantidade de acúmulos da Cura da Peste (0 a 99)"
+            className="h-9 w-20 bg-background/60 text-center text-foreground"
+            disabled={saving} value={editedStacks}
+            onChange={(event) => setEditedStacks(event.target.value)} />
+          <Button type="button" size="sm" variant="outline" className="h-9 min-w-9 border-emerald-500/35"
+            disabled={saving || stacks === 99} aria-label="Aumentar um acúmulo da Cura da Peste"
+            onClick={() => void changeStacks(Math.min(99, stacks + 1))}>+1</Button>
+          <Button type="button" size="sm" className="h-9" disabled={saving || !validInput || parsedInput === stacks}
+            onClick={() => void changeStacks(parsedInput)}>{saving ? "Salvando..." : "Aplicar"}</Button>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -1292,7 +1350,7 @@ export function CharacterAbilitiesPanel({
                         <span className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-amber-300">{accessoryInventory?.items.find(item => item.id === (ability as CharacterAbility & {source_inventory_item_id?:string|null}).source_inventory_item_id)?.item_templates.item_type === "weapon" ? "⚔️ Arma" : "💎 Acessório"}: {accessoryInventory?.items.find(item => item.id === (ability as CharacterAbility & {source_inventory_item_id?:string|null}).source_inventory_item_id)?.item_templates.name ?? "Equipamento"}</span>
                       )}
                       {isPesteCuraAbility(ability, abilityCatalog) && (
-                        <PesteCuraStacks ability={ability} battleId={mode === "combat" ? battleId : null} />
+                        <PesteCuraStacks ability={ability} battleId={mode === "combat" ? battleId : null} master={mode === "combat" && !!me?.isMaster} />
                       )}
                       {ability.passive_effects.filter((effect) => effect.effect_type === "visual_tag").map((tag,index) => (
                         <span key={`tag-${index}`} className="rounded border border-violet-500/40 bg-violet-500/10 px-2 py-1 text-violet-300">🏷️ {tag.name}</span>
