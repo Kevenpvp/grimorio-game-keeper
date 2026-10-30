@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
-import { useAbilities, type AbilityEffectDefinition } from "@/lib/abilities";
+import { useAbilities, type Ability, type AbilityEffectDefinition } from "@/lib/abilities";
+import { AbilityEditor } from "@/routes/_authenticated/habilidades";
 import { accessoryPhoto, itemGrantSummary, type ItemTemplate, type WeaponDamageConfig, weaponDamageSummary, useItemTemplates } from "@/lib/inventory";
 import { useDefs, useMe } from "@/lib/sheets";
 import { supabase } from "@/integrations/supabase/client";
@@ -60,8 +61,8 @@ function GrantedResources({ title, options, values, onChange }: {
   );
 }
 
-function ItemEditor({ item, abilities, transformations, creatures, defs }: {
-  item: ItemTemplate; abilities: Option[]; transformations: Option[]; creatures: Option[]; defs: NonNullable<ReturnType<typeof useDefs>["data"]>;
+function ItemEditor({ item, abilities, abilityDefinitions, transformations, creatures, defs }: {
+  item: ItemTemplate; abilities: Option[]; abilityDefinitions: Ability[]; transformations: Option[]; creatures: Option[]; defs: NonNullable<ReturnType<typeof useDefs>["data"]>;
 }) {
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -84,6 +85,7 @@ function ItemEditor({ item, abilities, transformations, creatures, defs }: {
   const [busy, setBusy] = useState(false);
   const [photoPath, setPhotoPath] = useState(item.image_path);
   const [open, setOpen] = useState(false);
+  const [editingWeaponAbilityId, setEditingWeaponAbilityId] = useState<string | null>(null);
 
   useEffect(() => {
     setName(item.name); setDescription(item.description); setEffects(item.effects);
@@ -124,14 +126,43 @@ function ItemEditor({ item, abilities, transformations, creatures, defs }: {
     const { error } = await db.from("item_templates").update({
       name: name.trim(), description, image_path: path, effects,
       item_type: itemType, weapon_damage: weaponDamage,
-      ability_ids: abilityIds, transformation_ids: transformationIds,
+      ...(itemType === "weapon" ? {} : { ability_ids: abilityIds }), transformation_ids: transformationIds,
       summon_character_ids: summonIds, updated_at: new Date().toISOString(),
     }).eq("id", item.id);
     if (error) { toast.error(error.message); return false; }
+    if (itemType === "weapon") {
+      const { data: ids, error: abilitiesError } = await db.rpc("inventory_weapon_set_abilities", {
+        _item_template_id: item.id, _requested_ids: abilityIds,
+      });
+      if (abilitiesError) {
+        toast.error("Item salvo, mas não foi possível vincular as habilidades da arma: " + abilitiesError.message);
+        await refresh();
+        return false;
+      }
+      if (Array.isArray(ids)) setAbilityIds(ids);
+      await qc.invalidateQueries({ queryKey: ["abilities"] });
+    }
     setPhotoPath(path);
     toast.success((itemType === "weapon" ? "Arma" : "Acessório") + " salvo(a). Benefícios dos personagens equipados sincronizados.");
     await refresh();
     return true;
+  }
+
+  async function createWeaponAbility() {
+    setBusy(true);
+    try {
+      const { data: abilityId, error } = await db.rpc("inventory_weapon_create_ability", { _item_template_id: item.id });
+      if (error) throw error;
+      setAbilityIds((current) => current.includes(abilityId) ? current : [...current, abilityId]);
+      setEditingWeaponAbilityId(abilityId);
+      toast.success("Habilidade exclusiva criada. Configure e salve os detalhes abaixo.");
+      await qc.invalidateQueries({ queryKey: ["abilities"] });
+      await refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível criar a habilidade.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function upload(file: File) {
@@ -314,7 +345,43 @@ function ItemEditor({ item, abilities, transformations, creatures, defs }: {
             description="Efeitos passivos do sistema de habilidades. São removidos quando o acessório é desequipado."
             permanentNote="Ativo apenas enquanto este item estiver equipado." />
         </div>
-        <GrantedResources title="Habilidades concedidas" options={abilities} values={abilityIds} onChange={setAbilityIds} />
+        <GrantedResources title="Habilidades concedidas" options={[
+          ...abilities,
+          ...abilityDefinitions.filter((entry) => (entry as Ability & { weapon_item_template_id?: string | null }).weapon_item_template_id === item.id)
+            .map(({ id, name }) => ({ id, name })),
+        ]} values={abilityIds} onChange={setAbilityIds} />
+        {itemType === "weapon" && (
+          <section className="space-y-3 rounded-xl border border-violet-500/30 bg-violet-500/5 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 className="text-sm font-semibold text-gold">Habilidades exclusivas desta arma</h3>
+                <p className="mt-1 text-xs text-muted-foreground">Crie habilidades próprias com custos, efeitos, atributos, ataques e scripts, sem cadastrá-las na lista geral.</p>
+              </div>
+              <Button type="button" size="sm" disabled={busy} onClick={() => void createWeaponAbility()}>
+                <Plus className="mr-1.5 h-4 w-4" /> Nova habilidade da arma
+              </Button>
+            </div>
+            {abilityDefinitions.filter((entry) =>
+              abilityIds.includes(entry.id) && (entry as Ability & { weapon_item_template_id?: string | null }).weapon_item_template_id === item.id
+            ).map((ability) => (
+              <div key={ability.id} className="min-w-0 space-y-2">
+                <button type="button" className="flex min-h-11 w-full items-center justify-between gap-2 rounded-lg border border-violet-500/25 bg-background/50 px-3 text-left text-sm"
+                  onClick={() => setEditingWeaponAbilityId((id) => id === ability.id ? null : ability.id)}>
+                  <span className="min-w-0 flex-1 truncate font-semibold">{ability.name}</span>
+                  <span className="shrink-0 text-xs text-gold">{editingWeaponAbilityId === ability.id ? "Recolher" : "Editar"}</span>
+                </button>
+                {editingWeaponAbilityId === ability.id && (
+                  <AbilityEditor ability={ability} defs={defs} isNew={false} hideDelete
+                    onSaved={() => { void refresh(); }} />
+                )}
+              </div>
+            ))}
+            <p className="text-[11px] text-muted-foreground">
+              Para desvincular uma habilidade, remova-a na seção Habilidades concedidas e salve a arma.
+              As cópias de habilidades globais compartilhadas ficam independentes entre armas.
+            </p>
+          </section>
+        )}
         <GrantedResources title="Transformações concedidas" options={transformations} values={transformationIds} onChange={setTransformationIds} />
         <GrantedResources title="Invocações concedidas" options={creatures} values={summonIds} onChange={setSummonIds} />
         <div className="flex flex-col gap-2 sm:flex-row">
@@ -405,7 +472,8 @@ function ItemCatalogPage() {
               <div className="grid items-start gap-3 xl:grid-cols-2">
                 {categoryItems.map(item => (
                   <ItemEditor key={item.id} item={item}
-                    abilities={abilityCatalog.map(({id,name}) => ({id,name}))}
+                    abilities={abilityCatalog.filter((ability) => !(ability as Ability & { weapon_item_template_id?: string | null }).weapon_item_template_id).map(({id,name}) => ({id,name}))}
+                    abilityDefinitions={abilityCatalog}
                     transformations={transforms} creatures={creatures} defs={defs} />
                 ))}
               </div>
