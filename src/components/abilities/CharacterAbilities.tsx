@@ -1263,7 +1263,7 @@ export function CharacterAbilitiesPanel({
                         <span className="rounded bg-gold/10 px-2 py-1 text-gold">Concedida por virtude</span>
                       )}
                       {!!(ability as CharacterAbility & {source_inventory_item_id?:string|null}).source_inventory_item_id && (
-                        <span className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-amber-300">💎 Acessório: {accessoryInventory?.items.find(item => item.id === (ability as CharacterAbility & {source_inventory_item_id?:string|null}).source_inventory_item_id)?.item_templates.name ?? "Equipamento"}</span>
+                        <span className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-amber-300">{accessoryInventory?.items.find(item => item.id === (ability as CharacterAbility & {source_inventory_item_id?:string|null}).source_inventory_item_id)?.item_templates.item_type === "weapon" ? "⚔️ Arma" : "💎 Acessório"}: {accessoryInventory?.items.find(item => item.id === (ability as CharacterAbility & {source_inventory_item_id?:string|null}).source_inventory_item_id)?.item_templates.name ?? "Equipamento"}</span>
                       )}
                       {ability.passive_effects.filter((effect) => effect.effect_type === "visual_tag").map((tag,index) => (
                         <span key={`tag-${index}`} className="rounded border border-violet-500/40 bg-violet-500/10 px-2 py-1 text-violet-300">🏷️ {tag.name}</span>
@@ -2040,7 +2040,8 @@ export function CharacterAbilitiesManager({ characterId, personalOnly = false }:
         !(ability as CharacterAbility & { source_inventory_item_id?: string | null }).source_inventory_item_id
         || ability.ability_id !== null
       );
-  const available = personalOnly ? [] : allAbilities.filter((ability) => !assignedIds.has(ability.id));
+  const available = personalOnly ? [] : allAbilities.filter((ability) =>
+    !(ability as Ability & { weapon_item_template_id?: string | null }).weapon_item_template_id && !assignedIds.has(ability.id));
 
   async function give(ability: Ability) {
     const { error } = await db.from("character_abilities").insert({
@@ -2177,8 +2178,10 @@ export function CharacterAbilitiesManager({ characterId, personalOnly = false }:
           <div className="space-y-3">
             {managedAssigned.map((ability) => {
               const sourceId = (ability as CharacterAbility & { source_inventory_item_id?: string | null }).source_inventory_item_id;
+              const originItem = sourceId ? inventory?.items.find(item => item.id === sourceId) : null;
               const accessoryName = sourceId
-                ? inventory?.items.find(item => item.id === sourceId)?.item_templates.name ?? "acessório equipado"
+                ? (originItem?.item_templates.item_type === "weapon" ? "Arma: " : "Acessório: ") +
+                  (originItem?.item_templates.name ?? "Equipamento")
                 : null;
               return <AssignedAbilityEditor key={ability.id} ability={ability} defs={defs!} accessoryName={accessoryName} />;
             })}
@@ -2379,7 +2382,7 @@ function AssignedAbilityEditor({ ability, defs, accessoryName }: {
   }
 
   async function remove() {
-    if (accessoryName) { toast.error("Para remover esta habilidade, desequipe o acessório."); return; }
+    if (accessoryName) { toast.error("Para remover esta habilidade, desequipe o equipamento correspondente."); return; }
     if (!confirm(`Remover "${ability.name}" desta ficha?`)) return;
     const { error } = await supabase.from("character_abilities").delete().eq("id", ability.id);
     if (error) { toast.error(error.message); return; }
@@ -2395,7 +2398,7 @@ function AssignedAbilityEditor({ ability, defs, accessoryName }: {
         <div className="min-w-0">
           <div className="font-semibold">{ability.name}</div>
           {accessoryName && (
-            <p className="mt-1 text-xs font-semibold text-amber-300">💎 Acessório: {accessoryName} · Personalização exclusiva desta ficha</p>
+            <p className="mt-1 text-xs font-semibold text-amber-300">⚔️ {accessoryName} · Personalização exclusiva desta ficha</p>
           )}
           <div className="text-xs text-muted-foreground">{ability.is_magical ? "Habilidade Mágica · " : "Não mágica · "}{ability.active_duration_remaining > 0 ? `Em duração: ${ability.active_duration_remaining} turno(s) · ` : ""}{ability.granted_by_virtue_id ? "Concedida por virtude · " : ""}{ability.can_activate ? `Cooldown atual: ${ability.cooldown_remaining}/${ability.cooldown_turns}` : "Não ativável · efeitos passivos permanentes"}</div>
         </div>
