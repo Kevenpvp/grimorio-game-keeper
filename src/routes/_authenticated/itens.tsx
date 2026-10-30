@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Gem, ImagePlus, Plus, Save, Search, Trash2, Upload, X } from "lucide-react";
+import { Gem, ImagePlus, Plus, Save, Search, Swords, Trash2, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { AbilityEffectsEditor } from "@/components/abilities/AbilityEffectsEditor";
 import { useAbilities, type AbilityEffectDefinition } from "@/lib/abilities";
-import { accessoryPhoto, itemGrantSummary, type ItemTemplate, useItemTemplates } from "@/lib/inventory";
+import { accessoryPhoto, itemGrantSummary, type ItemTemplate, type WeaponDamageConfig, weaponDamageSummary, useItemTemplates } from "@/lib/inventory";
 import { useDefs, useMe } from "@/lib/sheets";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -66,6 +66,16 @@ function ItemEditor({ item, abilities, transformations, creatures, defs }: {
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState(item.name);
+  const [weaponDamage, setWeaponDamage] = useState<WeaponDamageConfig>(item.weapon_damage);
+  const [itemType, setItemType] = useState<"accessory" | "weapon">(item.item_type);
+  const { data: damageTypes = [] } = useQuery<Array<{id:string;name:string;category:"physical"|"magical"}>>({
+    queryKey: ["damage-types"],
+    queryFn: async () => {
+      const { data, error } = await db.from("damage_types").select("id,name,category").order("name");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
   const [description, setDescription] = useState(item.description);
   const [effects, setEffects] = useState<AbilityEffectDefinition[]>(item.effects);
   const [abilityIds, setAbilityIds] = useState<string[]>(item.ability_ids);
@@ -77,6 +87,7 @@ function ItemEditor({ item, abilities, transformations, creatures, defs }: {
 
   useEffect(() => {
     setName(item.name); setDescription(item.description); setEffects(item.effects);
+    setItemType(item.item_type); setWeaponDamage(item.weapon_damage);
     setAbilityIds(item.ability_ids); setTransformationIds(item.transformation_ids);
     setSummonIds(item.summon_character_ids); setPhotoPath(item.image_path);
   }, [item.id, item.updated_at]);
@@ -95,15 +106,27 @@ function ItemEditor({ item, abilities, transformations, creatures, defs }: {
   }
 
   async function save(path = photoPath) {
-    if (!name.trim()) { toast.error("Informe o nome do acessório"); return false; }
+    if (!name.trim()) { toast.error("Informe o nome do item"); return false; }
+    if (itemType === "weapon") {
+      if ((weaponDamage.damage_kind === "magical" || weaponDamage.damage_kind === "hybrid") &&
+        !damageTypes.some((entry) => entry.id === weaponDamage.damage_type_id && entry.category === "magical")) {
+        toast.error("Selecione o tipo de dano mágico da arma."); return false;
+      }
+      if ((weaponDamage.damage_kind === "physical" || weaponDamage.damage_kind === "hybrid") &&
+        weaponDamage.physical_damage_type_id &&
+        !damageTypes.some((entry) => entry.id === weaponDamage.physical_damage_type_id && entry.category === "physical")) {
+        toast.error("Selecione um tipo físico válido para a arma."); return false;
+      }
+    }
     const { error } = await db.from("item_templates").update({
       name: name.trim(), description, image_path: path, effects,
+      item_type: itemType, weapon_damage: weaponDamage,
       ability_ids: abilityIds, transformation_ids: transformationIds,
       summon_character_ids: summonIds, updated_at: new Date().toISOString(),
     }).eq("id", item.id);
     if (error) { toast.error(error.message); return false; }
     setPhotoPath(path);
-    toast.success("Acessório salvo. Benefícios dos personagens equipados sincronizados.");
+    toast.success((itemType === "weapon" ? "Arma" : "Acessório") + " salvo(a). Benefícios dos personagens equipados sincronizados.");
     await refresh();
     return true;
   }
@@ -128,12 +151,12 @@ function ItemEditor({ item, abilities, transformations, creatures, defs }: {
   }
 
   async function remove() {
-    if (!window.confirm("Excluir este acessório do catálogo? Não é possível excluir itens que ainda estão em algum inventário.")) return;
+    if (!window.confirm("Excluir este item do catálogo? Não é possível excluir itens que ainda estão em algum inventário.")) return;
     setBusy(true);
     const { error } = await db.from("item_templates").delete().eq("id", item.id);
     setBusy(false);
     if (error) toast.error(error.message);
-    else { toast.success("Acessório excluído"); await refresh(); }
+    else { toast.success("Item excluído"); await refresh(); }
   }
 
   const path = accessoryPhoto(photoPath);
@@ -145,7 +168,7 @@ function ItemEditor({ item, abilities, transformations, creatures, defs }: {
         </div>
         <div className="min-w-0 flex-1 space-y-1">
           <h2 className="truncate font-display text-lg font-bold text-gold">{item.name}</h2>
-          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Acessório</p>
+          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">{item.item_type === "weapon" ? "Arma" : "Acessório"}</p>
           <p className="line-clamp-2 text-xs text-muted-foreground">{itemGrantSummary(item)}</p>
           <Button size="sm" variant="outline" className="mt-1 min-h-10" onClick={() => setOpen(v => !v)}>
             {open ? "Recolher configuração" : "Editar e ver detalhes"}
@@ -169,16 +192,105 @@ function ItemEditor({ item, abilities, transformations, creatures, defs }: {
               <Input maxLength={140} value={name} onChange={event => setName(event.target.value)} />
             </label>
             <label className="block space-y-1 text-sm">Descrição
-              <Textarea rows={4} value={description} onChange={event => setDescription(event.target.value)} placeholder="Aparência, história e funcionamento do acessório…" />
+              <Textarea rows={4} value={description} onChange={event => setDescription(event.target.value)} placeholder="Aparência, história e funcionamento do item…" />
+            </label>
+            <label className="block space-y-1 text-sm">Categoria
+              <select aria-label="Categoria do item" className="min-h-11 w-full rounded-md border border-input bg-background px-3 text-sm"
+                value={itemType} onChange={event => setItemType(event.target.value === "weapon" ? "weapon" : "accessory")}>
+                <option value="accessory">Acessório</option>
+                <option value="weapon">Arma</option>
+              </select>
             </label>
           </div>
         </div>
+        {itemType === "weapon" && (
+          <section className="space-y-3 rounded-xl border border-red-500/30 bg-red-500/5 p-3 sm:p-4">
+            <h3 className="flex items-center gap-2 text-base font-semibold text-gold"><Swords className="h-4 w-4" /> Dano da arma</h3>
+            <p className="text-xs text-muted-foreground">
+              Ao usar esta arma equipada em Aplicar dano em, o sistema usa a categoria configurada
+              e acrescenta o bônus a cada golpe antes de defesa e mitigação. Pode combinar com outros efeitos e habilidades.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="space-y-1 text-xs font-medium">Categoria de dano
+                <select aria-label="Categoria de dano da arma" className="min-h-11 w-full rounded-md border border-input bg-background px-2 text-sm"
+                  value={weaponDamage.damage_kind}
+                  onChange={event => setWeaponDamage(current => ({
+                    ...current, damage_kind: event.target.value as WeaponDamageConfig["damage_kind"],
+                  }))}>
+                  <option value="physical">Físico</option>
+                  <option value="magical">Mágico</option>
+                  <option value="hybrid">Híbrido (físico + mágico)</option>
+                  <option value="true">Verdadeiro</option>
+                </select>
+              </label>
+              <label className="space-y-1 text-xs font-medium">Bônus de dano
+                <select aria-label="Modo de bônus da arma" className="min-h-11 w-full rounded-md border border-input bg-background px-2 text-sm"
+                  value={weaponDamage.bonus_mode}
+                  onChange={event => setWeaponDamage(current => ({
+                    ...current, bonus_mode: event.target.value === "percent" ? "percent" : "fixed",
+                    bonus_amount: 0,
+                  }))}>
+                  <option value="fixed">Valor fixo extra por golpe</option>
+                  <option value="percent">% extra do dano bruto por golpe</option>
+                </select>
+              </label>
+              <label className="space-y-1 text-xs font-medium">{weaponDamage.bonus_mode === "percent" ? "Dano extra (%)" : "Dano fixo extra"}
+                <Input type="number" min={0} max={weaponDamage.bonus_mode === "percent" ? 1000 : 1000000}
+                  step={weaponDamage.bonus_mode === "percent" ? "0.1" : "1"}
+                  value={weaponDamage.bonus_amount}
+                  onChange={event => setWeaponDamage(current => {
+                    const raw = Number(event.target.value);
+                    const amount = Number.isFinite(raw) ? Math.max(0, Math.min(raw, current.bonus_mode === "percent" ? 1000 : 1000000)) : 0;
+                    return { ...current, bonus_amount: current.bonus_mode === "fixed" ? Math.floor(amount) : amount };
+                  })} />
+              </label>
+              {(weaponDamage.damage_kind === "physical" || weaponDamage.damage_kind === "hybrid") && (
+                <label className="space-y-1 text-xs font-medium">Tipo de dano físico
+                  <select className="min-h-11 w-full rounded-md border border-input bg-background px-2 text-sm"
+                    value={weaponDamage.physical_damage_type_id ?? ""}
+                    onChange={event => setWeaponDamage(current => ({...current, physical_damage_type_id: event.target.value || null}))}>
+                    <option value="">Sem subtipo físico</option>
+                    {damageTypes.filter(type => type.category === "physical").map(type => (
+                      <option key={type.id} value={type.id}>{type.name}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {(weaponDamage.damage_kind === "magical" || weaponDamage.damage_kind === "hybrid") && (
+                <>
+                  <label className="space-y-1 text-xs font-medium">Tipo de dano mágico
+                    <select className="min-h-11 w-full rounded-md border border-input bg-background px-2 text-sm"
+                      value={weaponDamage.damage_type_id ?? ""}
+                      onChange={event => setWeaponDamage(current => ({...current, damage_type_id: event.target.value || null}))}>
+                      <option value="">Selecionar tipo mágico</option>
+                      {damageTypes.filter(type => type.category === "magical").map(type => (
+                        <option key={type.id} value={type.id}>{type.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="space-y-1 text-xs font-medium">Grau da magia
+                    <select className="min-h-11 w-full rounded-md border border-input bg-background px-2 text-sm"
+                      value={weaponDamage.magic_level}
+                      onChange={event => setWeaponDamage(current => ({
+                        ...current, magic_level: event.target.value as WeaponDamageConfig["magic_level"],
+                      }))}>
+                      <option value="baixa">Baixa</option>
+                      <option value="media">Média</option>
+                      <option value="alta">Alta</option>
+                    </select>
+                  </label>
+                </>
+              )}
+            </div>
+            <p className="text-xs font-medium text-gold">{weaponDamageSummary(weaponDamage)} · por golpe acertado</p>
+          </section>
+        )}
         <div className="rounded-xl border border-gold/20 p-3">
           <AbilityEffectsEditor effects={effects} onChange={setEffects} defs={defs}
             permanent isPassive hideTargeting allowHealing={false} allowPeriodicHealing={false}
             title="Efeitos enquanto equipado"
             description="Efeitos passivos do sistema de habilidades. São removidos quando o acessório é desequipado."
-            permanentNote="Ativo apenas enquanto este acessório estiver equipado." />
+            permanentNote="Ativo apenas enquanto este item estiver equipado." />
         </div>
         <GrantedResources title="Habilidades concedidas" options={abilities} values={abilityIds} onChange={setAbilityIds} />
         <GrantedResources title="Transformações concedidas" options={transformations} values={transformationIds} onChange={setTransformationIds} />
@@ -186,7 +298,7 @@ function ItemEditor({ item, abilities, transformations, creatures, defs }: {
         <div className="flex flex-col gap-2 sm:flex-row">
           <Button disabled={busy} className="min-h-11 flex-1" onClick={() => {
             setBusy(true); void save().finally(() => setBusy(false));
-          }}><Save className="mr-1.5 h-4 w-4" /> {busy ? "Salvando…" : "Salvar acessório"}</Button>
+          }}><Save className="mr-1.5 h-4 w-4" /> {busy ? "Salvando…" : "Salvar item"}</Button>
           <Button disabled={busy} variant="destructive" onClick={() => void remove()}><Trash2 className="mr-1.5 h-4 w-4" /> Excluir</Button>
         </div>
       </div>}
@@ -222,12 +334,14 @@ function ItemCatalogPage() {
   if (!me) return <p className="text-sm text-muted-foreground">Carregando…</p>;
   if (!me.isMaster) return <p className="panel p-5 text-muted-foreground">Somente o mestre pode cadastrar itens.</p>;
 
-  async function create() {
+  async function create(type: "accessory" | "weapon") {
     setCreating(true);
-    const { error } = await db.from("item_templates").insert({ name: "Novo acessório", item_type: "accessory" });
+    const { error } = await db.from("item_templates").insert({
+      name: type === "weapon" ? "Nova arma" : "Novo acessório", item_type: type,
+    });
     setCreating(false);
     if (error) { toast.error(error.message); return; }
-    toast.success("Acessório criado. Abra-o para configurar.");
+    toast.success((type === "weapon" ? "Arma criada" : "Acessório criado") + ". Abra para configurar.");
     await qc.invalidateQueries({ queryKey: ["inventory-templates"] });
   }
 
@@ -236,24 +350,53 @@ function ItemCatalogPage() {
       <header className="grimorio-section-header flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 font-display text-2xl font-bold text-gold sm:text-3xl"><Gem className="h-6 w-6" /> Itens e acessórios</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Cadastre acessórios uma vez e conceda cópias a qualquer inventário. Apenas o mestre edita o catálogo.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Cadastre acessórios e armas com habilidades, efeitos, invocações e transformações. Apenas o mestre edita o catálogo.</p>
         </div>
-        <Button disabled={creating} onClick={() => void create()} className="min-h-11"><Plus className="mr-1.5 h-4 w-4" /> Novo acessório</Button>
+        <div className="flex flex-wrap gap-2">
+          <Button disabled={creating} variant="outline" onClick={() => void create("accessory")} className="min-h-11">
+            <Plus className="mr-1.5 h-4 w-4" /> Novo acessório
+          </Button>
+          <Button disabled={creating} onClick={() => void create("weapon")} className="min-h-11">
+            <Swords className="mr-1.5 h-4 w-4" /> Nova arma
+          </Button>
+        </div>
       </header>
       <div className="panel flex items-center gap-2 p-3">
         <Search className="h-4 w-4 text-muted-foreground" />
-        <Input aria-label="Buscar acessório" value={search} onChange={event => setSearch(event.target.value)} placeholder="Pesquisar itens…" className="border-0" />
+        <Input aria-label="Buscar item ou arma" value={search} onChange={event => setSearch(event.target.value)} placeholder="Pesquisar itens…" className="border-0" />
         <span className="shrink-0 text-xs text-muted-foreground">{items.length} item(ns)</span>
       </div>
       {error && <p role="alert" className="text-sm text-red-300">{error.message}</p>}
       {isLoading && <p className="text-sm text-muted-foreground">Carregando catálogo…</p>}
-      <div className="grid items-start gap-3 xl:grid-cols-2">
-        {items.filter(item => item.name.toLocaleLowerCase("pt-BR").includes(search.toLocaleLowerCase("pt-BR"))).map(item => (
-          <ItemEditor key={item.id} item={item} abilities={abilityCatalog.map(({id,name}) => ({id,name}))}
-            transformations={transforms} creatures={creatures} defs={defs} />
-        ))}
-      </div>
-      {!isLoading && items.length===0 && <p className="panel p-6 text-sm text-muted-foreground">Nenhum acessório cadastrado. Crie o primeiro para começar.</p>}
+      {(["accessory", "weapon"] as const).map(type => {
+        const categoryItems = items.filter(item =>
+          item.item_type === type && item.name.toLocaleLowerCase("pt-BR").includes(search.toLocaleLowerCase("pt-BR"))
+        );
+        return (
+          <section key={type} className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2 border-b border-gold/25 pb-2">
+              {type === "weapon" ? <Swords className="h-5 w-5 text-gold" /> : <Gem className="h-5 w-5 text-gold" />}
+              <h2 className="font-display text-xl text-gold">{type === "weapon" ? "Armas" : "Acessórios"}</h2>
+              <span className="text-xs text-muted-foreground">({categoryItems.length})</span>
+            </div>
+            {categoryItems.length > 0 ? (
+              <div className="grid items-start gap-3 xl:grid-cols-2">
+                {categoryItems.map(item => (
+                  <ItemEditor key={item.id} item={item}
+                    abilities={abilityCatalog.map(({id,name}) => ({id,name}))}
+                    transformations={transforms} creatures={creatures} defs={defs} />
+                ))}
+              </div>
+            ) : (
+              <p className="rounded-lg border border-dashed border-gold/20 p-4 text-xs text-muted-foreground">
+                {search ? "Nenhum item desta categoria corresponde à pesquisa." :
+                  type === "weapon" ? "Nenhuma arma cadastrada. Clique em Nova arma." :
+                    "Nenhum acessório cadastrado."}
+              </p>
+            )}
+          </section>
+        );
+      })}
     </div>
   );
 }

@@ -12,6 +12,7 @@ import { defenseIgnoreText, ZERO_DEFENSE_IGNORE, type DefenseIgnore } from "@/li
 import { passiveStatusModifiers, statusEffectModifiers, useCharacterAbilities, useCharacterActiveEffects, type AbilityEffectDefinition, useDotTemplates } from "@/lib/abilities";
 import { clampNonDefenseAttribute, computeValue, conditionAdjustedValue, physicalAttributePoints, useCharacter, useCharacterTraitMods, useClasses, useDefs, useRaces, useVirtues } from "@/lib/sheets";
 import type { Json } from "@/integrations/supabase/types";
+import { parseWeaponDamage, weaponDamageSummary, type WeaponDamageConfig } from "@/lib/inventory";
 
 type DamageKind = "physical" | "magical" | "hybrid" | "true";
 type MagicLevel = "baixa" | "media" | "alta";
@@ -37,6 +38,7 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
   const [physicalDamageTypeId, setPhysicalDamageTypeId] = useState("");
   const [magicLevel, setMagicLevel] = useState<MagicLevel>("baixa");
   const [sourceCharacterId, setSourceCharacterId] = useState(defaultSourceCharacterId ?? "");
+  const [weaponInventoryItemId, setWeaponInventoryItemId] = useState("");
   const [criticalDamage, setCriticalDamage] = useState(false);
   const [lastDamageOutcome, setLastDamageOutcome] = useState<{
     criticalRequested: boolean;
@@ -60,6 +62,28 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
   // Use the same attribute building blocks as the character sheet and combat
   // cards. The selected attacker, not the target, provides these quick values.
   const sourceId = sourceCharacterId || undefined;
+  const { data: equippedWeapons = [], isLoading: loadingWeapons } = useQuery<Array<{
+    id: string; name: string; weapon_damage: WeaponDamageConfig;
+  }>>({
+    queryKey: ["equipped-weapons-for-damage", sourceId],
+    enabled: !!sourceId,
+    refetchInterval: 8000,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).from("character_inventory")
+        .select("id,item_templates(name,item_type,weapon_damage)")
+        .eq("character_id", sourceId!).eq("equipped", true);
+      if (error) throw error;
+      return (data ?? []).flatMap((entry: { id: string; item_templates: unknown }) => {
+        const template = entry.item_templates as unknown as {
+          name: string; item_type: string; weapon_damage: unknown;
+        } | null;
+        return template?.item_type === "weapon"
+          ? [{ id: entry.id, name: template.name, weapon_damage: parseWeaponDamage(template.weapon_damage) }]
+          : [];
+      });
+    },
+  });
+  const selectedWeapon = equippedWeapons.find((item) => item.id === weaponInventoryItemId) ?? null;
   const { data: sourceSheet, isPending: sourceSheetLoading, error: sourceSheetError } = useCharacter(sourceId);
   const source = sourceSheet?.character;
   const sourceAttributes = sourceSheet?.attrs ?? [];
@@ -116,7 +140,10 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
     toast.success((key === "strength" ? "Força" : "Dano Mágico") + " de " + (source.name ?? "atacante") + " preenchido: " + value + ".");
   }
   useEffect(() => {
-    if (defaultSourceCharacterId) setSourceCharacterId(defaultSourceCharacterId);
+    if (defaultSourceCharacterId) {
+      setSourceCharacterId(defaultSourceCharacterId);
+      setWeaponInventoryItemId("");
+    }
   }, [defaultSourceCharacterId]);
   useEffect(() => {
     if (!dotTemplates.some((template) => template.id === selectedDotTemplateId)) {
@@ -135,8 +162,9 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
 
   const magicalDamageTypes = damageTypes.filter((type) => type.category === "magical");
   const physicalDamageTypes = damageTypes.filter((type) => type.category === "physical");
-  const needsMagic = damageKind === "magical" || damageKind === "hybrid";
-  const needsPhysical = damageKind === "physical" || damageKind === "hybrid";
+  const effectiveDamageKind = selectedWeapon?.weapon_damage.damage_kind ?? damageKind;
+  const needsMagic = effectiveDamageKind === "magical" || effectiveDamageKind === "hybrid";
+  const needsPhysical = effectiveDamageKind === "physical" || effectiveDamageKind === "hybrid";
   const selectedPhysicalDamageTypeId = physicalDamageTypes.some((type) => type.id === physicalDamageTypeId)
     ? physicalDamageTypeId
     : physicalDamageTypes[0]?.id ?? "";
@@ -245,17 +273,17 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
     // the source and armor/mitigation are still calculated on the server.
     values = values.map((value) => applyAbilityTargetDamage(value, adjustmentFixed, adjustmentPercent));
 
-    if (needsMagic && !selectedMagicDamageTypeId) {
+    if (!selectedWeapon && needsMagic && !selectedMagicDamageTypeId) {
       setCriticalDamage(false);
       toast.error("Selecione um tipo de dano mágico");
       return;
     }
-    if (needsPhysical && physicalDamageTypes.length > 0 && !selectedPhysicalDamageTypeId) {
+    if (!selectedWeapon && needsPhysical && physicalDamageTypes.length > 0 && !selectedPhysicalDamageTypeId) {
       setCriticalDamage(false);
       toast.error("Selecione um tipo de dano físico");
       return;
     }
-    if (loadingTypes && (needsMagic || needsPhysical)) {
+    if (!selectedWeapon && loadingTypes && (needsMagic || needsPhysical)) {
       setCriticalDamage(false);
       toast.error("Aguarde o carregamento dos tipos de dano");
       return;
@@ -272,14 +300,15 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
           battle_id: battleId,
           _battle_id: battleId,
           _character_id: target.id,
-          _damage_kind: damageKind,
-          _damage_type_id: needsMagic ? selectedMagicDamageTypeId : null,
-          _physical_damage_type_id: needsPhysical && physicalDamageTypes.length > 0 ? selectedPhysicalDamageTypeId : null,
+          _damage_kind: effectiveDamageKind,
+          _weapon_inventory_item_id: selectedWeapon?.id ?? null,
+          _damage_type_id: needsMagic ? (selectedWeapon?.weapon_damage.damage_type_id ?? selectedMagicDamageTypeId) : null,
+          _physical_damage_type_id: needsPhysical ? (selectedWeapon?.weapon_damage.physical_damage_type_id ?? (physicalDamageTypes.length > 0 ? selectedPhysicalDamageTypeId : null)) : null,
           _damage_values: values,
-          _magic_level: needsMagic ? magicLevel : null,
+          _magic_level: needsMagic ? (selectedWeapon?.weapon_damage.magic_level ?? magicLevel) : null,
           _source_character_id: effectiveSourceCharacterId,
           _critical_damage: criticalDamageForThisHit,
-          _defense_ignore: damageKind === "true" ? ZERO_DEFENSE_IGNORE : defenseIgnore,
+          _defense_ignore: effectiveDamageKind === "true" ? ZERO_DEFENSE_IGNORE : defenseIgnore,
         },
       });
       if (error) {
@@ -301,6 +330,10 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
       }
 
       const result = (runtimeResponse as { damage_result?: {
+        weapon_name?: string;
+        weapon_bonus_mode?: "fixed" | "percent";
+        weapon_bonus_amount?: number;
+        weapon_raw_damage_by_hit?: number[];
         hits: number;
         physical_defense: number;
         magical_defense: number;
@@ -331,18 +364,18 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
         return;
       }
       let defenseText: string;
-      if (damageKind === "true") defenseText = "defesas ignoradas";
-      else if (damageKind === "physical") defenseText = `Defesa física: ${result.physical_defense}`;
-      else if (damageKind === "magical") defenseText = `Defesa mágica: ${result.magical_defense}; magia ${magicLevel}`;
+      if (effectiveDamageKind === "true") defenseText = "defesas ignoradas";
+      else if (effectiveDamageKind === "physical") defenseText = `Defesa física: ${result.physical_defense}`;
+      else if (effectiveDamageKind === "magical") defenseText = `Defesa mágica: ${result.magical_defense}; magia ${magicLevel}`;
       else defenseText = `Defesa física: ${result.physical_defense}; Defesa mágica: ${result.magical_defense}; magia ${magicLevel}`;
 
       const magicTypeName = magicalDamageTypes.find((type) => type.id === selectedMagicDamageTypeId)?.name ?? "mágico";
       const physicalTypeName = physicalDamageTypes.find((type) => type.id === selectedPhysicalDamageTypeId)?.name ?? "físico";
-      const damageDescription = damageKind === "hybrid"
+      const damageDescription = effectiveDamageKind === "hybrid"
         ? `dano híbrido (físico: ${physicalTypeName}; mágico: ${magicTypeName})`
-        : damageKind === "magical"
+        : effectiveDamageKind === "magical"
           ? `dano mágico (${magicTypeName})`
-          : damageKind === "true"
+          : effectiveDamageKind === "true"
             ? "dano verdadeiro"
             : physicalDamageTypes.length > 0
               ? `dano físico (${physicalTypeName})`
@@ -362,7 +395,7 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
       const magicalPercent = Number(result.damage_magical_percent_modifier ?? 0);
       const sourceSummary = !effectiveSourceCharacterId
         ? ""
-        : damageKind === "hybrid"
+        : effectiveDamageKind === "hybrid"
           ? ` Origem: ${sourceName ?? "personagem selecionado"}; metade física: ${signed(anyFixed + physicalFixed)} fixos, ${signed(anyPercent + physicalPercent)}%; metade mágica: ${signed(anyFixed + magicalFixed)} fixos, ${signed(anyPercent + magicalPercent)}%.`
           : ` Origem: ${sourceName ?? "personagem selecionado"}; modificadores de dano: ${signed(fixedModifier)} fixos, ${signed(percentModifier)}%.`;
       const physicalReductionFixed = Number(result.physical_reduction_fixed ?? 0);
@@ -371,11 +404,11 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
       const magicalReductionPercent = Number(result.magical_reduction_percent ?? 0);
       const reductionPart = (label: string, fixed: number, percent: number) =>
         fixed === 0 && percent === 0 ? "" : ` ${label}: -${fixed} fixos, -${percent}%.`;
-      const reductionSummary = damageKind === "physical"
+      const reductionSummary = effectiveDamageKind === "physical"
         ? reductionPart("Mitigação física recebida", physicalReductionFixed, physicalReductionPercent)
-        : damageKind === "magical"
+        : effectiveDamageKind === "magical"
           ? reductionPart(`Mitigação mágica recebida para ${magicTypeName} / grau ${magicLevel}`, magicalReductionFixed, magicalReductionPercent)
-          : damageKind === "hybrid"
+          : effectiveDamageKind === "hybrid"
             ? reductionPart("Mitigação da metade física", physicalReductionFixed, physicalReductionPercent)
               + reductionPart(`Mitigação da metade mágica (${magicTypeName}, grau ${magicLevel})`, magicalReductionFixed, magicalReductionPercent)
             : "";
@@ -395,10 +428,13 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
       const criticalSummary = criticalConfirmed ? "⚔️ DANO CRÍTICO ×2 aplicado. " : "";
       const manualDamageSummary = adjustmentFixed || adjustmentPercent
         ? ` Ajuste por golpe: ${adjustmentFixed >= 0 ? "+" : ""}${adjustmentFixed} fixo, ${adjustmentPercent >= 0 ? "+" : ""}${adjustmentPercent}%.` : "";
-      const penetrationSummary = damageKind !== "true" && defenseIgnoreText(defenseIgnore)
+      const penetrationSummary = effectiveDamageKind !== "true" && defenseIgnoreText(defenseIgnore)
         ? ` Defesa ignorada: ${defenseIgnoreText(defenseIgnore)}.` : "";
+      const weaponSummary = result.weapon_name
+        ? ` Arma: ${result.weapon_name} · +${Number(result.weapon_bonus_amount ?? 0)}${result.weapon_bonus_mode === "percent" ? "%" : " fixos"} por golpe (antes da defesa).`
+        : "";
       toast.success(
-        `${criticalSummary}${target.name}: ${result.hits} golpe(s) de ${damageDescription}; ${defenseText}; ${result.total_damage} de dano total. HP: ${result.hp_before} → ${result.hp_after}.${manualDamageSummary}${penetrationSummary}${sourceSummary}${reductionSummary}${hitSummary}`,
+        `${criticalSummary}${target.name}: ${result.hits} golpe(s) de ${damageDescription}; ${defenseText}; ${result.total_damage} de dano total. HP: ${result.hp_before} → ${result.hp_after}.${manualDamageSummary}${penetrationSummary}${sourceSummary}${reductionSummary}${weaponSummary}${hitSummary}`,
         { duration: 8000 },
       );
       onDamageApplied?.({ targetId: target.id, totalDamage: result.total_damage, hpBefore: result.hp_before, hpAfter: result.hp_after });
@@ -446,17 +482,52 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
       </h3>
       <div className="space-y-1">
         <label className="text-xs text-muted-foreground">Quem está causando o dano?</label>
-        <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={sourceCharacterId} onChange={(e) => setSourceCharacterId(e.target.value)}>
+        <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={sourceCharacterId}
+          onChange={(e) => { setSourceCharacterId(e.target.value); setWeaponInventoryItemId(""); }}>
           <option value="">Nenhum atacante (sem modificadores de dano)</option>
           {sources.map((source) => <option key={source.id} value={source.id}>{source.name}</option>)}
         </select>
         <p className="text-xs text-muted-foreground">Ao selecionar um personagem, os buffs/debuffs de Dano Causado dele serão aplicados antes da Defesa e da Defesa Mágica.</p>
       </div>
+      <div className="space-y-2 rounded-xl border border-gold/25 bg-gold/5 p-3">
+        <label htmlFor={`weapon-for-damage-${target.id}`} className="block text-xs font-semibold text-gold">
+          Arma utilizada no ataque (opcional)
+        </label>
+        <select id={`weapon-for-damage-${target.id}`}
+          className="min-h-11 w-full rounded-md border border-input bg-background px-2 text-sm"
+          value={selectedWeapon?.id ?? ""}
+          disabled={!sourceId || applyingDamage}
+          onChange={(event) => {
+            const weapon = equippedWeapons.find((item) => item.id === event.target.value);
+            setWeaponInventoryItemId(weapon?.id ?? "");
+            if (weapon) {
+              setDamageKind(weapon.weapon_damage.damage_kind);
+              setDamageTypeId(weapon.weapon_damage.damage_type_id ?? "");
+              setPhysicalDamageTypeId(weapon.weapon_damage.physical_damage_type_id ?? "");
+              setMagicLevel(weapon.weapon_damage.magic_level);
+            }
+          }}>
+          <option value="">{!sourceId ? "Selecione quem está atacando primeiro" : loadingWeapons ? "Carregando armas…" : "Sem arma — dano manual normal"}</option>
+          {equippedWeapons.map((weapon) => (
+            <option key={weapon.id} value={weapon.id}>{weapon.name} · {weaponDamageSummary(weapon.weapon_damage)}</option>
+          ))}
+        </select>
+        {selectedWeapon && (
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            {weaponDamageSummary(selectedWeapon.weapon_damage)}. O sistema acrescenta o bônus a cada golpe,
+            aplica a categoria e os tipos cadastrados na arma e calcula defesa, mitigação e críticos normalmente.
+          </p>
+        )}
+        {sourceId && !loadingWeapons && equippedWeapons.length === 0 && (
+          <p className="text-xs text-muted-foreground">Este atacante não possui armas equipadas no inventário.</p>
+        )}
+      </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1">
           <label className="text-xs text-muted-foreground">Categoria do dano</label>
           <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
-            value={damageKind} onChange={(e) => setDamageKind(e.target.value as DamageKind)}>
+            value={effectiveDamageKind} disabled={!!selectedWeapon}
+            onChange={(e) => setDamageKind(e.target.value as DamageKind)}>
             <option value="physical">Físico — usa Defesa</option>
             <option value="magical">Mágico — usa Defesa Mágica</option>
             <option value="hybrid">Híbrido — usa as duas defesas</option>
@@ -467,7 +538,8 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
           <div className="space-y-1">
             <label className="text-xs text-muted-foreground">Tipo físico</label>
             <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
-              value={selectedPhysicalDamageTypeId}
+              value={selectedWeapon?.weapon_damage.physical_damage_type_id ?? selectedPhysicalDamageTypeId}
+              disabled={!!selectedWeapon}
               onChange={(e) => setPhysicalDamageTypeId(e.target.value)}>
               <option value="">Selecione o tipo físico</option>
               {physicalDamageTypes.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}
@@ -479,7 +551,7 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
             <div className="space-y-1">
               <label className="text-xs text-muted-foreground">Tipo mágico</label>
               <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
-                value={damageTypeId} onChange={(e) => setDamageTypeId(e.target.value)}>
+                value={selectedWeapon?.weapon_damage.damage_type_id ?? damageTypeId} disabled={!!selectedWeapon} onChange={(e) => setDamageTypeId(e.target.value)}>
                 <option value="">Selecione o tipo</option>
                 {damageTypes.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}
               </select>
@@ -489,7 +561,7 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
             <div className="space-y-1">
               <label className="text-xs text-muted-foreground">Nível da magia</label>
               <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
-                value={magicLevel} onChange={(e) => setMagicLevel(e.target.value as MagicLevel)}>
+                value={selectedWeapon?.weapon_damage.magic_level ?? magicLevel} disabled={!!selectedWeapon} onChange={(e) => setMagicLevel(e.target.value as MagicLevel)}>
                 <option value="baixa">Baixa</option>
                 <option value="media">Média</option>
                 <option value="alta">Alta</option>
@@ -498,13 +570,13 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
           </>
         )}
       </div>
-      {damageKind === "hybrid" && (
+      {effectiveDamageKind === "hybrid" && (
         <p className="text-xs text-muted-foreground">
           O dano bruto é dividido igualmente: metade física reduzida pela Defesa e metade mágica reduzida pela Defesa Mágica.
           Se o valor for ímpar, o ponto extra vai para a parte mágica.
         </p>
       )}
-      {damageKind === "true" && (
+      {effectiveDamageKind === "true" && (
         <p className="text-xs text-muted-foreground">Dano verdadeiro ignora Defesa e Defesa Mágica.</p>
       )}
       <div className="flex flex-wrap gap-2">

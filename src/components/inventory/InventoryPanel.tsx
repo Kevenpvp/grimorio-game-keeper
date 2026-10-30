@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Backpack, Check, Gem, Package, Plus, ShieldCheck, Trash2, X } from "lucide-react";
+import { Backpack, Check, Gem, Package, Plus, ShieldCheck, Swords, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useMe } from "@/lib/sheets";
-import { accessoryPhoto, invalidateInventory, itemGrantSummary, useCharacterInventory, useItemTemplates } from "@/lib/inventory";
+import { accessoryPhoto, invalidateInventory, itemGrantSummary, weaponDamageSummary, useCharacterInventory, useItemTemplates } from "@/lib/inventory";
 
 const db = supabase as any;
 
@@ -73,7 +73,7 @@ export function InventoryPanel({ characterId, master = false, combat = false }: 
           <h2 className="flex items-center gap-2 font-display text-xl font-semibold text-gold">
             <Backpack className="h-5 w-5" /> Inventário
           </h2>
-          <p className="mt-1 text-xs text-muted-foreground">Acessórios e equipamentos pertencentes a esta ficha.</p>
+          <p className="mt-1 text-xs text-muted-foreground">Acessórios, armas e equipamentos pertencentes a esta ficha.</p>
         </div>
         <span className="rounded-full border border-gold/30 bg-gold/10 px-3 py-1.5 text-xs font-bold tabular-nums text-gold">
           {items.length} / {data.slots} slots
@@ -82,7 +82,7 @@ export function InventoryPanel({ characterId, master = false, combat = false }: 
 
       {equipped.length > 0 && (
         <div className="rounded-xl border border-emerald-700/35 bg-emerald-950/10 p-3">
-          <p className="mb-2 flex items-center gap-2 text-xs font-semibold text-emerald-300"><ShieldCheck className="h-4 w-4" /> Acessórios equipados ({equipped.length})</p>
+          <p className="mb-2 flex items-center gap-2 text-xs font-semibold text-emerald-300"><ShieldCheck className="h-4 w-4" /> Equipamentos ativos ({equipped.length})</p>
           <div className="flex flex-wrap gap-2">
             {equipped.map(item => (
               <button key={item.id} type="button" onClick={() => setSelectedId(item.id)}
@@ -106,6 +106,7 @@ export function InventoryPanel({ characterId, master = false, combat = false }: 
                 {item.equipped && <span className="absolute right-1 top-1 rounded-full bg-emerald-800 p-1 text-white"><Check className="h-3 w-3" /></span>}
               </div>
               <p className="mt-2 truncate text-[11px] font-semibold">{item.item_templates.name}</p>
+              <p className="mt-0.5 text-[10px] text-gold/70">{item.item_templates.item_type === "weapon" ? "Arma" : "Acessório"}</p>
               <p className={"mt-0.5 text-[10px] " + (item.equipped ? "text-emerald-300" : "text-muted-foreground")}>{item.equipped ? "Equipado" : "Guardado"}</p>
             </button>
           ) : (
@@ -137,14 +138,14 @@ export function InventoryPanel({ characterId, master = false, combat = false }: 
             <div className="flex flex-col gap-2 sm:flex-row">
               <select aria-label="Escolher item para adicionar" value={templateId} onChange={e => setTemplateId(e.target.value)}
                 className="min-h-11 min-w-0 flex-1 rounded-lg border border-input bg-background px-3 text-sm">
-                <option value="">Selecionar acessório cadastrado…</option>
+                <option value="">Selecionar acessório ou arma cadastrada…</option>
                 {templates.map(template => <option key={template.id} value={template.id}>{template.name}</option>)}
               </select>
               <Button disabled={busy || !templateId || items.length >= data.slots} onClick={() =>
                 void run(() => db.rpc("inventory_add_item",{_character_id:characterId,_template_id:templateId}),"Item adicionado ao inventário")
               }><Plus className="mr-1 h-4 w-4" /> Adicionar item</Button>
             </div>
-            <p className="text-xs text-muted-foreground">Somente o mestre adiciona e remove itens. Crie os acessórios no menu Itens.</p>
+            <p className="text-xs text-muted-foreground">Somente o mestre adiciona e remove itens. Crie acessórios e armas no menu Itens.</p>
           </div>
         </details>
       )}
@@ -154,7 +155,7 @@ export function InventoryPanel({ characterId, master = false, combat = false }: 
           {selected && <>
             <DialogHeader>
               <DialogTitle className="font-display text-xl text-gold">{selected.item_templates.name}</DialogTitle>
-              <DialogDescription>Acessório · slot {selected.slot_index} · {selected.equipped ? "Equipado" : "Guardado"}</DialogDescription>
+              <DialogDescription>{selected.item_templates.item_type === "weapon" ? "Arma" : "Acessório"} · slot {selected.slot_index} · {selected.equipped ? "Equipado" : "Guardado"}</DialogDescription>
             </DialogHeader>
             <div className="flex justify-center">
               <div className="flex aspect-square w-36 items-center justify-center overflow-hidden rounded-xl border border-gold/30 bg-background/50 sm:w-48">
@@ -165,6 +166,13 @@ export function InventoryPanel({ characterId, master = false, combat = false }: 
             <div className="space-y-2 rounded-xl border border-gold/25 bg-gold/5 p-3 text-xs">
               <p className="font-semibold text-gold">Benefícios enquanto equipado</p>
               <p className="text-muted-foreground">{itemGrantSummary(selected.item_templates)}</p>
+              {selected.item_templates.item_type === "weapon" && (
+                <div className="flex items-start gap-2 rounded-lg border border-red-500/25 bg-red-500/5 p-2 text-xs text-red-200">
+                  <Swords className="h-4 w-4 shrink-0" />
+                  <span>{weaponDamageSummary(selected.item_templates.weapon_damage)}.
+                    Selecione esta arma em Aplicar dano em para utilizar seu dano configurado.</span>
+                </div>
+              )}
               {selected.item_templates.effects.map((effect, index) => <p key={index}>✦ {effect.name || effect.effect_type}</p>)}
               {master && !combat && (selected.item_templates.ability_ids.length > 0 || selected.item_templates.transformation_ids.length > 0 || selected.item_templates.summon_character_ids.length > 0) &&
                 <p className="rounded-lg border border-amber-500/25 bg-amber-500/5 p-2 text-amber-200">
@@ -185,7 +193,7 @@ export function InventoryPanel({ characterId, master = false, combat = false }: 
             </div>
             {canEquip && <Button className="min-h-11 w-full" variant={selected.equipped ? "outline" : "default"} disabled={busy}
               onClick={() => void run(() => db.rpc("inventory_set_equipped",{_item_id:selected.id,_equipped:!selected.equipped}),
-                selected.equipped ? "Acessório desequipado" : "Acessório equipado")}>
+                selected.equipped ? "Equipamento desequipado" : "Equipamento equipado")}>
               {selected.equipped ? <><X className="mr-2 h-4 w-4" /> Desequipar</> : <><ShieldCheck className="mr-2 h-4 w-4" /> Equipar</>}
             </Button>}
             {master && !combat && <Button variant="destructive" className="min-h-11 w-full" disabled={busy}

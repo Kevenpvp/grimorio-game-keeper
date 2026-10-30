@@ -4,11 +4,53 @@ import { parseAbilityEffects, type AbilityEffectDefinition } from "@/lib/abiliti
 
 const db = supabase as any;
 
+export type WeaponDamageKind = "physical" | "magical" | "hybrid" | "true";
+export type WeaponDamageConfig = {
+  damage_kind: WeaponDamageKind;
+  bonus_mode: "fixed" | "percent";
+  bonus_amount: number;
+  physical_damage_type_id: string | null;
+  damage_type_id: string | null;
+  magic_level: "baixa" | "media" | "alta";
+};
+export const DEFAULT_WEAPON_DAMAGE: WeaponDamageConfig = {
+  damage_kind: "physical",
+  bonus_mode: "fixed",
+  bonus_amount: 0,
+  physical_damage_type_id: null,
+  damage_type_id: null,
+  magic_level: "baixa",
+};
+export function parseWeaponDamage(raw: unknown): WeaponDamageConfig {
+  const source = raw && typeof raw === "object" && !Array.isArray(raw)
+    ? raw as Record<string, unknown> : {};
+  const amount = Number(source.bonus_amount ?? 0);
+  const mode = source.bonus_mode === "percent" ? "percent" : "fixed";
+  return {
+    damage_kind: ["physical","magical","hybrid","true"].includes(String(source.damage_kind))
+      ? source.damage_kind as WeaponDamageKind : "physical",
+    bonus_mode: mode,
+    bonus_amount: Number.isFinite(amount)
+      ? Math.max(0, Math.min(mode === "percent" ? 1000 : 1_000_000, mode === "fixed" ? Math.floor(amount) : amount))
+      : 0,
+    physical_damage_type_id: typeof source.physical_damage_type_id === "string" && source.physical_damage_type_id
+      ? source.physical_damage_type_id : null,
+    damage_type_id: typeof source.damage_type_id === "string" && source.damage_type_id ? source.damage_type_id : null,
+    magic_level: source.magic_level === "media" || source.magic_level === "alta" ? source.magic_level : "baixa",
+  };
+}
+
+export function weaponDamageSummary(config: WeaponDamageConfig): string {
+  const kind = {physical:"Físico",magical:"Mágico",hybrid:"Híbrido",true:"Verdadeiro"}[config.damage_kind];
+  return `${kind} · +${config.bonus_amount}${config.bonus_mode === "percent" ? "%" : " fixo(s)"} por golpe`;
+}
+
 export type ItemTemplate = {
   id: string;
   name: string;
   description: string;
-  item_type: "accessory";
+  item_type: "accessory" | "weapon";
+  weapon_damage: WeaponDamageConfig;
   image_path: string | null;
   effects: AbilityEffectDefinition[];
   ability_ids: string[];
@@ -34,6 +76,8 @@ function normalizeTemplate(raw: any): ItemTemplate {
   return {
     ...raw,
     effects: parseAbilityEffects(raw.effects),
+    item_type: raw.item_type === "weapon" ? "weapon" : "accessory",
+    weapon_damage: parseWeaponDamage(raw.weapon_damage),
     ability_ids: Array.isArray(raw.ability_ids) ? raw.ability_ids : [],
     transformation_ids: Array.isArray(raw.transformation_ids) ? raw.transformation_ids : [],
     summon_character_ids: Array.isArray(raw.summon_character_ids) ? raw.summon_character_ids : [],
@@ -92,8 +136,9 @@ export function invalidateInventory(qc: QueryClient, characterId: string) {
   ]);
 }
 
-export function itemGrantSummary(template: Pick<ItemTemplate, "effects" | "ability_ids" | "transformation_ids" | "summon_character_ids">) {
+export function itemGrantSummary(template: Pick<ItemTemplate, "effects" | "ability_ids" | "transformation_ids" | "summon_character_ids"> & Partial<Pick<ItemTemplate,"item_type" | "weapon_damage">>) {
   return [
+    template.item_type === "weapon" && template.weapon_damage ? weaponDamageSummary(template.weapon_damage) : "",
     template.effects.length ? template.effects.length + " efeito(s)" : "",
     template.ability_ids.length ? template.ability_ids.length + " habilidade(s)" : "",
     template.transformation_ids.length ? template.transformation_ids.length + " transformação(ões)" : "",

@@ -689,11 +689,11 @@ async function applyDamageWithScripts(
   const battleId = typeof body._battle_id === "string" ? body._battle_id : null;
   const targetId = typeof body._character_id === "string" ? body._character_id : "";
   const sourceId = typeof body._source_character_id === "string" ? body._source_character_id : null;
-  const rawValues = Array.isArray(body._damage_values) ? body._damage_values.map((value) => Number(value)) : [];
-  const kind = body._damage_kind as DamageCall["kind"];
-  const typeId = typeof body._damage_type_id === "string" ? body._damage_type_id : null;
-  const physicalTypeId = typeof body._physical_damage_type_id === "string" ? body._physical_damage_type_id : null;
-  const magicLevel = typeof body._magic_level === "string" ? body._magic_level as DamageCall["magicLevel"] : null;
+  let rawValues = Array.isArray(body._damage_values) ? body._damage_values.map((value) => Number(value)) : [];
+  let kind = body._damage_kind as DamageCall["kind"];
+  let typeId = typeof body._damage_type_id === "string" ? body._damage_type_id : null;
+  let physicalTypeId = typeof body._physical_damage_type_id === "string" ? body._physical_damage_type_id : null;
+  let magicLevel = typeof body._magic_level === "string" ? body._magic_level as DamageCall["magicLevel"] : null;
   const critical = body._critical_damage === true;
   const defenseIgnorePayload = body._defense_ignore;
   const defenseIgnore = defenseIgnorePayload !== undefined
@@ -714,6 +714,36 @@ async function applyDamageWithScripts(
       rawValues.length < 1 || rawValues.length > 200 ||
       rawValues.some((value) => !Number.isFinite(value) || value < 0 || value > 1_000_000)) {
     throw new Error("Dados de dano inválidos.");
+  }
+
+  // A selected weapon changes the input attack profile BEFORE critical, defenses,
+  // mitigation and custom scripts. Only the server may read its saved settings.
+  const weaponInventoryItemId = typeof body._weapon_inventory_item_id === "string"
+    ? body._weapon_inventory_item_id : null;
+  let weaponInfo: ObjectValue | null = null;
+  if (weaponInventoryItemId) {
+    if (!sourceId || !battleId) {
+      throw new Error("Selecione o atacante e uma batalha para usar a arma.");
+    }
+    const { data: prepared, error: weaponError } = await userClient.rpc(
+      "prepare_equipped_weapon_damage", {
+        _inventory_item_id: weaponInventoryItemId,
+        _source_character_id: sourceId,
+        _battle_id: battleId,
+        _damage_values: rawValues,
+      },
+    );
+    if (weaponError) throw weaponError;
+    weaponInfo = asObject(prepared);
+    const updatedValues = weaponInfo.damage_values;
+    if (!Array.isArray(updatedValues) || updatedValues.length !== rawValues.length) {
+      throw new Error("O servidor não retornou os danos da arma.");
+    }
+    rawValues = updatedValues.map((value) => finiteNumber(value, "Dano da arma", 0, 1_000_000));
+    kind = weaponInfo.damage_kind as DamageCall["kind"];
+    typeId = typeof weaponInfo.damage_type_id === "string" ? weaponInfo.damage_type_id : null;
+    physicalTypeId = typeof weaponInfo.physical_damage_type_id === "string" ? weaponInfo.physical_damage_type_id : null;
+    magicLevel = typeof weaponInfo.magic_level === "string" ? weaponInfo.magic_level as DamageCall["magicLevel"] : null;
   }
 
   // A critical multiplies each RAW hit before the physical/magical defense,
@@ -813,6 +843,13 @@ async function applyDamageWithScripts(
     critical_damage: critical,
     critical_before_defense: critical,
     ...(critical ? { critical_raw_damage_by_hit: calculatedRawValues } : {}),
+    ...(weaponInfo ? {
+      weapon_name: weaponInfo.weapon_name,
+      weapon_damage_kind: kind,
+      weapon_bonus_mode: weaponInfo.bonus_mode,
+      weapon_bonus_amount: weaponInfo.bonus_amount,
+      weapon_raw_damage_by_hit: rawValues,
+    } : {}),
     custom_script_hooks: { processed: hooksProcessed, errors: hookErrors },
   };
 }
