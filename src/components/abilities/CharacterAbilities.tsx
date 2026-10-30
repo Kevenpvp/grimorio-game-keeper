@@ -27,6 +27,7 @@ import { parseAttributeStatusModifiers } from "@/lib/multi-attribute-effects";
 import { ActivationEffectValuesDialog, type ActivationEffectOverrides } from "@/components/abilities/ActivationEffectValuesDialog";
 import { SheetAbilityAttackEditor, AbilityDotEffectsEditor } from "@/components/abilities/SheetAbilityAttackEditor";
 import { onHitHealingDescription } from "@/components/abilities/AbilityAttackOnHitHealingEditor";
+import { FlorinPetalsControl, type FlorinPetalsState } from "@/components/combat/FlorinPetalsControl";
 import { TemporaryAttackCategoryEditor } from "@/components/abilities/TemporaryAttackCategoryEditor";
 import { TemporaryGuaranteedDotsEditor } from "@/components/abilities/TemporaryGuaranteedDotsEditor";
 import { findRegisteredDotTemplate, registerAbilityDotTemplates } from "@/lib/ability-dot-templates";
@@ -404,6 +405,25 @@ export function CharacterAbilitiesPanel({
   const { data: classes = [] } = useClasses();
   const { data: abilityCatalog = [] } = useAbilities();
   const db = supabase as any;
+  // Keep stack editing next to the ability itself, never on the compact combat
+  // fighter card. Shared queryKey makes it refresh after a weapon hit/GM edit.
+  const hasFlorinPetalsAbility = (loadout ?? []).some((ability) =>
+    ability.custom_script_key === "lagrimas_petalas"
+    || abilityCatalog.some((entry) =>
+      entry.id === ability.ability_id && entry.custom_script_key === "lagrimas_petalas"
+    )
+  );
+  const { data: florinPetals = [] } = useQuery<FlorinPetalsState[]>({
+    queryKey: ["florin-petals", battleId],
+    enabled: mode === "combat" && !!battleId && !!me?.isMaster && hasFlorinPetalsAbility,
+    refetchInterval: 6000,
+    refetchOnWindowFocus: true,
+    queryFn: async () => {
+      const { data, error } = await db.rpc("list_florin_petals_battle", { _battle_id: battleId });
+      if (error) throw error;
+      return Array.isArray(data) ? data : [];
+    },
+  });
   const { data: attackContinuousLinks = [] } = useQuery<ContinuousInstance[]>({
     queryKey:["battle-continuous-instances",battleId],
     enabled:mode==="combat" && !!battleId && !!me?.isMaster,
@@ -1348,6 +1368,13 @@ export function CharacterAbilitiesPanel({
                     activeEffects={activeEffects}
                   />
                 )}
+                {mode === "combat" && battleId && me?.isMaster && florinPetals
+                  .filter((state) => state.ability_id === ability.id && state.character_id === characterId)
+                  .map((state) => (
+                    <div key={state.ability_id} className="mt-3">
+                      <FlorinPetalsControl state={state} battleId={battleId} active={canUse} />
+                    </div>
+                  ))}
                 {mode === "combat" && battleId && (
                   <BattleAbilityOverrideEditor ability={ability} battleId={battleId} defs={defs ?? []} />
                 )}

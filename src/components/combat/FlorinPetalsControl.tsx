@@ -18,7 +18,7 @@ export type FlorinPetalsState = {
   pending: { damage_mode: "fixed" | "percent"; damage_amount: number; duration: number } | null;
 };
 
-/** Master-only controls on the combat card, responsive down to narrow phones. */
+/** Master-only controls nested under the granted ability, responsive on phones. */
 export function FlorinPetalsControl({ state, battleId, active }: {
   state: FlorinPetalsState;
   battleId: string;
@@ -88,7 +88,7 @@ export function FlorinPetalsControl({ state, battleId, active }: {
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-1.5 text-xs font-bold text-rose-200">
-            <Droplets className="h-4 w-4 shrink-0" /> Lágrimas das pétalas
+            <Droplets className="h-4 w-4 shrink-0" /> Controle de stacks
           </div>
           <p className="truncate text-[11px] text-muted-foreground">{state.weapon_name}</p>
         </div>

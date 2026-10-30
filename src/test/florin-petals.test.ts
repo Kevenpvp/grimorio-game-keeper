@@ -7,6 +7,7 @@ import { abilityScriptRegistry } from "../../supabase/functions/ability-runtime/
 const read = (path: string) => readFileSync(resolve(process.cwd(),path),"utf8");
 const control = read("src/components/combat/FlorinPetalsControl.tsx");
 const combat = read("src/routes/_authenticated/combate.tsx");
+const abilities = read("src/components/abilities/CharacterAbilities.tsx");
 const damage = read("src/components/combat/DamageApplier.tsx");
 const runtime = read("supabase/functions/ability-runtime/index.ts");
 const migration = read("drizzle/migrations/205_florin_petals_bleed.sql");
@@ -57,16 +58,22 @@ describe("Lágrimas das pétalas: stacks na Espada Florin", () => {
     expect(damage).toContain('qc.invalidateQueries({ queryKey: ["florin-petals", battleId] })');
   });
 
-  it("mostra controles organizados no cartão de combate somente para o mestre", () => {
-    expect(combat).toContain('enabled: isMaster && battle.active');
-    expect(combat).toContain("list_florin_petals_battle");
-    expect(combat).toContain("isMaster && florinPetals.filter");
-    expect(combat).toContain("<FlorinPetalsControl");
+  it("mostra stacks e Sangramento somente na própria habilidade dentro da aba Habilidades", () => {
+    expect(combat).toContain('detailTab === "abilities"');
+    expect(combat).toContain('<CharacterAbilitiesPanel characterId={f.id}');
+    expect(combat).not.toContain("<FlorinPetalsControl");
+    expect(combat).not.toContain('queryKey: ["florin-petals", battle.id]');
+    expect(abilities).toContain('queryKey: ["florin-petals", battleId]');
+    expect(abilities).toContain('enabled: mode === "combat" && !!battleId && !!me?.isMaster && hasFlorinPetalsAbility');
+    expect(abilities).toContain('list_florin_petals_battle');
+    expect(abilities).toContain('ability.custom_script_key === "lagrimas_petalas"');
+    expect(abilities).toContain('state.ability_id === ability.id && state.character_id === characterId');
+    expect(abilities).toContain('<FlorinPetalsControl state={state} battleId={battleId} active={canUse} />');
+    expect(abilities).toContain('mode === "combat" && battleId && me?.isMaster && florinPetals');
     expect(control).toContain("min-h-11");
     expect(control).toContain("sm:grid-cols-2");
     expect(control).toContain("state.stacks} / {state.max_stacks} stacks");
     expect(control).toContain("Sem DoT preparado");
-    expect(control).toContain("Cancelar Sangramento preparado");
-    expect(control).toContain("setDamage(\"\"); setDuration(\"\"); setMode(\"fixed\")");
+    expect(control).toContain('setDamage(""); setDuration(""); setMode("fixed")');
   });
 });
