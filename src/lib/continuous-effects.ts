@@ -144,7 +144,9 @@ export function continuousDamageAdjusted(base: number, fixed: number, percent: n
 }
 
 export function pendingContinuousInstances(instances: ContinuousInstance[], characterId: string | null) {
-  return instances.filter((instance) => instance.active && instance.rule.actions.length > 0 && (
+  // Include action-free grips too: they must be manageable from the same
+  // confirmation dialog even though they do not inflict per-turn effects.
+  return instances.filter((instance) => instance.active && (
     characterId === null ? instance.rule.trigger === "global"
       : (instance.rule.trigger === "target" && instance.target_character_id === characterId)
       || (instance.rule.trigger === "caster" && instance.caster_character_id === characterId)
