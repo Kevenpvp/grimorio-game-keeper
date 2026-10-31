@@ -150,7 +150,7 @@ export function ActivationEffectValuesDialog({
           <Button type="button" variant="outline" className="min-h-11" disabled={pending} onClick={onCancel}>
             Cancelar
           </Button>
-          <Button type="button" className="min-h-11" disabled={pending || selected.length === 0}
+          <Button type="button" className="min-h-11" disabled={pending}
             onClick={() => void confirm()}>
             {pending ? "Ativando..." : selected.length === 0 ? "Ativar sem destinatários" : `Ativar em ${selected.length} personagem(ns)`}
           </Button>
