@@ -2439,7 +2439,9 @@ function AssignedAbilityEditor({ ability, defs, accessoryName }: {
       self_target_only: canActivate && selfTargetOnly,
       is_passive: !canActivate,
       cooldown_turns: cooldownTurns,
-      attack_miss_cooldown_turns: !ability.ability_id && canActivate && attackEnabled && missCooldown.trim() !== "" ? Number(missCooldown) : null,
+      ...(!ability.ability_id ? {
+        attack_miss_cooldown_turns: canActivate && attackEnabled && missCooldown.trim() !== "" ? Number(missCooldown) : null,
+      } : {}),
       duration_turns: durationTurns,
       cooldown_remaining: canActivate ? Math.min(ability.cooldown_remaining, cooldownTurns) : 0,
       mana_cost: canActivate ? cost : 0,
