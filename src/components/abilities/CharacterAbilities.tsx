@@ -869,11 +869,13 @@ export function CharacterAbilitiesPanel({
       // Snapshot existing effects before casting. This lets the popup confirm
       // which DoTs/buffs/debuffs were created by this strike independently
       // of the direct damage result (including damage reduced to zero).
-      const existingEffectsResponse = await supabase.from("battle_effects")
-        .select("id")
-        .eq("battle_id", battleId)
-        .eq("source_character_ability_id", attackAbility.id)
-        .in("character_id", attackExternalHit ? [] : attackTargetIds);
+      const existingEffectsResponse = attackExternalHit || attackTargetIds.length === 0
+        ? { data: [] as Array<{ id: string }>, error: null }
+        : await supabase.from("battle_effects")
+          .select("id")
+          .eq("battle_id", battleId)
+          .eq("source_character_ability_id", attackAbility.id)
+          .in("character_id", attackTargetIds);
       const existingEffectIds = existingEffectsResponse.error
         ? null
         : new Set((existingEffectsResponse.data ?? []).map((effect) => effect.id));
