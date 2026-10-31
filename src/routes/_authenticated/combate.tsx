@@ -275,7 +275,9 @@ function useLiveBattles(isMaster: boolean, userId: string | undefined) {
     // Mobile browsers may suspend the Realtime connection in an embedded
     // preview or after returning from another app. Poll visible battles as a
     // bounded fallback, without needing a manual page reload.
-    refetchInterval: 5000,
+    // Realtime invalidations keep attacks/turns immediate; this poll is only
+    // a safety net for a missed event or interrupted mobile connection.
+    refetchInterval: 15000,
     refetchOnWindowFocus: "always",
     refetchOnReconnect: "always",
     queryFn: async () => {
@@ -665,7 +667,7 @@ function BattleView({ battle, isMaster, userId }: { battle: BattleRow; isMaster:
   const { data: effects = [] } = useQuery({
     queryKey: ["battle-effects", battle.id, visibleEffectCharacterIds],
     enabled: visibleEffectCharacterIds.length > 0,
-    refetchInterval: battle.active ? 5000 : false,
+    refetchInterval: battle.active ? 12000 : false,
     refetchOnWindowFocus: "always",
     refetchOnReconnect: "always",
     queryFn: async () => {
