@@ -67,7 +67,7 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
   }>>({
     queryKey: ["equipped-weapons-for-damage", sourceId],
     enabled: !!sourceId,
-    refetchInterval: 8000,
+    refetchInterval: 15000,
     queryFn: async () => {
       const { data, error } = await (supabase as any).from("character_inventory")
         .select("id,ammo_current,item_templates(name,item_type,weapon_damage)")
@@ -156,6 +156,7 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
 
   const { data: damageTypes = [], isLoading: loadingTypes, error: typesError } = useQuery({
     queryKey: ["damage-types"],
+    staleTime: 5 * 60_000,
     queryFn: async () => {
       const { data, error } = await supabase.from("damage_types").select("id,name,category").order("name");
       if (error) throw error;
