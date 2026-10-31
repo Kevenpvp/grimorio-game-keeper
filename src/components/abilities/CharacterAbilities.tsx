@@ -2297,6 +2297,7 @@ function AssignedAbilityEditor({ ability, defs, accessoryName }: {
   const [isMagical, setIsMagical] = useState(ability.is_magical);
   const [selfTargetOnly, setSelfTargetOnly] = useState(ability.self_target_only);
   const [cooldown, setCooldown] = useState(String(ability.cooldown_turns));
+  const [missCooldown, setMissCooldown] = useState((ability as CharacterAbility & { attack_miss_cooldown_turns?: number | null }).attack_miss_cooldown_turns == null ? "" : String((ability as CharacterAbility & { attack_miss_cooldown_turns?: number | null }).attack_miss_cooldown_turns));
   const [duration, setDuration] = useState(String(ability.duration_turns ?? 0));
   const [manaCost, setManaCost] = useState(String(ability.mana_cost));
   const [attackManaCost, setAttackManaCost] = useState(ability.attack_mana_cost === null ? "" : String(ability.attack_mana_cost));
@@ -2327,6 +2328,7 @@ function AssignedAbilityEditor({ ability, defs, accessoryName }: {
     setIsMagical(ability.is_magical);
     setSelfTargetOnly(ability.self_target_only);
     setCooldown(String(ability.cooldown_turns));
+    setMissCooldown((ability as CharacterAbility & { attack_miss_cooldown_turns?: number | null }).attack_miss_cooldown_turns == null ? "" : String((ability as CharacterAbility & { attack_miss_cooldown_turns?: number | null }).attack_miss_cooldown_turns));
     setDuration(String(ability.duration_turns ?? 0));
     setManaCost(String(ability.mana_cost));
     setAttackManaCost(ability.attack_mana_cost === null ? "" : String(ability.attack_mana_cost));
@@ -2345,6 +2347,7 @@ function AssignedAbilityEditor({ ability, defs, accessoryName }: {
     const durationTurns = canActivate && !toggleMode ? Math.floor(Number(duration)) : 0;
     const cost = Math.floor(Number(manaCost));
     const attackCost = attackManaCost.trim() === "" ? null : Number(attackManaCost);
+    if (missCooldown.trim() !== "" && (!Number.isInteger(Number(missCooldown)) || Number(missCooldown) < 0 || Number(missCooldown) > 1000)) { toast.error("Cooldown de erro: valor inteiro entre 0 e 1000."); return; }
     if (!name.trim()) { toast.error("Informe o nome"); return; }
     const sustainError = validateSustainedCosts(sustainCosts);
     if (canActivate && toggleMode && sustainError) { toast.error(sustainError); return; }
@@ -2421,6 +2424,7 @@ function AssignedAbilityEditor({ ability, defs, accessoryName }: {
       self_target_only: canActivate && selfTargetOnly,
       is_passive: !canActivate,
       cooldown_turns: cooldownTurns,
+      attack_miss_cooldown_turns: !ability.ability_id && canActivate && attackEnabled && missCooldown.trim() !== "" ? Number(missCooldown) : null,
       duration_turns: durationTurns,
       cooldown_remaining: canActivate ? Math.min(ability.cooldown_remaining, cooldownTurns) : 0,
       mana_cost: canActivate ? cost : 0,
@@ -2552,6 +2556,12 @@ function AssignedAbilityEditor({ ability, defs, accessoryName }: {
           </label>
         )}
         {canActivate && <div className="space-y-1"><Label>Custo de Mana para Ativar</Label><Input type="number" min="0" value={manaCost} onChange={(e) => setManaCost(e.target.value)} /></div>}
+        {canActivate && !ability.ability_id && !toggleMode && !selfTargetOnly && attackEnabled && (
+          <div className="space-y-1">
+            <Label>Cooldown se não acertar ninguém (opcional)</Label>
+            <Input type="number" min="0" max="1000" step="1" value={missCooldown} placeholder="Cooldown normal" onChange={e=>setMissCooldown(e.target.value)} />
+          </div>
+        )}
         {canActivate && !ability.ability_id && !toggleMode && !selfTargetOnly && attackEnabled && (
           <div className="space-y-1">
             <Label>Custo de Mana para Atacar (opcional)</Label>
