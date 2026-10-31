@@ -155,7 +155,7 @@ function Editor({ character, attrs, defs }: { character: Character; attrs: Chara
       return data ?? [];
     },
     refetchOnWindowFocus: true,
-    refetchInterval: 15000,
+    refetchInterval: 60000,
   });
   const visibleProfiles = profiles.filter((p) => {
     const search = profileFilter.trim().toLocaleLowerCase("pt-BR");
