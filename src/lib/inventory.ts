@@ -97,6 +97,7 @@ export function useItemTemplates(enabled = true) {
   return useQuery<ItemTemplate[]>({
     queryKey: ["inventory-templates"],
     enabled,
+    staleTime: 2 * 60_000,
     queryFn: async () => {
       const { data, error } = await db.from("item_templates").select("*").order("name");
       if (error) throw error;
@@ -110,7 +111,7 @@ export function useCharacterInventory(characterId: string) {
   return useQuery<{ slots: number; ownerId: string | null; items: InventoryItem[] }>({
     queryKey: ["inventory", characterId],
     enabled: !!characterId,
-    refetchInterval: 8000,
+    refetchInterval: 15000,
     refetchOnWindowFocus: true,
     queryFn: async () => {
       const [{ data: character, error: characterError }, { data, error }] = await Promise.all([
