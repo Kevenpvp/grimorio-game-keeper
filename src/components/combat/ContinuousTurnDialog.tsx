@@ -170,6 +170,38 @@ export function ContinuousTurnDialog({items,title,busy,fighterNames,casterAttrib
               </div>
               <span className="shrink-0 text-sm font-semibold text-gold">{expanded?"Recolher ▲":"Editar ▼"}</span>
             </button>
+            {/* Keep release controls visible even when this effect is collapsed.
+                Decisions are staged and committed atomically with the turn. */}
+            <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-gold/15 pt-2" aria-label={`Resolver vínculo: ${item.name}`}>
+              <Button type="button" size="sm" variant={resolution==="interrupt"?"default":"outline"}
+                className={resolution==="interrupt"
+                  ?"min-h-10 bg-amber-600 text-black hover:bg-amber-500"
+                  :"min-h-10 border-amber-500/40 text-amber-200"}
+                disabled={busy}
+                onClick={()=>patch(item.id,{resolution:"interrupt"})}>
+                {resolution==="interrupt"?"✓ Soltar selecionado":"Soltar vínculo"}
+              </Button>
+              <Button type="button" size="sm" variant={resolution==="dispel"?"destructive":"outline"}
+                className="min-h-10 border-red-500/40 text-red-300"
+                disabled={busy}
+                onClick={()=>patch(item.id,{resolution:"dispel"})}>
+                {resolution==="dispel"?"✓ Dissipar selecionado":"Dissipar tudo"}
+              </Button>
+              {(resolution==="interrupt" || resolution==="dispel") && (
+                <Button type="button" size="sm" variant="ghost" className="min-h-10"
+                  disabled={busy} onClick={()=>patch(item.id,{resolution:"apply"})}>
+                  Cancelar soltura
+                </Button>
+              )}
+            </div>
+            {resolution==="interrupt" && <p className="mt-1 text-xs text-amber-300">
+              O vínculo será solto ao confirmar o turno. {item.rule.linger_turns > 0
+                ? `Penalidades residuais permanecerão por ${item.rule.linger_turns} turno(s).`
+                : "Não haverá resíduos."}
+            </p>}
+            {resolution==="dispel" && <p className="mt-1 text-xs text-red-300">
+              Ao confirmar o turno, o vínculo e seus efeitos vinculados serão removidos.
+            </p>}
             {expanded && <div className="space-y-3 border-t border-gold/15 pt-3">
               <label className="block space-y-1 text-xs font-semibold text-gold">Resolver vínculo
                 <select className="min-h-11 w-full rounded-lg border border-input bg-background px-3 text-sm"
