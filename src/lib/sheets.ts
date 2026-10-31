@@ -10,6 +10,10 @@ export type CharacterAttr = Tables<"character_attributes">;
 export function useMe() {
   return useQuery({
     queryKey: ["me"],
+    // Sharing this result between mounted components avoids repeating auth.getUser,
+    // sync_my_role, profile and role queries on every remount. Auth events still
+    // invalidate the query immediately in the root component.
+    staleTime: 60_000,
     queryFn: async () => {
       const { data: u } = await supabase.auth.getUser();
       if (!u.user) return null;
@@ -48,7 +52,7 @@ export function useCharacter(id: string | undefined) {
     refetchOnMount: "always",
     refetchOnWindowFocus: "always",
     refetchOnReconnect: "always",
-    refetchInterval: 10000,
+    refetchInterval: 20000,
     queryFn: async () => {
       const [{ data: c, error }, { data: attrs, error: e2 }] = await Promise.all([
         supabase.from("characters").select("*").eq("id", id!).maybeSingle(),
@@ -95,23 +99,25 @@ export function useCharacterLive(id: string | undefined) {
   }, [id, qc]);
 }
 
+/** One signed URL per photo path for 50 minutes, shared by all portraits.
+ * Supabase URLs expire after 60 minutes, so cache them for less than that.
+ * React Query deduplicates simultaneous requests for the same photograph.
+ */
 export function usePhotoUrl(path: string | null | undefined) {
-  const [url, setUrl] = useState<string | null>(null);
-  useEffect(() => {
-    let alive = true;
-    if (!path) {
-      setUrl(null);
-      return;
-    }
-    supabase.storage
-      .from("character-photos")
-      .createSignedUrl(path, 3600)
-      .then(({ data }) => alive && setUrl(data?.signedUrl ?? null));
-    return () => {
-      alive = false;
-    };
-  }, [path]);
-  return url;
+  const { data } = useQuery<string | null>({
+    queryKey: ["character-photo-url", path],
+    enabled: !!path,
+    staleTime: 50 * 60_000,
+    gcTime: 55 * 60_000,
+    refetchOnWindowFocus: false,
+    queryFn: async () => {
+      const { data: signed, error } = await supabase.storage
+        .from("character-photos").createSignedUrl(path!, 3600);
+      if (error) throw error;
+      return signed?.signedUrl ?? null;
+    },
+  });
+  return path ? data ?? null : null;
 }
 
 export const clampPct = (n: number) => Math.max(0, Math.min(100, Math.round(Number.isFinite(n) ? n : 0)));
@@ -219,6 +225,7 @@ export type Trait = Race | Virtue | ClassTrait;
 export function useRaces() {
   return useQuery({
     queryKey: ["races"],
+    staleTime: 5 * 60_000,
     queryFn: async () => {
       const { data, error } = await supabase.from("races").select("*").order("name");
       if (error) throw error;
@@ -230,6 +237,7 @@ export function useRaces() {
 export function useClasses() {
   return useQuery<ClassTrait[]>({
     queryKey: ["classes"],
+    staleTime: 5 * 60_000,
     queryFn: async () => {
       const { data, error } = await supabase.from("classes").select("*").order("name");
       if (error) throw error;
@@ -245,6 +253,7 @@ export function classMods(classTrait: ClassTrait | null | undefined): RaceMods {
 export function useVirtues() {
   return useQuery({
     queryKey: ["virtues"],
+    staleTime: 5 * 60_000,
     queryFn: async () => {
       const { data, error } = await supabase.from("virtues").select("*").order("name");
       if (error) throw error;
