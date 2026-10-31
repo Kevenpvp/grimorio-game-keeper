@@ -289,6 +289,7 @@ export function ContinuousRulesEditor({ rules, onChange, defs, disabled = false 
                         <option value="no_regen_mana">Bloquear regeneração de Mana</option>
                         <option value="magic_prohibition">Proibição de magia</option><option value="no_mana">Sem Mana</option>
                         <option value="invincible">Invencível</option>
+                        <option value="visual_tag">Tag visual</option>
                       </select>
                     </label>
                     <div className="grid grid-cols-2 gap-2">
