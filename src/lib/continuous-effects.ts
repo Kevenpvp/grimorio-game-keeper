@@ -16,7 +16,7 @@ export type ContinuousDamageAction = {
   neutralizable: boolean;
 };
 export type ContinuousDotAction = { kind: "dot"; template_id: string; damage_mode: "fixed" | "percent"; damage_amount: number; duration: number; repeat: boolean };
-export type ContinuousEffectAction = { kind: "effect"; effect_type: "stun" | "no_regen_hp" | "no_regen_mana" | "magic_prohibition" | "no_mana" | "invincible"; name: string; duration: number; repeat: boolean };
+export type ContinuousEffectAction = { kind: "effect"; effect_type: "stun" | "no_regen_hp" | "no_regen_mana" | "magic_prohibition" | "no_mana" | "invincible" | "visual_tag"; name: string; duration: number; repeat: boolean };
 export type ContinuousAction = ContinuousStatusAction | ContinuousDamageAction | ContinuousDotAction | ContinuousEffectAction;
 export type ContinuousOnLimit = "replace_oldest" | "choose" | "block";
 export type ContinuousRule = {
@@ -80,7 +80,7 @@ export function parseContinuousRules(value: unknown): ContinuousRule[] {
         repeat:action.repeat===true,
       }];
       if (action.kind === "effect" && typeof action.effect_type === "string" &&
-        ["stun","no_regen_hp","no_regen_mana","magic_prohibition","no_mana","invincible"].includes(action.effect_type)) return [{
+        ["stun","no_regen_hp","no_regen_mana","magic_prohibition","no_mana","invincible","visual_tag"].includes(action.effect_type)) return [{
           kind:"effect",effect_type:action.effect_type as ContinuousEffectAction["effect_type"],
           name:typeof action.name==="string"?action.name.slice(0,120):"Efeito",duration:Math.max(1,n(action.duration,2,1000)),
           repeat:action.repeat===true,
