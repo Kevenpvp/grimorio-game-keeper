@@ -147,6 +147,7 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
     if (defaultSourceCharacterId) {
       setSourceCharacterId(defaultSourceCharacterId);
       setWeaponInventoryItemId("");
+      setOutsideTargetMode("none");
     }
   }, [defaultSourceCharacterId]);
   useEffect(() => {
@@ -297,9 +298,10 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
           peste_reset?: number;
           peste_healing?: { last_heal_percent?: number; next_heal_percent?: number };
         } | null;
+        const damageForNotebook = values.reduce((sum, value) => sum + value, 0);
         toast.success(outsideTargetMode === "hit"
-          ? `Acerto externo registrado: ${values.length} golpe(s). Nenhum inimigo do site recebeu dano.${result?.peste_healing ? ` Cura da Peste: ${result.peste_healing.last_heal_percent}% no atacante; próximo ${result.peste_healing.next_heal_percent}%.` : ""}`
-          : `Ataque sem acerto registrado: ${values.length} golpe(s). Nenhum HP de inimigo foi alterado.`,
+          ? `Acerto externo registrado: ${values.length} golpe(s), ${damageForNotebook} de dano declarado no livro (não aplicado no site).${result?.peste_healing ? ` Cura da Peste: ${result.peste_healing.last_heal_percent}% no atacante; próximo ${result.peste_healing.next_heal_percent}%.` : ""}`
+          : `Ataque sem acerto registrado: ${values.length} tentativa(s). Nenhum HP de inimigo foi alterado.`,
           { duration: 8000 });
         await Promise.all([
           qc.invalidateQueries({ queryKey: ["character-abilities", attackerId] }),
@@ -571,7 +573,7 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
       <div className="space-y-1">
         <label className="text-xs text-muted-foreground">Quem está causando o dano?</label>
         <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={sourceCharacterId}
-          onChange={(e) => { setSourceCharacterId(e.target.value); setWeaponInventoryItemId(""); }}>
+          onChange={(e) => { setSourceCharacterId(e.target.value); setWeaponInventoryItemId(""); setOutsideTargetMode("none"); }}>
           <option value="">Nenhum atacante (sem modificadores de dano)</option>
           {sources.map((source) => <option key={source.id} value={source.id}>{source.name}</option>)}
         </select>
