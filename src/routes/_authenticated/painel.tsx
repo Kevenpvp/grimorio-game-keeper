@@ -41,6 +41,7 @@ function PlayerView({ userId }: { userId: string }) {
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null);
   const { data: mine = [], isLoading, error } = useQuery({
     queryKey: ["my-character", userId],
+    staleTime: 30_000,
     queryFn: async () => {
       const { data, error } = await supabase.from("characters")
         .select("id,name,player_name")
@@ -147,7 +148,7 @@ function MasterDashboard() {
       if (error) throw error;
       return data ?? [];
     },
-    refetchInterval: 8000,
+    refetchInterval: 20000,
     refetchOnWindowFocus: true,
   });
   const maximaByCharacter = useMemo(
@@ -159,13 +160,15 @@ function MasterDashboard() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("characters")
-        .select("*, character_attributes(attribute_key,current_value,max_value,points,bonus)")
+        // The library cards need only these fields; loading full race/class/
+        // skill metadata every few seconds was costly for Supabase egress.
+        .select("id,name,player_name,owner_id,photo_path,body,sanity,available_points,kills,character_attributes(attribute_key,current_value)")
         .eq("is_summon_snapshot", false)
         .order("name");
       if (error) throw error;
       return data ?? [];
     },
-    refetchInterval: 8000,
+    refetchInterval: 20000,
     refetchOnWindowFocus: true,
   });
 
@@ -190,7 +193,7 @@ function MasterDashboard() {
       if (error) throw error;
       return data ?? [];
     },
-    refetchInterval: 15000,
+    refetchInterval: 60000,
     refetchOnWindowFocus: true,
   });
   const groups = useMemo(
