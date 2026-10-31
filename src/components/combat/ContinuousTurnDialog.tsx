@@ -214,6 +214,12 @@ export function ContinuousTurnDialog({items,title,busy,fighterNames,casterAttrib
               {resolution==="interrupt" && <p className="text-xs text-amber-300">Debuffs residuais permanecem por {item.rule.linger_turns} turnos da vítima.</p>}
               {resolution==="dispel" && <p className="text-xs text-emerald-300">Remove o vínculo e os efeitos vinculados.</p>}
               {resolution==="apply" && <>
+                {item.rule.actions.length === 0 && (
+                  <p className="rounded-lg border border-dashed border-gold/25 bg-black/15 px-3 py-2 text-xs text-muted-foreground">
+                    Somente vínculo de grudagem: não causa dano nem aplica efeitos por turno.
+                    Se quiser encerrar, use <strong>Soltar vínculo</strong> acima; caso contrário, ele continua ativo.
+                  </p>
+                )}
                 {item.rule.actions.map((action,index)=>{
                   const edit=actionEdits[item.id]?.[String(index)];
                   if(!edit)return null;
