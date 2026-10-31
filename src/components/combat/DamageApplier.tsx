@@ -39,6 +39,7 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
   const [magicLevel, setMagicLevel] = useState<MagicLevel>("baixa");
   const [sourceCharacterId, setSourceCharacterId] = useState(defaultSourceCharacterId ?? "");
   const [weaponInventoryItemId, setWeaponInventoryItemId] = useState("");
+  const [outsideTargetMode, setOutsideTargetMode] = useState<"none" | "hit" | "miss">("none");
   const [criticalDamage, setCriticalDamage] = useState(false);
   const [lastDamageOutcome, setLastDamageOutcome] = useState<{
     criticalRequested: boolean;
@@ -270,6 +271,49 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
     if (selectedWeapon?.weapon_damage.uses_ammo && values.length > (selectedWeapon.ammo_current ?? 0)) {
       toast.error("Munição insuficiente: " + (selectedWeapon.ammo_current ?? 0) + " disponível(is), " + values.length + " necessária(s).");
       setCriticalDamage(false);
+      return;
+    }
+    if (outsideTargetMode !== "none") {
+      const attackerId = (sourceOverride ?? sourceCharacterId) || null;
+      if (!battleId || !attackerId) {
+        toast.error("Para registrar um ataque fora do sistema, selecione uma batalha e o atacante.");
+        return;
+      }
+      setApplyingDamage(true);
+      setLastDamageOutcome(null);
+      try {
+        const { data, error } = await (supabase as any).rpc("register_unregistered_attack", {
+          _battle_id: battleId,
+          _attacker_id: attackerId,
+          _weapon_inventory_item_id: selectedWeapon?.id ?? null,
+          _character_ability_id: null,
+          _hit_confirmed: outsideTargetMode === "hit",
+          _hit_count: values.length,
+        });
+        if (error) throw error;
+        const result = data as {
+          ammo_used?: number;
+          ammo_after?: number | null;
+          peste_reset?: number;
+          peste_healing?: { last_heal_percent?: number; next_heal_percent?: number };
+        } | null;
+        toast.success(outsideTargetMode === "hit"
+          ? `Acerto externo registrado: ${values.length} golpe(s). Nenhum inimigo do site recebeu dano.${result?.peste_healing ? ` Cura da Peste: ${result.peste_healing.last_heal_percent}% no atacante; próximo ${result.peste_healing.next_heal_percent}%.` : ""}`
+          : `Ataque sem acerto registrado: ${values.length} golpe(s). Nenhum HP de inimigo foi alterado.`,
+          { duration: 8000 });
+        await Promise.all([
+          qc.invalidateQueries({ queryKey: ["character-abilities", attackerId] }),
+          qc.invalidateQueries({ queryKey: ["character-abilities-battle"] }),
+          qc.invalidateQueries({ queryKey: ["character", attackerId] }),
+          qc.invalidateQueries({ queryKey: ["equipped-weapons-for-damage", attackerId] }),
+          qc.invalidateQueries({ queryKey: ["inventory", attackerId] }),
+          qc.invalidateQueries({ queryKey: ["battles"] }),
+        ]);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Não foi possível registrar o ataque sem alvo.");
+      } finally {
+        setApplyingDamage(false);
+      }
       return;
     }
     const adjustmentFixed = Number(extraDamageFixed);
@@ -562,6 +606,21 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
             aplica a categoria e os tipos cadastrados na arma e calcula defesa, mitigação e críticos normalmente.
           </p>
         )}
+        <div className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+          <label className="block text-xs font-semibold text-amber-200" htmlFor={`external-attack-${target.id}`}>Ataque contra inimigo fora do sistema</label>
+          <select id={`external-attack-${target.id}`} value={outsideTargetMode} disabled={applyingDamage}
+            className="min-h-11 w-full rounded-md border border-input bg-background px-3 text-sm"
+            onChange={event => setOutsideTargetMode(event.target.value as "none" | "hit" | "miss")}>
+            <option value="none">Dano normal no alvo cadastrado ({target.name})</option>
+            <option value="hit">Acertou alguém fora do sistema</option>
+            <option value="miss">Não acertou ninguém</option>
+          </select>
+          {outsideTargetMode !== "none" && (
+            <p className="text-xs text-amber-200">
+              Usa a arma selecionada, consome munição quando houver e registra o resultado. Não reduz HP de personagens cadastrados. Acertos com Luvas da Peste podem gerar cura e stacks apenas no atacante.
+            </p>
+          )}
+        </div>
         {selectedWeapon?.weapon_damage.uses_ammo && (
           <div role="status" className={"rounded-lg border px-3 py-2 text-sm " + (ammoInsufficient ? "border-red-500/40 bg-red-500/10 text-red-300" : "border-amber-500/25 bg-amber-500/5 text-amber-200")}>
             <span className="font-semibold">Munição: {availableAmmo}/{selectedWeapon.weapon_damage.ammo_max}</span>
@@ -792,15 +851,15 @@ export function DamageApplier({ target, battleId = null, sources = [], defaultSo
           </div>
         </div>
       </details>
-      <Button disabled={applyingDamage || applyingEffectsOnly || ammoInsufficient
-        || (needsMagic && (!selectedMagicDamageTypeId || magicalDamageTypes.length === 0))
-        || (needsPhysical && physicalDamageTypes.length > 0 && !selectedPhysicalDamageTypeId)
-        || (loadingTypes && (needsMagic || needsPhysical))}
+      <Button disabled={applyingDamage || applyingEffectsOnly || ammoInsufficient || (outsideTargetMode !== "none" && (!battleId || !sourceId))
+        || (outsideTargetMode === "none" && needsMagic && (!selectedMagicDamageTypeId || magicalDamageTypes.length === 0))
+        || (outsideTargetMode === "none" && needsPhysical && physicalDamageTypes.length > 0 && !selectedPhysicalDamageTypeId)
+        || (outsideTargetMode === "none" && loadingTypes && (needsMagic || needsPhysical))}
         onClick={() => void applyDamage()}>
         {damageKind === "physical" ? <Shield className="mr-1 h-4 w-4" /> :
           damageKind === "magical" ? <Sparkles className="mr-1 h-4 w-4" /> :
           damageKind === "hybrid" ? <Swords className="mr-1 h-4 w-4" /> : <Zap className="mr-1 h-4 w-4" />}
-        {applyingDamage ? "Aplicando…" : `Confirmar dano em ${target.name}`}
+        {applyingDamage ? "Aplicando…" : outsideTargetMode !== "none" ? "Registrar ataque sem alvo cadastrado" : `Confirmar dano em ${target.name}`}
       </Button>
       {lastDamageOutcome && (
         <div role="status" className={`space-y-1.5 rounded-lg border p-3 text-sm ${lastDamageOutcome.criticalRequested ? "border-amber-500/50 bg-amber-500/10" : "border-border bg-muted/20"}`}>
