@@ -641,6 +641,7 @@ export function CharacterAbilitiesPanel({
   const [expanded, setExpanded] = useState(true);
   const [attackDialogAbilityId, setAttackDialogAbilityId] = useState<string | null>(null);
   const [attackTargetIds, setAttackTargetIds] = useState<string[]>([]);
+  const [attackExternalHit, setAttackExternalHit] = useState(false);
   // Mobile shows one attack target at a time; desktop still renders all targets.
   const [attackFocusedTargetId, setAttackFocusedTargetId] = useState<string | null>(null);
   const [attackShowTargetPicker, setAttackShowTargetPicker] = useState(true);
@@ -745,6 +746,7 @@ export function CharacterAbilitiesPanel({
     const preferred = eligibleAttackTargets.slice(0, 1).map((target) => target.id);
     setAttackDialogAbilityId(ability.id);
     setAttackTargetIds(preferred);
+    setAttackExternalHit(false);
     setAttackFocusedTargetId(preferred[0] ?? null);
     setAttackShowTargetPicker(true);
     setAttackHits({});
@@ -770,10 +772,6 @@ export function CharacterAbilitiesPanel({
 
   async function resolveAbilityAttack(releaseIds?: string[]) {
     if (!attackAbility || !attackDefinition?.attack_enabled || !attackConfig || !battleId || attackBusy) return;
-    if (attackTargetIds.length === 0) {
-      toast.error("Selecione pelo menos um alvo para este ataque.");
-      return;
-    }
     if ((attackConfig.damage_kind === "physical" || attackConfig.damage_kind === "hybrid")
       && !damageTypes.some((type) => type.id === attackConfig.physical_damage_type_id && type.category === "physical")) {
       toast.error("Configure um tipo de dano físico válido nesta habilidade.");
@@ -785,7 +783,7 @@ export function CharacterAbilitiesPanel({
       return;
     }
 
-    const hitTargets = currentAttackTargets.filter((target) => attackHits[target.id]);
+    const hitTargets = attackExternalHit ? [] : currentAttackTargets.filter((target) => attackHits[target.id]);
     // Resolve capped ongoing links as part of the same database transaction.
     // Never release a previous victim in a separate request before the attack
     // has succeeded; cooldown, mana and residuals all roll back together.
@@ -875,7 +873,7 @@ export function CharacterAbilitiesPanel({
         .select("id")
         .eq("battle_id", battleId)
         .eq("source_character_ability_id", attackAbility.id)
-        .in("character_id", attackTargetIds);
+        .in("character_id", attackExternalHit ? [] : attackTargetIds);
       const existingEffectIds = existingEffectsResponse.error
         ? null
         : new Set((existingEffectsResponse.data ?? []).map((effect) => effect.id));
@@ -899,7 +897,7 @@ export function CharacterAbilitiesPanel({
           group_overrides: groupOverridesForTarget(target.id),
         })),
         _dot_target_selections: dotTargetSelections,
-        _dot_attribute_values: dotAttributeValues,
+        _dot_attribute_values: { ...dotAttributeValues, __external_hit: attackExternalHit },
       });
       if (activationError) throw activationError;
       setPendingTargetTransfer(null);
@@ -1067,7 +1065,7 @@ export function CharacterAbilitiesPanel({
       setAttackGroupEdits({});
       setAttackGuaranteedDotExpanded({});
       setAttackGuaranteedDotEdits({});
-      toast.success(hitTargets.length
+      toast.success(attackExternalHit ? `${attackAbility.name}: acerto externo confirmado sem alterar HP de inimigo cadastrado.` : hitTargets.length
         ? `${attackAbility.name}: golpe aplicado em ${hitTargets.length} alvo(s).${!continuingAttack && typeof spentMana === "number" && spentMana > 0 ? ` Mana gasta: ${spentMana}.` : ""}`
         : `${attackAbility.name}: aplicação sem acertos.${!continuingAttack && typeof spentMana === "number" && spentMana > 0 ? ` Mana gasta: ${spentMana}.` : ""}`);
       await Promise.all([
@@ -1223,6 +1221,7 @@ export function CharacterAbilitiesPanel({
     activationOverrides?: ActivationEffectOverrides,
     selectedTargetIds: string[] = [characterId],
     preparedDots?: AbilityDotEffect[],
+    hitOutside = false,
   ) {
     if (!canUse || mode !== "combat" || !ability.can_activate || ability.cooldown_turns < 0 || ability.cooldown_remaining > 0 || ability.active_duration_remaining > 0 || busyId || ability.toggle_active) return;
     if ((ability as CharacterAbility & { once_per_battle?: boolean }).once_per_battle && mode === "combat" && usedOnceAbilityIds.includes(ability.id)) {
@@ -1232,11 +1231,11 @@ export function CharacterAbilitiesPanel({
     const catalogEntry = abilityCatalog.find((candidate) => candidate.id === ability.ability_id);
     const guaranteedDots = preparedDots ?? parseAbilityDotEffects(ability.ability_id ? catalogEntry?.dot_effects : ability.dot_effects);
     const chosenTargets = [...new Set(ability.self_target_only ? [characterId] : selectedTargetIds)];
-    if (!chosenTargets.length || chosenTargets.length > 25 || chosenTargets.some((id) => !targetOptions.some((target) => target.id === id))) {
-      toast.error("Selecione entre 1 e 25 destinatários válidos.");
+    if (chosenTargets.length > 25 || chosenTargets.some((id) => !targetOptions.some((target) => target.id === id))) {
+      toast.error("Selecione até 25 destinatários válidos.");
       return;
     }
-    const actualTargetId = chosenTargets[0];
+    const actualTargetId = chosenTargets[0] ?? characterId;
     if (guaranteedDots.length > 0 && (mode !== "combat" || !battleId)) {
       toast.error("DoTs de habilidades só podem ser aplicados durante um combate ativo.");
       return;
@@ -1257,6 +1256,7 @@ export function CharacterAbilitiesPanel({
       _dot_attribute_values: {
         ...dotAttributeValues,
         __activation_target_ids: chosenTargets,
+        __external_hit: chosenTargets.length === 0 && hitOutside,
         ...(activationOverrides ? { __activation_effect_overrides: activationOverrides } : {}),
       },
     });
@@ -1267,7 +1267,7 @@ export function CharacterAbilitiesPanel({
     }
     // O custo extra é enviado apenas nesta ativação; o valor salvo na ficha nunca muda.
     setExtraManaCosts((current) => ({ ...current, [ability.id]: "0" }));
-    toast.success(`${ability.name} ativada em ${chosenTargets.length} personagem(ns)!${typeof spentMana === "number" && spentMana > 0 ? ` Mana gasta: ${spentMana}.` : ""}`);
+    toast.success(`${ability.name}: ${chosenTargets.length ? `ativada em ${chosenTargets.length} personagem(ns)` : (hitOutside ? "acerto fora do sistema registrado" : "ativada sem destinatários")}.${typeof spentMana === "number" && spentMana > 0 ? ` Mana gasta: ${spentMana}.` : ""}`);
     dispatchAndRefreshAbilityEffects(mode === "combat" ? battleId : null);
     await Promise.all([
       qc.invalidateQueries({ queryKey: ["character-abilities", characterId] }),
@@ -1661,6 +1661,21 @@ export function CharacterAbilitiesPanel({
                     onClick={() => setAttackShowTargetPicker(false)}>Pronto · configurar acertos</Button>
                 </div>}
               </section>
+              <label className="flex min-h-12 cursor-pointer items-center gap-3 rounded-lg border border-amber-500/35 bg-amber-500/5 px-3 py-2.5 text-sm">
+                <input type="checkbox" checked={attackExternalHit} disabled={attackBusy}
+                  onChange={event => {
+                    setAttackExternalHit(event.target.checked);
+                    if (event.target.checked) {
+                      setAttackTargetIds([]);
+                      setAttackHits({});
+                      setAttackCriticalHits({});
+                      setAttackEffectHits({});
+                    }
+                  }} />
+                <span><strong className="block text-amber-200">Acertou alguém fora do sistema</strong>
+                  <span className="block text-xs text-muted-foreground">Registra um acerto sem inimigo cadastrado. Não altera HP nem aplica efeitos a alvos do site. Desmarcado e sem acertos significa erro.</span>
+                </span>
+              </label>
               {currentAttackTargets.length > 0 && (
                 <section className="space-y-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1994,7 +2009,7 @@ export function CharacterAbilitiesPanel({
             <Button type="button" variant="outline" className="min-h-11 w-full sm:w-auto" onClick={() => void finishAbilityAttack()} disabled={attackBusy}>
               Finalizar Ataque
             </Button>
-            <Button type="button" className="min-h-11 w-full sm:w-auto" onClick={() => void resolveAbilityAttack()} disabled={attackBusy || !attackAbility || !attackConfig || attackTargetIds.length === 0 || !battleId}>
+            <Button type="button" className="min-h-11 w-full sm:w-auto" onClick={() => void resolveAbilityAttack()} disabled={attackBusy || !attackAbility || !attackConfig || !battleId}>
               <Swords className="mr-1 h-4 w-4" />
               {attackBusy ? "Aplicando..." : "Causar o Ataque"}
             </Button>
@@ -2070,8 +2085,8 @@ export function CharacterAbilitiesPanel({
           initialTargetIds={activationSetup.initialTargetIds}
           effects={activationSetup.effects}
           onCancel={() => setActivationSetup(null)}
-          onConfirm={async (values, selectedIds) => {
-            const result = await activate(activationSetup.ability, values, selectedIds, activationSetup.dotEffects);
+          onConfirm={async (values, selectedIds, hitOutside) => {
+            const result = await activate(activationSetup.ability, values, selectedIds, activationSetup.dotEffects, hitOutside);
             return result === true;
           }}
         />
