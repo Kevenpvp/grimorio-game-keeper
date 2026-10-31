@@ -258,6 +258,7 @@ export type DotTemplateOption = Pick<Tables<"damage_over_time_templates">, "id" 
 export function useDotTemplates() {
   return useQuery({
     queryKey: ["damage-over-time-templates"],
+    staleTime: 5 * 60_000,
     queryFn: async () => {
       const { data, error } = await supabase.from("damage_over_time_templates").select("id,name,damage_kind,physical_damage_type_id,damage_type_id,magic_level").order("name");
       if (error) throw error;
@@ -430,6 +431,7 @@ export function parseAbilityEffects(value: unknown, nested = false): AbilityEffe
 export function useDamageTypes(category?: DamageTypeCategory) {
   return useQuery({
     queryKey: ["damage-types", category ?? "all"],
+    staleTime: 5 * 60_000,
     queryFn: async () => {
       let query = supabase.from("damage_types").select("id,name,category").order("name");
       if (category) query = query.eq("category", category);
@@ -443,6 +445,7 @@ export function useDamageTypes(category?: DamageTypeCategory) {
 export function useAbilities() {
   return useQuery({
     queryKey: ["abilities"],
+    staleTime: 2 * 60_000,
     queryFn: async () => {
       const { data, error } = await supabase.from("abilities").select("*").order("name");
       if (error) throw error;
@@ -520,7 +523,7 @@ export function useCharacterActiveEffects(characterId: string | undefined, enabl
     // The script runtime can insert effects after a damage/HP request returns.
     // Realtime is primary, but mobile/embedded previews can miss notifications.
     // Reconcile visible effects periodically while this list is mounted.
-    refetchInterval: enabled ? 4000 : false,
+    refetchInterval: enabled ? 12000 : false,
     refetchOnWindowFocus: "always",
     refetchOnReconnect: "always",
     queryFn: async () => {
