@@ -1951,25 +1951,29 @@ export function CharacterAbilitiesPanel({
                   ? ` · Mágico: ${damageTypes.find((type) => type.id === attackConfig.damage_type_id)?.name ?? "tipo não configurado"} · grau ${attackConfig.magic_level}`
                   : ""}
               </div>
-              {attackContinuousRules.some(rule=>rule.max_targets!==null) &&
+              {attackContinuousRules.length > 0 &&
                 <section className="space-y-2 rounded-xl border border-gold/35 bg-gold/5 p-3">
-                  <p className="text-sm font-semibold text-gold">Vínculos sustentados e limite de alvos</p>
+                  <p className="text-sm font-semibold text-gold">Vínculos sustentados · Soltar alvos</p>
                   <p className="text-xs text-muted-foreground">
                     {attackContinuousRules.some(rule => rule.exclusive_grip)
                       ? "Grudagem exclusiva: ao acertar outro alvo com uma habilidade marcada desta criatura, o Grimório remove a grudagem anterior automaticamente. No mesmo alvo, os efeitos continuam. A troca só acontece se o ataque for confirmado."
-                      : "Ao acertar uma nova vítima com o limite cheio, o Grimório pergunta quem soltar antes de confirmar o ataque. A transferência ocorre junto com o golpe; se ele falhar, ninguém é solto. Também é possível liberar um alvo manualmente abaixo."}
+                      : "Você pode soltar qualquer alvo manualmente, mesmo nas regras com alvos ilimitados. Quando houver limite, a troca de alvo é resolvida junto com o ataque confirmado."}
                   </p>
-                  {attackContinuousRules.map((rule,index)=>rule.max_targets===null?null:(
+                  {attackContinuousRules.map((rule,index)=>(
                     <div key={index} className="space-y-2 rounded-lg border border-gold/15 p-2.5">
                       <div className="flex flex-wrap justify-between gap-2 text-xs">
                         <span className="font-semibold">{rule.name}</span>
                         <span className="font-semibold text-gold">
-                          {heldAttackTargets.filter(item=>item.rule_index===index).length}/{rule.max_targets} alvos
+                          {heldAttackTargets.filter(item=>item.rule_index===index).length}/{rule.max_targets === null ? "∞" : rule.max_targets} alvos
                         </span>
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        {rule.on_limit==="choose"?"Escolher quem liberar":rule.on_limit==="block"?"Bloquear novos alvos ao atingir o limite":"Substituir automaticamente o mais antigo"}
+                        {rule.max_targets === null ? "Alvos ilimitados · você pode soltar individualmente qualquer vínculo ativo" :
+                          rule.on_limit==="choose"?"Escolher quem liberar":rule.on_limit==="block"?"Bloquear novos alvos ao atingir o limite":"Substituir automaticamente o mais antigo"}
                       </p>
+                      {!heldAttackTargets.some(item=>item.rule_index===index) && (
+                        <p className="rounded-md border border-dashed border-border/60 p-2.5 text-xs text-muted-foreground">Nenhum alvo preso por esta regra no momento.</p>
+                      )}
                       {heldAttackTargets.filter(item=>item.rule_index===index).map(instance=>(
                         <div key={instance.id} className="flex items-center justify-between gap-2 rounded-lg bg-background/60 px-2.5 py-2">
                           <span className="min-w-0 truncate text-xs">
