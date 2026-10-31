@@ -20,7 +20,7 @@ export function ActivationEffectValuesDialog({
   initialTargetIds?: string[];
   effects: AbilityEffectDefinition[];
   onCancel: () => void;
-  onConfirm: (values: ActivationEffectOverrides, targetIds: string[]) => Promise<boolean>;
+  onConfirm: (values: ActivationEffectOverrides, targetIds: string[], hitOutside: boolean) => Promise<boolean>;
 }) {
   const customizable = useMemo(() => customizableActivationEffects(effects), [effects]);
   const [targetIds, setTargetIds] = useState<string[]>(initialTargetIds);
@@ -31,6 +31,7 @@ export function ActivationEffectValuesDialog({
     ]))
   );
   const [pending, setPending] = useState(false);
+  const [hitOutside, setHitOutside] = useState(false);
   const available = recipients.filter((recipient) => recipient.id.trim().length > 0);
   const selected = available.filter((recipient) => targetIds.includes(recipient.id));
   const toggleRecipient = (id: string, checked: boolean) => {
@@ -39,10 +40,6 @@ export function ActivationEffectValuesDialog({
   };
 
   async function confirm() {
-    if (selected.length === 0) {
-      toast.error("Selecione pelo menos um destinatário para a habilidade.");
-      return;
-    }
     const parsed = parseActivationValueOverrides(effects, values);
     if (!parsed) {
       toast.error("Revise os valores dos efeitos. Não use valores negativos ou acima do limite.");
@@ -50,7 +47,7 @@ export function ActivationEffectValuesDialog({
     }
     setPending(true);
     try {
-      const success = await onConfirm(parsed, selected.map((recipient) => recipient.id));
+      const success = await onConfirm(parsed, selected.map((recipient) => recipient.id), selected.length === 0 && hitOutside);
       if (success) onCancel();
     } finally {
       setPending(false);
@@ -66,7 +63,7 @@ export function ActivationEffectValuesDialog({
             Escolha quem receberá os efeitos desta ativação. Você pode selecionar vários personagens.
             Os efeitos do tipo Caster se aplicam ao próprio usuário quando ele estiver selecionado;
             Alvo se aplica aos outros destinatários; Ambos respeita as duas opções.
-            O custo de Mana e a recarga são contabilizados uma única vez.
+            O custo de Mana e a recarga são contabilizados uma única vez. Sem selecionar destinatários, a habilidade ainda é usada e não aplica efeitos a ninguém.
           </DialogDescription>
         </DialogHeader>
         <section className="space-y-3 rounded-xl border border-gold/20 bg-gold/5 p-3">
@@ -81,7 +78,7 @@ export function ActivationEffectValuesDialog({
                 Selecionar todos
               </Button>
               <Button type="button" size="sm" variant="ghost" className="min-h-9"
-                disabled={pending || selected.length === 0} onClick={() => setTargetIds([])}>
+                disabled={pending} onClick={() => setTargetIds([])}>
                 Limpar seleção
               </Button>
             </div>
@@ -103,7 +100,15 @@ export function ActivationEffectValuesDialog({
             ))}
           </div>
           {selfOnly && <p className="text-xs text-muted-foreground">Esta habilidade só pode ser ativada no próprio personagem.</p>}
-          {selected.length === 0 && <p className="text-xs text-amber-300">Selecione ao menos um destinatário para continuar.</p>}
+          {!selfOnly && selected.length === 0 && (
+            <div className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-2.5">
+              <p className="text-xs text-amber-200">Nenhum destinatário: a ativação gastará Mana e iniciará cooldown, mas não aplicará efeitos nem DoTs em personagens cadastrados.</p>
+              <label className="flex min-h-10 items-center gap-2 text-xs font-medium">
+                <input type="checkbox" disabled={pending} checked={hitOutside} onChange={event=>setHitOutside(event.target.checked)} />
+                Acertou alguém fora do sistema (registrar acerto sem alvo cadastrado)
+              </label>
+            </div>
+          )}
         </section>
         {customizable.length > 0 && (
           <div className="space-y-3">
@@ -147,7 +152,7 @@ export function ActivationEffectValuesDialog({
           </Button>
           <Button type="button" className="min-h-11" disabled={pending || selected.length === 0}
             onClick={() => void confirm()}>
-            {pending ? "Ativando..." : `Ativar em ${selected.length} personagem(ns)`}
+            {pending ? "Ativando..." : selected.length === 0 ? "Ativar sem destinatários" : `Ativar em ${selected.length} personagem(ns)`}
           </Button>
         </DialogFooter>
       </DialogContent>
