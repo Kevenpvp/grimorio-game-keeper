@@ -122,6 +122,7 @@ export function AbilityEditor({ ability, defs, isNew, onSaved, hideDelete = fals
   const [oncePerBattle, setOncePerBattle] = useState(Boolean((ability as Ability & { once_per_battle?: boolean }).once_per_battle));
   const [selfTargetOnly, setSelfTargetOnly] = useState(ability.self_target_only);
   const [cooldown, setCooldown] = useState(String(ability.cooldown_turns));
+  const [missCooldown, setMissCooldown] = useState((ability as Ability & { attack_miss_cooldown_turns?: number | null }).attack_miss_cooldown_turns == null ? "" : String((ability as Ability & { attack_miss_cooldown_turns?: number | null }).attack_miss_cooldown_turns));
   const [duration, setDuration] = useState(String(ability.duration_turns ?? 0));
   const [manaCost, setManaCost] = useState(String(ability.mana_cost));
   const [attackManaCost, setAttackManaCost] = useState(
@@ -150,6 +151,7 @@ export function AbilityEditor({ ability, defs, isNew, onSaved, hideDelete = fals
     setOncePerBattle(Boolean((ability as Ability & { once_per_battle?: boolean }).once_per_battle));
     setSelfTargetOnly(ability.self_target_only);
     setCooldown(String(ability.cooldown_turns));
+    setMissCooldown((ability as Ability & { attack_miss_cooldown_turns?: number | null }).attack_miss_cooldown_turns == null ? "" : String((ability as Ability & { attack_miss_cooldown_turns?: number | null }).attack_miss_cooldown_turns));
     setDuration(String(ability.duration_turns ?? 0));
     setManaCost(String(ability.mana_cost));
     setAttackManaCost(ability.attack_mana_cost === null ? "" : String(ability.attack_mana_cost));
@@ -269,9 +271,13 @@ export function AbilityEditor({ ability, defs, isNew, onSaved, hideDelete = fals
       toast.error("Revise os nomes e valores dos efeitos ativos e passivos");
       return;
     }
+    if (missCooldown.trim() !== "" && (!Number.isInteger(Number(missCooldown)) || Number(missCooldown) < 0 || Number(missCooldown) > 1000)) {
+      toast.error("Cooldown quando errar: informe um inteiro entre 0 e 1000, ou deixe em branco."); return;
+    }
     setBusy(true);
     const db = supabase as any;
     const { error } = await db.from("abilities").update({
+      attack_miss_cooldown_turns: canActivate && effectiveAttackEnabled && missCooldown.trim() !== "" ? Number(missCooldown) : null,
       name: name.trim(),
       description: description.trim() || null,
       custom_script_key: customScriptKey || null,
@@ -730,6 +736,13 @@ export function AbilityEditor({ ability, defs, isNew, onSaved, hideDelete = fals
           <Label>Custo de Mana para Ativar (0 = não gasta)</Label>
           <Input type="number" min="0" value={manaCost} onChange={(e) => setManaCost(e.target.value)} />
         </div>}
+        {canActivate && !toggleMode && !selfTargetOnly && attackEnabled && (
+          <div className="space-y-1.5">
+            <Label>Cooldown se o ataque não acertar nenhum alvo (opcional)</Label>
+            <Input type="number" min="0" max="1000" step="1" value={missCooldown} placeholder="Mesmo cooldown normal" onChange={e => setMissCooldown(e.target.value)} />
+            <p className="text-xs text-muted-foreground">Aplica somente ao Atacar quando todos errarem, sem acerto registrado ou externo. Em branco usa a recarga normal.</p>
+          </div>
+        )}
         {canActivate && !toggleMode && !selfTargetOnly && attackEnabled && (
           <div className="space-y-1.5">
             <Label>Custo de Mana para Atacar (opcional)</Label>
